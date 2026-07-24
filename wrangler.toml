@@ -23,7 +23,7 @@ class_name = "IpRegistry"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["IpRegistry"]
+new_sqlite_classes = ["IpRegistry"]
 
 [vars]
 CHU_SO_HUU = "7055595466"

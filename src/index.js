@@ -293,19 +293,119 @@ async function xuLyTaoNhiemVu(env, url, goc) {
   }
 }
 
-function trangHtmlMa({ tieuDe, noiDung }) {
+function trangHtmlMa({ icon, tieuDe, ma, moTa, ghiChu }) {
+  const khoiMa = ma
+    ? `<div class="ma" id="ma">${ma}</div>
+       <button class="btn-copy" id="btn-copy" type="button">
+         <span id="btn-copy-label">📋 Copy mã</span>
+       </button>`
+    : "";
+
+  const script = ma
+    ? `<script>
+        document.getElementById('btn-copy').addEventListener('click', function () {
+          var ma = document.getElementById('ma').textContent;
+          var xongRoi = function () {
+            var label = document.getElementById('btn-copy-label');
+            var cu = label.textContent;
+            label.textContent = '✅ Đã copy';
+            setTimeout(function () { label.textContent = cu; }, 1500);
+          };
+          if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(ma).then(xongRoi);
+          } else {
+            var ta = document.createElement('textarea');
+            ta.value = ma;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.focus(); ta.select();
+            try { document.execCommand('copy'); } finally { document.body.removeChild(ta); }
+            xongRoi();
+          }
+        });
+      </script>`
+    : "";
+
   return new Response(
     `<!DOCTYPE html>
-<html lang="vi"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>${tieuDe}</title>
 <style>
-  body { background:#0A0E1A; color:#E8EDF5; font-family:-apple-system,'SF Pro Display','Segoe UI',system-ui,sans-serif;
-         display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; padding:24px; text-align:center; }
-  .ma { font-size:48px; font-weight:700; letter-spacing:10px; color:#229ED9; margin:24px 0; }
-  p { color:#5A7A99; font-size:15px; line-height:1.6; }
-</style></head>
-<body><div>${noiDung}</div></body></html>`,
+  :root {
+    --tg-blue: #229ED9;
+    --tg-dark: #0A0E1A;
+    --tg-surface: #0F1629;
+    --tg-border: rgba(34, 158, 217, 0.18);
+    --tg-text: #E8EDF5;
+    --tg-muted: #5A7A99;
+    --tg-glow: rgba(34, 158, 217, 0.35);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; min-height: 100%;
+    background: var(--tg-dark);
+    font-family: -apple-system, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+    color: var(--tg-text);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .card {
+    width: 100%; max-width: 380px;
+    background: var(--tg-surface);
+    border: 1px solid var(--tg-border);
+    border-radius: 24px;
+    padding: 36px 28px;
+    text-align: center;
+    box-shadow: 0 0 40px rgba(34, 158, 217, 0.08);
+  }
+  .icon {
+    width: 72px; height: 72px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 40% 38%, rgba(34,158,217,0.22), transparent 70%);
+    border: 1.5px solid var(--tg-border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px;
+    margin: 0 auto 20px;
+  }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 20px; }
+  .ma {
+    font-size: 42px; font-weight: 700; letter-spacing: 8px;
+    color: var(--tg-blue);
+    text-shadow: 0 0 20px var(--tg-glow);
+    margin-bottom: 24px;
+    word-break: break-all;
+  }
+  p { color: var(--tg-muted); font-size: 14px; line-height: 1.6; margin-bottom: 20px; }
+  .btn-copy {
+    width: 100%;
+    background: var(--tg-blue);
+    color: #fff;
+    border: none;
+    border-radius: 14px;
+    padding: 16px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .btn-copy:active { opacity: 0.85; }
+  .ghi-chu { color: var(--tg-muted); font-size: 12px; margin-top: 16px; margin-bottom: 0; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">${icon}</div>
+    <h1>${tieuDe}</h1>
+    ${khoiMa}
+    <p style="${ma ? "" : "margin-bottom:0;"}">${moTa}</p>
+    ${ghiChu ? `<p class="ghi-chu">${ghiChu}</p>` : ""}
+  </div>
+  ${script}
+</body>
+</html>`,
     { headers: { "Content-Type": "text/html; charset=utf-8" } }
   );
 }
@@ -314,28 +414,34 @@ async function xuLyTrangNhiemVu(env, ma) {
   const raw = await env.USERS.get(TIEN_TO_NHIEM_VU + ma);
   if (!raw) {
     return trangHtmlMa({
+      icon: "❌",
       tieuDe: "Mã không hợp lệ",
-      noiDung: `<p>Mã này không tồn tại hoặc đã bị xóa. Quay lại app tạo nhiệm vụ mới.</p>`,
+      moTa: "Mã này không tồn tại hoặc đã bị xóa. Quay lại app tạo nhiệm vụ mới.",
     });
   }
 
   const banGhi = JSON.parse(raw);
   if (banGhi.daDung) {
     return trangHtmlMa({
+      icon: "✅",
       tieuDe: "Mã đã dùng",
-      noiDung: `<p>Mã này đã được xác nhận trước đó rồi.</p>`,
+      moTa: "Mã này đã được xác nhận trước đó rồi.",
     });
   }
   if (Date.now() - banGhi.taoLuc > TTL_NHIEM_VU_MS) {
     return trangHtmlMa({
+      icon: "⏰",
       tieuDe: "Mã đã hết hạn",
-      noiDung: `<p>Nhiệm vụ này đã hết hạn (quá 30 phút). Quay lại app tạo nhiệm vụ mới.</p>`,
+      moTa: "Nhiệm vụ này đã hết hạn. Quay lại app tạo nhiệm vụ mới.",
     });
   }
 
   return trangHtmlMa({
-    tieuDe: "Mã xác nhận nhiệm vụ",
-    noiDung: `<div class="ma">${ma}</div><p>Quay lại app Tree Farm và nhập đúng mã này để hoàn thành nhiệm vụ.</p>`,
+    icon: "🎯",
+    tieuDe: "Mã xác nhận",
+    ma,
+    moTa: "Copy mã này và nhập vào mục Rút gọn trong game để nhận thưởng.",
+    ghiChu: "Mã có hiệu lực 30 phút sau khi tạo link",
   });
 }
 

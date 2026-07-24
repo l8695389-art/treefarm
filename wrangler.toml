@@ -1,0 +1,37 @@
+name = "treefarm-bot"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+# Tạo bằng: npx wrangler kv namespace create ADMINS
+#           npx wrangler kv namespace create USERS
+# rồi thay id bên dưới bằng id thật in ra từ 2 lệnh trên.
+[[kv_namespaces]]
+binding = "ADMINS"
+id = "REPLACE_WITH_ADMINS_KV_ID"
+
+[[kv_namespaces]]
+binding = "USERS"
+id = "REPLACE_WITH_USERS_KV_ID"
+
+[[durable_objects.bindings]]
+name = "IP_REGISTRY"
+class_name = "IpRegistry"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["IpRegistry"]
+
+[vars]
+CHU_SO_HUU = "7055595466"
+NHOM_LOG = "@nhomlogbot"
+LINK_MINIAPP = "https://m.treefarmapp.workers.dev/"
+LINK_ANH = "https://i.ibb.co/7x7DFnZ9/1783599852392.jpg"
+
+# Secrets — KHÔNG khai báo ở đây, set qua CLI:
+#   npx wrangler secret put BOT_TOKEN
+#   npx wrangler secret put LINK4M_API_TOKEN
+#   npx wrangler secret put WEBHOOK_SECRET

@@ -1,5 +1,4 @@
 import { telegramApi, cho } from "./telegram.js";
-export { IpRegistry } from "./ip-registry.js";
 
 const KEY_DANH_SACH_ADMIN = "danh_sach_admin";
 const TIEN_TO_USER = "user:";
@@ -243,39 +242,44 @@ async function xuLyUpdate(env, update) {
 }
 
 // ==================================================
-// 🌐 API CHO MINIAPP — thay Flask (/kiem-tra-ip, /nha-ip, /tao-link, /kiem-tra-link)
+// 🎯 NHIỆM VỤ VƯỢT LINK — tự host trang xác nhận thay vì tin vào API
+// Link4M (Link4M không có API kiểm tra hoàn thành/reward, đã xác minh).
+// Mã 6 số chỉ lộ ra ở trang đích SAU khi vượt hết quảng cáo Link4M,
+// dùng 1 lần rồi khóa — không phụ thuộc dữ liệu phía Link4M.
 // ==================================================
-function layIpRegistryStub(env) {
-  const id = env.IP_REGISTRY.idFromName("global");
-  return env.IP_REGISTRY.get(id);
+const TIEN_TO_NHIEM_VU = "nhiemvu:";
+const TTL_NHIEM_VU_MS = 30 * 60 * 1000; // 30 phút
+
+function sinhMaNgauNhien() {
+  return String(Math.floor(100000 + Math.random() * 900000));
 }
 
-async function xuLyKiemTraIp(env, url) {
-  const uid = url.searchParams.get("uid");
-  const ip = url.searchParams.get("ip");
-  if (!uid || !ip) return Response.json({ duoc_phep: false, loi: "thieu_tham_so" }, { status: 400 });
+async function taoNhiemVuMoi(env, uid) {
+  for (let lanThu = 0; lanThu < 5; lanThu++) {
+    const ma = sinhMaNgauNhien();
+    const key = TIEN_TO_NHIEM_VU + ma;
+    const daTonTai = await env.USERS.get(key);
+    if (daTonTai) continue; // đụng mã hiếm khi xảy ra, thử lại
 
-  const stub = layIpRegistryStub(env);
-  const ketQua = await stub.fetch(`https://ip-registry/check?uid=${encodeURIComponent(uid)}&ip=${encodeURIComponent(ip)}`);
-  return new Response(await ketQua.text(), { headers: { "Content-Type": "application/json" } });
+    await env.USERS.put(key, JSON.stringify({ uid: String(uid), daDung: false, taoLuc: Date.now() }));
+    return ma;
+  }
+  throw new Error("khong_sinh_duoc_ma");
 }
 
-async function xuLyNhaIp(env, url) {
-  const uid = url.searchParams.get("uid");
-  const ip = url.searchParams.get("ip");
-  if (!uid || !ip) return Response.json({ thanh_cong: false, loi: "thieu_tham_so" }, { status: 400 });
-
-  const stub = layIpRegistryStub(env);
-  const ketQua = await stub.fetch(`https://ip-registry/release?uid=${encodeURIComponent(uid)}&ip=${encodeURIComponent(ip)}`);
-  return new Response(await ketQua.text(), { headers: { "Content-Type": "application/json" } });
-}
-
-async function xuLyTaoLink(env, url) {
+async function xuLyTaoNhiemVu(env, url, goc) {
   const uid = url.searchParams.get("uid");
   if (!uid) return Response.json({ thanh_cong: false, loi: "thieu_uid" }, { status: 400 });
 
-  const target = `https://t.me/treefarm_bot?start=nhiemvu_${uid}`;
-  const apiUrl = `https://link4m.co/api-shorten/v2?api=${env.LINK4M_API_TOKEN}&url=${encodeURIComponent(target)}`;
+  let ma;
+  try {
+    ma = await taoNhiemVuMoi(env, uid);
+  } catch {
+    return Response.json({ thanh_cong: false, loi: "khong_sinh_duoc_ma" }, { status: 500 });
+  }
+
+  const trangDich = `${goc}/nv/${ma}`;
+  const apiUrl = `https://link4m.co/api-shorten/v2?api=${env.LINK4M_API_TOKEN}&url=${encodeURIComponent(trangDich)}`;
 
   try {
     const res = await fetch(apiUrl, { signal: AbortSignal.timeout(15000) });
@@ -289,20 +293,77 @@ async function xuLyTaoLink(env, url) {
   }
 }
 
-async function xuLyKiemTraLink(env, url) {
-  const target = url.searchParams.get("url");
-  if (!target) return Response.json({ hoan_thanh: false, loi: "thieu_url" }, { status: 400 });
+function trangHtmlMa({ tieuDe, noiDung }) {
+  return new Response(
+    `<!DOCTYPE html>
+<html lang="vi"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${tieuDe}</title>
+<style>
+  body { background:#0A0E1A; color:#E8EDF5; font-family:-apple-system,'SF Pro Display','Segoe UI',system-ui,sans-serif;
+         display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; padding:24px; text-align:center; }
+  .ma { font-size:48px; font-weight:700; letter-spacing:10px; color:#229ED9; margin:24px 0; }
+  p { color:#5A7A99; font-size:15px; line-height:1.6; }
+</style></head>
+<body><div>${noiDung}</div></body></html>`,
+    { headers: { "Content-Type": "text/html; charset=utf-8" } }
+  );
+}
 
-  const apiUrl = `https://link4m.co/api-stats?api=${env.LINK4M_API_TOKEN}&url=${encodeURIComponent(target)}`;
-
-  try {
-    const res = await fetch(apiUrl, { signal: AbortSignal.timeout(15000) });
-    const data = await res.json();
-    const hoanThanh = data.status === "success" && Number(data.clicks || 0) > 0;
-    return Response.json({ hoan_thanh: hoanThanh });
-  } catch (e) {
-    return Response.json({ hoan_thanh: false, loi: String(e) }, { status: 500 });
+async function xuLyTrangNhiemVu(env, ma) {
+  const raw = await env.USERS.get(TIEN_TO_NHIEM_VU + ma);
+  if (!raw) {
+    return trangHtmlMa({
+      tieuDe: "Mã không hợp lệ",
+      noiDung: `<p>Mã này không tồn tại hoặc đã bị xóa. Quay lại app tạo nhiệm vụ mới.</p>`,
+    });
   }
+
+  const banGhi = JSON.parse(raw);
+  if (banGhi.daDung) {
+    return trangHtmlMa({
+      tieuDe: "Mã đã dùng",
+      noiDung: `<p>Mã này đã được xác nhận trước đó rồi.</p>`,
+    });
+  }
+  if (Date.now() - banGhi.taoLuc > TTL_NHIEM_VU_MS) {
+    return trangHtmlMa({
+      tieuDe: "Mã đã hết hạn",
+      noiDung: `<p>Nhiệm vụ này đã hết hạn (quá 30 phút). Quay lại app tạo nhiệm vụ mới.</p>`,
+    });
+  }
+
+  return trangHtmlMa({
+    tieuDe: "Mã xác nhận nhiệm vụ",
+    noiDung: `<div class="ma">${ma}</div><p>Quay lại app Tree Farm và nhập đúng mã này để hoàn thành nhiệm vụ.</p>`,
+  });
+}
+
+async function xuLyXacNhanNhiemVu(env, url) {
+  const uid = url.searchParams.get("uid");
+  const ma = url.searchParams.get("ma");
+  if (!uid || !ma) return Response.json({ hoan_thanh: false, loi: "thieu_tham_so" }, { status: 400 });
+
+  const key = TIEN_TO_NHIEM_VU + ma;
+  const raw = await env.USERS.get(key);
+  if (!raw) return Response.json({ hoan_thanh: false, loi: "sai_ma" });
+
+  const banGhi = JSON.parse(raw);
+  if (banGhi.uid !== String(uid)) return Response.json({ hoan_thanh: false, loi: "sai_ma" });
+  if (banGhi.daDung) return Response.json({ hoan_thanh: false, loi: "da_dung" });
+  if (Date.now() - banGhi.taoLuc > TTL_NHIEM_VU_MS) return Response.json({ hoan_thanh: false, loi: "het_han" });
+
+  banGhi.daDung = true;
+  await env.USERS.put(key, JSON.stringify(banGhi));
+
+  // Cộng thưởng cho user
+  const nguoiDung = await layNguoiDung(env, uid);
+  if (nguoiDung) {
+    nguoiDung.coin = (nguoiDung.coin || 0) + Number(env.THUONG_XU_NHIEM_VU || 10);
+    await luuNguoiDung(env, uid, nguoiDung);
+  }
+
+  return Response.json({ hoan_thanh: true });
 }
 
 // ==================================================
@@ -324,15 +385,16 @@ export default {
     }
 
     if (request.method === "GET") {
+      if (url.pathname.startsWith("/nv/")) {
+        const ma = url.pathname.slice("/nv/".length);
+        return xuLyTrangNhiemVu(env, ma);
+      }
+
       switch (url.pathname) {
-        case "/kiem-tra-ip":
-          return xuLyKiemTraIp(env, url);
-        case "/nha-ip":
-          return xuLyNhaIp(env, url);
-        case "/tao-link":
-          return xuLyTaoLink(env, url);
-        case "/kiem-tra-link":
-          return xuLyKiemTraLink(env, url);
+        case "/tao-nhiem-vu":
+          return xuLyTaoNhiemVu(env, url, url.origin);
+        case "/xac-nhan-nhiem-vu":
+          return xuLyXacNhanNhiemVu(env, url);
         case "/suc-khoe":
           return Response.json({ trang_thai: "on" });
       }

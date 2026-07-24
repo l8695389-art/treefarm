@@ -250,6 +250,14 @@
           <a id="btn-open-link" class="secondary-btn" href="#" target="_blank" rel="noopener">Mở link</a>
         </div>
       </div>
+
+      <div id="ma-card" class="card highlight" style="display:none;">
+        <div class="card-label">Sau khi vượt link xong, nhập mã 6 số hiện trên trang đích:</div>
+        <input id="ma-input" type="text" inputmode="numeric" maxlength="6" placeholder="000000" class="mono" style="width:100%;text-align:center;font-size:24px;letter-spacing:6px;padding:12px;margin:8px 0;border-radius:8px;border:1px solid var(--tg-border);background:transparent;color:var(--tg-text);" />
+        <button id="btn-xac-nhan-ma" class="primary-btn" type="button">
+          <span class="btn-label">Xác nhận hoàn thành</span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -355,11 +363,11 @@
       return Promise.resolve();
     }
 
-    // Link4M chặn CORS khi gọi trực tiếp từ trình duyệt — nên tạo link và
-    // kiểm tra hoàn thành đều đi qua backend Railway (routes /tao-link,
-    // /kiem-tra-link), backend mới là nơi gọi thẳng Link4M.
-    async function createLink4mLink(uid) {
-      const endpoint = `${LINK4M_CONFIG.linkGoc}/tao-link?uid=${encodeURIComponent(uid)}`;
+    // Tạo nhiệm vụ mới — backend sinh mã 6 số, tạo link Link4M trỏ tới
+    // trang /nv/<ma> do chính Worker host. Mã chỉ lộ ra sau khi vượt hết
+    // quảng cáo Link4M, không cần API stats (Link4M không có API đó).
+    async function taoNhiemVu(uid) {
+      const endpoint = `${LINK4M_CONFIG.linkGoc}/tao-nhiem-vu?uid=${encodeURIComponent(uid)}`;
       const res = await fetch(endpoint);
       if (!res.ok) throw new Error('network');
       const data = await res.json();
@@ -369,58 +377,13 @@
       return data.link;
     }
 
-    // ── PHẦN 1: kiem_tra_link_hop_le (port từ bot Python) ──
-    async function kiemTraLinkHoanThanh(shortUrl) {
-      const endpoint = `${LINK4M_CONFIG.linkGoc}/kiem-tra-link?url=${encodeURIComponent(shortUrl)}`;
-      try {
-        const res = await fetch(endpoint);
-        if (!res.ok) return false;
-        const data = await res.json();
-        return !!data.hoan_thanh;
-      } catch (e) {
-        console.error('Lỗi kiểm tra link:', e);
-        return false;
-      }
-    }
-
-    // Poll định kỳ để tự phát hiện khi user hoàn thành nhiệm vụ (giống
-    // hạn 30 phút bên bot Python).
-    function batDauKiemTraLink(shortUrl, onHoanThanh) {
-      const interval = setInterval(async () => {
-        const daXong = await kiemTraLinkHoanThanh(shortUrl);
-        if (daXong) {
-          clearInterval(interval);
-          onHoanThanh();
-        }
-      }, 5000);
-      const timeout = setTimeout(() => clearInterval(interval), 30 * 60 * 1000);
-      return () => { clearInterval(interval); clearTimeout(timeout); };
-    }
-
-    // ── PHẦN 2: chống trùng IP (port từ ip_dang_dung bên bot Python) ──
-    // Client chỉ biết IP của chính nó — việc "đang có ai dùng IP này chưa"
-    // phải hỏi backend (bot) vì dict ip_dang_dung sống trên server, dùng
-    // chung cho mọi người. Cần thêm 2 route Flask bên bot (xem ghi chú cuối file).
-    async function layIpHienTai() {
-      try {
-        const res = await fetch('https://api.ipify.org?format=json');
-        const data = await res.json();
-        return data.ip;
-      } catch (e) {
-        console.error('Lỗi lấy IP:', e);
-        return null;
-      }
-    }
-
-    async function kiemTraIpVoiBot(uid, ip) {
-      try {
-        const res = await fetch(`${LINK4M_CONFIG.linkGoc}/kiem-tra-ip?uid=${encodeURIComponent(uid)}&ip=${encodeURIComponent(ip)}`);
-        if (!res.ok) return { duoc_phep: true }; // fail-open nếu backend lỗi
-        return await res.json();
-      } catch (e) {
-        console.error('Lỗi kiểm tra IP với bot:', e);
-        return { duoc_phep: true };
-      }
+    // Đối chiếu mã người dùng nhập với mã đã lưu — atomic ở backend,
+    // mã dùng 1 lần rồi khóa lại.
+    async function xacNhanMa(uid, ma) {
+      const endpoint = `${LINK4M_CONFIG.linkGoc}/xac-nhan-nhiem-vu?uid=${encodeURIComponent(uid)}&ma=${encodeURIComponent(ma)}`;
+      const res = await fetch(endpoint);
+      if (!res.ok) return { hoan_thanh: false, loi: 'network' };
+      return await res.json();
     }
 
     function setupLinkButton(tg) {
@@ -433,7 +396,10 @@
       const successEl = document.getElementById('link-success');
       const openBtn = document.getElementById('btn-open-link');
       const copyBtn = document.getElementById('btn-copy-link');
-      let dungPollHienTai = null;
+      const maCard = document.getElementById('ma-card');
+      const maInput = document.getElementById('ma-input');
+      const btnXacNhanMa = document.getElementById('btn-xac-nhan-ma');
+      const labelXacNhan = btnXacNhanMa.querySelector('.btn-label');
 
       function anTatCaThongBao() {
         errorEl.style.display = 'none';
@@ -449,30 +415,17 @@
 
       btn.addEventListener('click', async () => {
         anTatCaThongBao();
-        if (dungPollHienTai) { dungPollHienTai(); dungPollHienTai = null; }
+        maCard.style.display = 'none';
+        maInput.value = '';
         btn.disabled = true;
         btn.classList.add('loading');
-        label.textContent = 'Đang kiểm tra...';
+        label.textContent = 'Đang tạo nhiệm vụ...';
 
         const uid = tg?.initDataUnsafe?.user?.id;
 
-        // Bước 1: chống trùng IP (Phần 2) — hỏi backend trước khi tạo link
-        const ip = await layIpHienTai();
-        if (uid && ip) {
-          const ketQua = await kiemTraIpVoiBot(uid, ip);
-          if (!ketQua.duoc_phep) {
-            btn.disabled = false;
-            btn.classList.remove('loading');
-            label.textContent = 'Nhận link rút gọn';
-            return batLoi('❌ Có người cùng mạng đang làm nhiệm vụ rồi!');
-          }
-        }
-
-        // Bước 2: tạo link Link4M (qua backend, né CORS)
-        label.textContent = 'Đang tạo liên kết...';
         try {
           if (!uid) throw new Error('khong_co_uid');
-          const shortUrl = await createLink4mLink(uid);
+          const shortUrl = await taoNhiemVu(uid);
           valueEl.textContent = shortUrl;
           openBtn.href = shortUrl;
           card.style.display = 'block';
@@ -482,21 +435,56 @@
           btn.classList.remove('loading');
           label.textContent = 'Nhận link rút gọn';
 
-          // Bước 3: kiểm tra link đã hoàn thành (Phần 1) — poll mỗi 5s
-          statusEl.textContent = '⏳ Đang chờ bạn hoàn thành nhiệm vụ...';
+          statusEl.textContent = '⏳ Vượt link xong, mã 6 số sẽ hiện ở trang đích — quay lại đây nhập mã đó.';
           statusEl.style.display = 'block';
-          dungPollHienTai = batDauKiemTraLink(shortUrl, () => {
-            statusEl.style.display = 'none';
-            successEl.textContent = '✅ Đã xác nhận hoàn thành nhiệm vụ!';
-            successEl.style.display = 'block';
-            dungPollHienTai = null;
-          });
+
+          maCard.style.display = 'block';
+          gsap.fromTo(maCard, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.35, ease: 'power2.out' });
         } catch (err) {
-          console.error('Lỗi tạo link:', err);
+          console.error('Lỗi tạo nhiệm vụ:', err);
           btn.disabled = false;
           btn.classList.remove('loading');
           label.textContent = 'Nhận link rút gọn';
           batLoi('❌ Không tạo được link, thử lại sau nhé.');
+        }
+      });
+
+      btnXacNhanMa.addEventListener('click', async () => {
+        const uid = tg?.initDataUnsafe?.user?.id;
+        const ma = maInput.value.trim();
+
+        if (!uid) return batLoi('❌ Không xác định được tài khoản Telegram.');
+        if (!/^\d{6}$/.test(ma)) return batLoi('❌ Mã phải gồm đúng 6 chữ số.');
+
+        anTatCaThongBao();
+        btnXacNhanMa.disabled = true;
+        btnXacNhanMa.classList.add('loading');
+        labelXacNhan.textContent = 'Đang kiểm tra...';
+
+        try {
+          const ketQua = await xacNhanMa(uid, ma);
+          btnXacNhanMa.disabled = false;
+          btnXacNhanMa.classList.remove('loading');
+          labelXacNhan.textContent = 'Xác nhận hoàn thành';
+
+          if (ketQua.hoan_thanh) {
+            successEl.textContent = '✅ Đã xác nhận hoàn thành nhiệm vụ!';
+            successEl.style.display = 'block';
+            maCard.style.display = 'none';
+          } else {
+            const thongBaoLoi = {
+              sai_ma: '❌ Mã không đúng.',
+              da_dung: '❌ Mã này đã được dùng rồi.',
+              het_han: '❌ Mã đã hết hạn, tạo nhiệm vụ mới nhé.',
+            };
+            batLoi(thongBaoLoi[ketQua.loi] || '❌ Không xác nhận được, thử lại sau.');
+          }
+        } catch (err) {
+          console.error('Lỗi xác nhận mã:', err);
+          btnXacNhanMa.disabled = false;
+          btnXacNhanMa.classList.remove('loading');
+          labelXacNhan.textContent = 'Xác nhận hoàn thành';
+          batLoi('❌ Lỗi kết nối, thử lại sau.');
         }
       });
 

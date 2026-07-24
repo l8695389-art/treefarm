@@ -251,7 +251,7 @@
         </div>
       </div>
 
-      <div id="ma-card" class="card highlight" style="display:none;">
+      <div id="ma-card" class="card highlight">
         <div class="card-label">Sau khi vượt link xong, nhập mã 6 số hiện trên trang đích:</div>
         <input id="ma-input" type="text" inputmode="numeric" maxlength="6" placeholder="000000" class="mono" style="width:100%;text-align:center;font-size:24px;letter-spacing:6px;padding:12px;margin:8px 0;border-radius:8px;border:1px solid var(--tg-border);background:transparent;color:var(--tg-text);" />
         <button id="btn-xac-nhan-ma" class="primary-btn" type="button">
@@ -415,7 +415,6 @@
 
       btn.addEventListener('click', async () => {
         anTatCaThongBao();
-        maCard.style.display = 'none';
         maInput.value = '';
         btn.disabled = true;
         btn.classList.add('loading');
@@ -437,9 +436,6 @@
 
           statusEl.textContent = '⏳ Vượt link xong, mã 6 số sẽ hiện ở trang đích — quay lại đây nhập mã đó.';
           statusEl.style.display = 'block';
-
-          maCard.style.display = 'block';
-          gsap.fromTo(maCard, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.35, ease: 'power2.out' });
         } catch (err) {
           console.error('Lỗi tạo nhiệm vụ:', err);
           btn.disabled = false;
@@ -470,7 +466,7 @@
           if (ketQua.hoan_thanh) {
             successEl.textContent = '✅ Đã xác nhận hoàn thành nhiệm vụ!';
             successEl.style.display = 'block';
-            maCard.style.display = 'none';
+            maInput.value = '';
           } else {
             const thongBaoLoi = {
               sai_ma: '❌ Mã không đúng.',

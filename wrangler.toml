@@ -14,6 +14,17 @@ id = "64b15fa4516246ee88938ade841666b8"
 binding = "USERS"
 id = "2dd6c260cd6543c086663b1ea0ca45f3"
 
+# Lịch sử Durable Object IpRegistry — đã tạo ở v1 (khi còn chống trùng IP),
+# giờ xóa hẳn ở v2. Cloudflare bắt buộc phải khai báo tường minh bước xóa
+# này, không được lặng lẽ bỏ binding — nếu không sẽ báo lỗi 10064.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["IpRegistry"]
+
+[[migrations]]
+tag = "v2"
+deleted_classes = ["IpRegistry"]
+
 [vars]
 CHU_SO_HUU = "7055595466"
 NHOM_LOG = "@nhomlogbot"

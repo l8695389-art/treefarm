@@ -2,6 +2,14 @@ import { telegramApi, cho } from "./telegram.js";
 
 const KEY_DANH_SACH_ADMIN = "danh_sach_admin";
 const TIEN_TO_USER = "user:";
+const TIEN_TO_QC_SO_LAN_NGAY = "qc-so-lan-ngay:";
+const QC_GIOI_HAN_NGAY = 20;
+const TIEN_TO_TAI_KHOAN_NHAN = "tai-khoan-nhan:";
+const TIEN_TO_RUT_NGAY = "rut-ngay:";
+const TIEN_TO_RUT_TUAN = "rut-tuan:";
+const RUT_TOI_THIEU = 10000;
+const RUT_TOI_DA_NGAY = 15000;
+const RUT_TOI_DA_TUAN = 50000;
 
 // ==================================================
 // 📋 QUẢN LÝ ADMIN — KV thay cho FILE_ADMIN (json)
@@ -258,6 +266,18 @@ function ngayVnHomNay() {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
 }
 
+function dauTuanVN() {
+  // ngày Thứ Hai của tuần hiện tại, theo giờ VN — dùng làm key gộp giới hạn rút/tuần
+  const vn = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" }));
+  const thu = vn.getDay(); // 0 = CN
+  const luiVe = thu === 0 ? 6 : thu - 1;
+  vn.setDate(vn.getDate() - luiVe);
+  const y = vn.getFullYear();
+  const m = String(vn.getMonth() + 1).padStart(2, "0");
+  const d = String(vn.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 function sinhMaNgauNhien() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
@@ -332,7 +352,8 @@ async function xuLyTaoNhiemVu(env, url, goc) {
 }
 
 // Trạng thái hiện tại — frontend gọi lúc mở app để khôi phục link cũ,
-// biết đã hoàn thành hôm nay chưa, và hiện số dư.
+// biết đã hoàn thành hôm nay chưa (link4m), đã xem bao nhiêu quảng cáo
+// hôm nay, và hiện số dư.
 async function xuLyNhiemVuHienTai(env, url) {
   const uid = url.searchParams.get("uid");
   if (!uid) return Response.json({ loi: "thieu_uid" }, { status: 400 });
@@ -341,17 +362,53 @@ async function xuLyNhiemVuHienTai(env, url) {
   const nguoiDung = await layNguoiDung(env, uid);
   const soDu = nguoiDung ? nguoiDung.soDu || 0 : 0;
 
+  const soLanQcDaXem = Number((await env.USERS.get(TIEN_TO_QC_SO_LAN_NGAY + uid + ":" + homNay)) || 0);
+
   const ngayDaHoanThanh = await env.USERS.get(TIEN_TO_NGAY_HOAN_THANH + uid);
   if (ngayDaHoanThanh === homNay) {
-    return Response.json({ trang_thai: "da_hoan_thanh", so_du: soDu });
+    return Response.json({ trang_thai: "da_hoan_thanh", so_du: soDu, so_lan_qc_da_xem: soLanQcDaXem, qc_gioi_han_ngay: QC_GIOI_HAN_NGAY });
   }
 
   const dangCho = await layNhiemVuHienTai(env, uid);
   if (dangCho && dangCho.ngay === homNay && Date.now() - dangCho.taoLuc <= TTL_NHIEM_VU_MS) {
-    return Response.json({ trang_thai: "dang_cho", link: dangCho.link, so_du: soDu });
+    return Response.json({ trang_thai: "dang_cho", link: dangCho.link, so_du: soDu, so_lan_qc_da_xem: soLanQcDaXem, qc_gioi_han_ngay: QC_GIOI_HAN_NGAY });
   }
 
-  return Response.json({ trang_thai: "chua_co", so_du: soDu });
+  return Response.json({ trang_thai: "chua_co", so_du: soDu, so_lan_qc_da_xem: soLanQcDaXem, qc_gioi_han_ngay: QC_GIOI_HAN_NGAY });
+}
+
+// Xác nhận đã xem quảng cáo Monetag — gọi trong .then() của show_11396646().
+// Tối đa QC_GIOI_HAN_NGAY lần/ngày, reset 00:00 giờ VN.
+// LƯU Ý BẢO MẬT: đây là callback phía trình duyệt, không có xác thực từ
+// phía Monetag server, nên ai rành DevTools cũng có thể tự gọi endpoint
+// này. Giới hạn số lần/ngày + số thưởng thấp là lớp phòng vệ duy nhất.
+async function xuLyXacNhanQuangCao(env, url) {
+  const uid = url.searchParams.get("uid");
+  if (!uid) return Response.json({ thanh_cong: false, loi: "thieu_uid" }, { status: 400 });
+
+  const homNay = ngayVnHomNay();
+  const key = TIEN_TO_QC_SO_LAN_NGAY + uid + ":" + homNay;
+  const soLanDaXem = Number((await env.USERS.get(key)) || 0);
+
+  if (soLanDaXem >= QC_GIOI_HAN_NGAY) {
+    return Response.json({ thanh_cong: false, loi: "da_vuot_hom_nay", so_lan_qc_da_xem: soLanDaXem, qc_gioi_han_ngay: QC_GIOI_HAN_NGAY });
+  }
+
+  const soLanMoi = soLanDaXem + 1;
+  await env.USERS.put(key, String(soLanMoi));
+
+  const soTienCong = Number(env.THUONG_QUANG_CAO || 100);
+  const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, gem: 0, soDu: 0 };
+  nguoiDung.soDu = (nguoiDung.soDu || 0) + soTienCong;
+  await luuNguoiDung(env, uid, nguoiDung);
+
+  return Response.json({
+    thanh_cong: true,
+    so_du: nguoiDung.soDu,
+    so_du_cong: soTienCong,
+    so_lan_qc_da_xem: soLanMoi,
+    qc_gioi_han_ngay: QC_GIOI_HAN_NGAY,
+  });
 }
 
 // Reset mã — hủy nhiệm vụ đang chờ (CHƯA hoàn thành) để tạo lại link mới,
@@ -585,6 +642,106 @@ async function xuLyBangXepHang(env) {
 }
 
 // ==================================================
+// 💰 VÍ & RÚT TIỀN — không tự động chuyển khoản, chỉ ghi nhận yêu cầu
+// và báo admin xử lý thủ công. Mọi giới hạn (tối thiểu, ngày, tuần,
+// khóa 1 tài khoản nhận duy nhất) được enforce ở SERVER, không tin
+// client — vì đây là chỗ liên quan trực tiếp tới tiền thật.
+// ==================================================
+async function xuLyThongTinVi(env, url) {
+  const uid = url.searchParams.get("uid");
+  if (!uid) return Response.json({ loi: "thieu_uid" }, { status: 400 });
+
+  const nguoiDung = await layNguoiDung(env, uid);
+  const soDu = nguoiDung ? nguoiDung.soDu || 0 : 0;
+
+  const rawTaiKhoan = await env.USERS.get(TIEN_TO_TAI_KHOAN_NHAN + uid);
+  const taiKhoan = rawTaiKhoan ? JSON.parse(rawTaiKhoan) : null;
+
+  const homNay = ngayVnHomNay();
+  const tuanNay = dauTuanVN();
+  const daRutNgay = Number((await env.USERS.get(TIEN_TO_RUT_NGAY + uid + ":" + homNay)) || 0);
+  const daRutTuan = Number((await env.USERS.get(TIEN_TO_RUT_TUAN + uid + ":" + tuanNay)) || 0);
+
+  return Response.json({
+    so_du: soDu,
+    tai_khoan: taiKhoan,
+    con_lai_ngay: Math.max(0, RUT_TOI_DA_NGAY - daRutNgay),
+    con_lai_tuan: Math.max(0, RUT_TOI_DA_TUAN - daRutTuan),
+  });
+}
+
+async function xuLyYeuCauRutTien(env, url) {
+  const uid = url.searchParams.get("uid");
+  const nganHang = (url.searchParams.get("ngan_hang") || "").trim();
+  const soTk = (url.searchParams.get("so_tk") || "").trim();
+  const tenNguoiNhan = (url.searchParams.get("ten_nguoi_nhan") || "").trim();
+  const soTien = Number(url.searchParams.get("so_tien"));
+
+  if (!uid || !nganHang || !soTk || !tenNguoiNhan || !soTien) {
+    return Response.json({ thanh_cong: false, loi: "thieu_tham_so" }, { status: 400 });
+  }
+  if (!Number.isFinite(soTien) || soTien < RUT_TOI_THIEU) {
+    return Response.json({ thanh_cong: false, loi: "duoi_toi_thieu" });
+  }
+
+  const nguoiDung = await layNguoiDung(env, uid);
+  const soDu = nguoiDung ? nguoiDung.soDu || 0 : 0;
+  if (soTien > soDu) {
+    return Response.json({ thanh_cong: false, loi: "khong_du_so_du" });
+  }
+
+  // Chỉ liên kết 1 tài khoản nhận duy nhất — lần đầu khóa lại, các lần
+  // sau bắt buộc trùng khớp, không cho đổi.
+  const rawTaiKhoan = await env.USERS.get(TIEN_TO_TAI_KHOAN_NHAN + uid);
+  const taiKhoanDaLuu = rawTaiKhoan ? JSON.parse(rawTaiKhoan) : null;
+  if (taiKhoanDaLuu && (taiKhoanDaLuu.nganHang !== nganHang || taiKhoanDaLuu.soTk !== soTk)) {
+    return Response.json({ thanh_cong: false, loi: "sai_tai_khoan_lien_ket" });
+  }
+
+  const homNay = ngayVnHomNay();
+  const tuanNay = dauTuanVN();
+  const keyNgay = TIEN_TO_RUT_NGAY + uid + ":" + homNay;
+  const keyTuan = TIEN_TO_RUT_TUAN + uid + ":" + tuanNay;
+  const daRutNgay = Number((await env.USERS.get(keyNgay)) || 0);
+  const daRutTuan = Number((await env.USERS.get(keyTuan)) || 0);
+
+  if (daRutNgay + soTien > RUT_TOI_DA_NGAY) {
+    return Response.json({ thanh_cong: false, loi: "vuot_han_muc_ngay" });
+  }
+  if (daRutTuan + soTien > RUT_TOI_DA_TUAN) {
+    return Response.json({ thanh_cong: false, loi: "vuot_han_muc_tuan" });
+  }
+
+  // Trừ số dư ngay — coi như tiền bị giữ lại chờ admin xử lý thủ công,
+  // tránh gửi trùng nhiều yêu cầu vượt quá số dư thực có.
+  nguoiDung.soDu = soDu - soTien;
+  await luuNguoiDung(env, uid, nguoiDung);
+
+  if (!taiKhoanDaLuu) {
+    await env.USERS.put(TIEN_TO_TAI_KHOAN_NHAN + uid, JSON.stringify({ nganHang, soTk, tenNguoiNhan }));
+  }
+  await env.USERS.put(keyNgay, String(daRutNgay + soTien));
+  await env.USERS.put(keyTuan, String(daRutTuan + soTien));
+
+  const thoiGian = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+  const noiDung =
+    `💸 YÊU CẦU RÚT TIỀN\n` +
+    `👤 UID: ${uid}\n` +
+    `🏦 Ngân hàng/Ví: ${nganHang}\n` +
+    `🔢 Số TK/SĐT: ${soTk}\n` +
+    `📛 Tên người nhận: ${tenNguoiNhan}\n` +
+    `💰 Số tiền: ${soTien.toLocaleString("vi-VN")}đ\n` +
+    `🕐 Thời gian: ${thoiGian}`;
+
+  const danhSachAdmin = await layDanhSachAdmin(env);
+  await Promise.allSettled(
+    danhSachAdmin.map((adminId) => telegramApi(env, "sendMessage", { chat_id: Number(adminId), text: noiDung }))
+  );
+
+  return Response.json({ thanh_cong: true, so_du_con_lai: nguoiDung.soDu });
+}
+
+// ==================================================
 // 🚦 ENTRYPOINT — thay app.run() / bot.polling()
 // ==================================================
 export default {
@@ -617,8 +774,14 @@ export default {
           return xuLyResetNhiemVu(env, url);
         case "/xac-nhan-nhiem-vu":
           return xuLyXacNhanNhiemVu(env, url);
+        case "/xac-nhan-quang-cao":
+          return xuLyXacNhanQuangCao(env, url);
         case "/bang-xep-hang":
           return xuLyBangXepHang(env);
+        case "/thong-tin-vi":
+          return xuLyThongTinVi(env, url);
+        case "/yeu-cau-rut-tien":
+          return xuLyYeuCauRutTien(env, url);
         case "/suc-khoe":
           return Response.json({ trang_thai: "on" });
       }

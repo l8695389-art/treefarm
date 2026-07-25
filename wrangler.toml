@@ -31,6 +31,7 @@ NHOM_LOG = "@nhomlogbot"
 LINK_MINIAPP = "https://m.treefarmapp.workers.dev/"
 LINK_ANH = "https://i.ibb.co/7x7DFnZ9/1783599852392.jpg"
 THUONG_SO_DU_NHIEM_VU = "300"
+THUONG_QUANG_CAO = "100"
 
 # Secrets — set qua Dashboard: Settings > Variables and secrets
 #   BOT_TOKEN, LINK4M_API_TOKEN, WEBHOOK_SECRET

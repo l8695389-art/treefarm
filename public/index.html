@@ -228,7 +228,7 @@
       <div class="avatar" id="user-avatar">?</div>
       <div class="header-info">
         <div class="header-name" id="user-name">Đang tải...</div>
-        <div class="header-env">Xin chào!</div>
+        <div class="header-env" id="so-du-hien-thi">Số dư: —</div>
       </div>
       <div class="status-dot"></div>
     </div>
@@ -251,12 +251,13 @@
         </div>
       </div>
 
-      <div id="ma-card" class="card highlight">
+      <div id="ma-card" class="card highlight" style="display:none;">
         <div class="card-label">Sau khi vượt link xong, nhập mã 6 số hiện trên trang đích:</div>
         <input id="ma-input" type="text" inputmode="numeric" maxlength="6" placeholder="000000" class="mono" style="width:100%;text-align:center;font-size:24px;letter-spacing:6px;padding:12px;margin:8px 0;border-radius:8px;border:1px solid var(--tg-border);background:transparent;color:var(--tg-text);" />
         <button id="btn-xac-nhan-ma" class="primary-btn" type="button">
           <span class="btn-label">Xác nhận hoàn thành</span>
         </button>
+        <button id="btn-reset-ma" class="secondary-btn" type="button" style="width:100%;margin-top:10px;">🔄 Reset, lấy mã khác</button>
       </div>
     </div>
   </div>
@@ -366,15 +367,13 @@
     // Tạo nhiệm vụ mới — backend sinh mã 6 số, tạo link Link4M trỏ tới
     // trang /nv/<ma> do chính Worker host. Mã chỉ lộ ra sau khi vượt hết
     // quảng cáo Link4M, không cần API stats (Link4M không có API đó).
-    async function taoNhiemVu(uid) {
+    // Trả nguyên object (không throw) để UI phân biệt được từng loại lỗi,
+    // đặc biệt là "da_vuot_hom_nay" (giới hạn 1 link/ngày).
+    async function taoNhiemVuFull(uid) {
       const endpoint = `${LINK4M_CONFIG.linkGoc}/tao-nhiem-vu?uid=${encodeURIComponent(uid)}`;
       const res = await fetch(endpoint);
-      if (!res.ok) throw new Error('network');
-      const data = await res.json();
-      if (!data.thanh_cong || !data.link) {
-        throw new Error(data.loi || 'api-error');
-      }
-      return data.link;
+      if (!res.ok) return { thanh_cong: false, loi: 'network' };
+      return await res.json();
     }
 
     // Đối chiếu mã người dùng nhập với mã đã lưu — atomic ở backend,
@@ -384,6 +383,27 @@
       const res = await fetch(endpoint);
       if (!res.ok) return { hoan_thanh: false, loi: 'network' };
       return await res.json();
+    }
+
+    // Trạng thái hiện tại — gọi lúc mở app để khôi phục link cũ (nếu còn
+    // hiệu lực), biết đã hoàn thành hôm nay chưa, và lấy số dư.
+    async function layTrangThaiHienTai(uid) {
+      const endpoint = `${LINK4M_CONFIG.linkGoc}/nhiem-vu-hien-tai?uid=${encodeURIComponent(uid)}`;
+      const res = await fetch(endpoint);
+      if (!res.ok) return null;
+      return await res.json();
+    }
+
+    // Hủy nhiệm vụ đang chờ (chưa hoàn thành) để tạo link mới thay thế.
+    async function resetNhiemVu(uid) {
+      const endpoint = `${LINK4M_CONFIG.linkGoc}/reset-nhiem-vu?uid=${encodeURIComponent(uid)}`;
+      const res = await fetch(endpoint);
+      if (!res.ok) return { thanh_cong: false, loi: 'network' };
+      return await res.json();
+    }
+
+    function hienThiSoDu(soDu) {
+      document.getElementById('so-du-hien-thi').textContent = `Số dư: ${(soDu || 0).toLocaleString('vi-VN')}đ`;
     }
 
     function setupLinkButton(tg) {
@@ -400,6 +420,9 @@
       const maInput = document.getElementById('ma-input');
       const btnXacNhanMa = document.getElementById('btn-xac-nhan-ma');
       const labelXacNhan = btnXacNhanMa.querySelector('.btn-label');
+      const btnResetMa = document.getElementById('btn-reset-ma');
+
+      const uid = tg?.initDataUnsafe?.user?.id;
 
       function anTatCaThongBao() {
         errorEl.style.display = 'none';
@@ -413,6 +436,40 @@
         errorEl.style.display = 'block';
       }
 
+      function hienThiLink(link) {
+        valueEl.textContent = link;
+        openBtn.href = link;
+        card.style.display = 'block';
+        maCard.style.display = 'block';
+      }
+
+      function khoaHomNay() {
+        btn.disabled = true;
+        label.textContent = 'Đã hoàn thành hôm nay ✅';
+        card.style.display = 'none';
+        maCard.style.display = 'none';
+        anTatCaThongBao();
+        statusEl.textContent = '🎉 Hẹn gặp lại lúc 00:00 (giờ Việt Nam) cho nhiệm vụ tiếp theo!';
+        statusEl.style.display = 'block';
+      }
+
+      // Khôi phục trạng thái ngay khi mở app — link cũ, số dư, đã xong
+      // hôm nay chưa. Đây là phần xử lý "thoát app rồi mở lại vẫn còn link".
+      (async () => {
+        if (!uid) return;
+        const tt = await layTrangThaiHienTai(uid);
+        if (!tt) return;
+        hienThiSoDu(tt.so_du);
+
+        if (tt.trang_thai === 'da_hoan_thanh') {
+          khoaHomNay();
+        } else if (tt.trang_thai === 'dang_cho' && tt.link) {
+          hienThiLink(tt.link);
+          statusEl.textContent = '⏳ Vượt link xong, mã 6 số sẽ hiện ở trang đích — quay lại đây nhập mã đó.';
+          statusEl.style.display = 'block';
+        }
+      })();
+
       btn.addEventListener('click', async () => {
         anTatCaThongBao();
         maInput.value = '';
@@ -420,19 +477,26 @@
         btn.classList.add('loading');
         label.textContent = 'Đang tạo nhiệm vụ...';
 
-        const uid = tg?.initDataUnsafe?.user?.id;
-
         try {
           if (!uid) throw new Error('khong_co_uid');
-          const shortUrl = await taoNhiemVu(uid);
-          valueEl.textContent = shortUrl;
-          openBtn.href = shortUrl;
-          card.style.display = 'block';
-          gsap.fromTo(card, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.35, ease: 'power2.out' });
+          const data = await taoNhiemVuFull(uid);
 
           btn.disabled = false;
           btn.classList.remove('loading');
           label.textContent = 'Nhận link rút gọn';
+
+          if (!data.thanh_cong) {
+            if (data.loi === 'da_vuot_hom_nay') {
+              const tt = await layTrangThaiHienTai(uid);
+              if (tt) hienThiSoDu(tt.so_du);
+              return khoaHomNay();
+            }
+            return batLoi('❌ Không tạo được link, thử lại sau nhé.');
+          }
+
+          hienThiLink(data.link);
+          gsap.fromTo(card, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.35, ease: 'power2.out' });
+          gsap.fromTo(maCard, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.35, ease: 'power2.out' });
 
           statusEl.textContent = '⏳ Vượt link xong, mã 6 số sẽ hiện ở trang đích — quay lại đây nhập mã đó.';
           statusEl.style.display = 'block';
@@ -446,7 +510,6 @@
       });
 
       btnXacNhanMa.addEventListener('click', async () => {
-        const uid = tg?.initDataUnsafe?.user?.id;
         const ma = maInput.value.trim();
 
         if (!uid) return batLoi('❌ Không xác định được tài khoản Telegram.');
@@ -464,15 +527,18 @@
           labelXacNhan.textContent = 'Xác nhận hoàn thành';
 
           if (ketQua.hoan_thanh) {
-            successEl.textContent = '✅ Đã xác nhận hoàn thành nhiệm vụ!';
+            hienThiSoDu(ketQua.so_du);
+            successEl.textContent = '✅ Đã hoàn thành nhiệm vụ! +300đ vào số dư.';
             successEl.style.display = 'block';
-            maInput.value = '';
+            setTimeout(khoaHomNay, 1400);
           } else {
             const thongBaoLoi = {
               sai_ma: '❌ Mã không đúng.',
               da_dung: '❌ Mã này đã được dùng rồi.',
-              het_han: '❌ Mã đã hết hạn, tạo nhiệm vụ mới nhé.',
+              het_han: '❌ Mã đã hết hạn, bấm Reset để lấy link mới.',
+              da_vuot_hom_nay: '❌ Bạn đã hoàn thành nhiệm vụ hôm nay rồi.',
             };
+            if (ketQua.loi === 'da_vuot_hom_nay') return khoaHomNay();
             batLoi(thongBaoLoi[ketQua.loi] || '❌ Không xác nhận được, thử lại sau.');
           }
         } catch (err) {
@@ -480,6 +546,37 @@
           btnXacNhanMa.disabled = false;
           btnXacNhanMa.classList.remove('loading');
           labelXacNhan.textContent = 'Xác nhận hoàn thành';
+          batLoi('❌ Lỗi kết nối, thử lại sau.');
+        }
+      });
+
+      btnResetMa.addEventListener('click', async () => {
+        if (!uid) return batLoi('❌ Không xác định được tài khoản Telegram.');
+
+        anTatCaThongBao();
+        btnResetMa.disabled = true;
+        btnResetMa.textContent = 'Đang reset...';
+
+        try {
+          const ketQua = await resetNhiemVu(uid);
+          btnResetMa.disabled = false;
+          btnResetMa.textContent = '🔄 Reset, lấy mã khác';
+
+          if (ketQua.thanh_cong) {
+            card.style.display = 'none';
+            maCard.style.display = 'none';
+            maInput.value = '';
+            statusEl.textContent = '🔄 Đã reset. Bấm "Nhận link rút gọn" để lấy link mới.';
+            statusEl.style.display = 'block';
+          } else if (ketQua.loi === 'da_hoan_thanh_khong_the_reset') {
+            khoaHomNay();
+          } else {
+            batLoi('❌ Không reset được, thử lại sau.');
+          }
+        } catch (err) {
+          console.error('Lỗi reset:', err);
+          btnResetMa.disabled = false;
+          btnResetMa.textContent = '🔄 Reset, lấy mã khác';
           batLoi('❌ Lỗi kết nối, thử lại sau.');
         }
       });

@@ -564,6 +564,27 @@ async function xuLyXacNhanNhiemVu(env, url) {
 }
 
 // ==================================================
+// 🏆 BẢNG XẾP HẠNG — sắp xếp theo số dư (tiền đã nhận từ vượt link)
+// ==================================================
+async function xuLyBangXepHang(env) {
+  const QUET_TOI_DA = 500; // giới hạn số user quét mỗi lần gọi, tránh vượt CPU time free plan
+  const ketQua = [];
+  let daQuet = 0;
+
+  for await (const uid of duyetTatCaNguoiDung(env)) {
+    if (daQuet >= QUET_TOI_DA) break;
+    daQuet += 1;
+    const nguoiDung = await layNguoiDung(env, uid);
+    if (nguoiDung && (nguoiDung.soDu || 0) > 0) {
+      ketQua.push({ ten: nguoiDung.ten || "Ẩn danh", soDu: nguoiDung.soDu || 0 });
+    }
+  }
+
+  ketQua.sort((a, b) => b.soDu - a.soDu);
+  return Response.json({ bang_xep_hang: ketQua.slice(0, 50) });
+}
+
+// ==================================================
 // 🚦 ENTRYPOINT — thay app.run() / bot.polling()
 // ==================================================
 export default {
@@ -596,6 +617,8 @@ export default {
           return xuLyResetNhiemVu(env, url);
         case "/xac-nhan-nhiem-vu":
           return xuLyXacNhanNhiemVu(env, url);
+        case "/bang-xep-hang":
+          return xuLyBangXepHang(env);
         case "/suc-khoe":
           return Response.json({ trang_thai: "on" });
       }

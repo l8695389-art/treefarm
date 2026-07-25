@@ -158,6 +158,7 @@ async function xuLyStart(env, message) {
       ngay_tham_gia: new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }),
       coin: 0,
       gem: 0,
+      soDu: 0,
     });
     await ghiLogVaThongBao(env, message, "| ✅ NGƯỜI DÙNG MỚI");
   } else {
@@ -248,10 +249,30 @@ async function xuLyUpdate(env, update) {
 // dùng 1 lần rồi khóa — không phụ thuộc dữ liệu phía Link4M.
 // ==================================================
 const TIEN_TO_NHIEM_VU = "nhiemvu:";
+const TIEN_TO_NGAY_HOAN_THANH = "ngay_hoan_thanh:";
+const TIEN_TO_NHIEM_VU_HIEN_TAI = "nhiemvu-hientai:"; // con trỏ nhiệm vụ đang chờ, để khôi phục khi mở lại app
 const TTL_NHIEM_VU_MS = 30 * 60 * 1000; // 30 phút
+
+function ngayVnHomNay() {
+  // định dạng YYYY-MM-DD theo giờ Việt Nam, reset đúng 00:00 giờ VN
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
+}
 
 function sinhMaNgauNhien() {
   return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+async function layNhiemVuHienTai(env, uid) {
+  const raw = await env.USERS.get(TIEN_TO_NHIEM_VU_HIEN_TAI + uid);
+  return raw ? JSON.parse(raw) : null;
+}
+
+async function luuNhiemVuHienTai(env, uid, duLieu) {
+  await env.USERS.put(TIEN_TO_NHIEM_VU_HIEN_TAI + uid, JSON.stringify(duLieu));
+}
+
+async function xoaNhiemVuHienTai(env, uid) {
+  await env.USERS.delete(TIEN_TO_NHIEM_VU_HIEN_TAI + uid);
 }
 
 async function taoNhiemVuMoi(env, uid) {
@@ -271,6 +292,22 @@ async function xuLyTaoNhiemVu(env, url, goc) {
   const uid = url.searchParams.get("uid");
   if (!uid) return Response.json({ thanh_cong: false, loi: "thieu_uid" }, { status: 400 });
 
+  const homNay = ngayVnHomNay();
+
+  // Chặn sớm nếu hôm nay đã hoàn thành rồi — đỡ tốn 1 lượt gọi Link4M vô ích
+  const ngayDaHoanThanh = await env.USERS.get(TIEN_TO_NGAY_HOAN_THANH + uid);
+  if (ngayDaHoanThanh === homNay) {
+    return Response.json({ thanh_cong: false, loi: "da_vuot_hom_nay" });
+  }
+
+  // Còn nhiệm vụ đang chờ, chưa hoàn thành, chưa hết hạn → trả lại ĐÚNG
+  // link cũ, không tạo mới. Đây là cơ chế giữ link khi thoát app rồi mở
+  // lại — không cần gọi thêm Link4M, không sinh thêm mã thừa.
+  const dangCho = await layNhiemVuHienTai(env, uid);
+  if (dangCho && dangCho.ngay === homNay && Date.now() - dangCho.taoLuc <= TTL_NHIEM_VU_MS) {
+    return Response.json({ thanh_cong: true, link: dangCho.link });
+  }
+
   let ma;
   try {
     ma = await taoNhiemVuMoi(env, uid);
@@ -285,12 +322,58 @@ async function xuLyTaoNhiemVu(env, url, goc) {
     const res = await fetch(apiUrl, { signal: AbortSignal.timeout(15000) });
     const data = await res.json();
     if (data.status === "success" && data.shortenedUrl) {
+      await luuNhiemVuHienTai(env, uid, { ma, link: data.shortenedUrl, taoLuc: Date.now(), ngay: homNay });
       return Response.json({ thanh_cong: true, link: data.shortenedUrl });
     }
     return Response.json({ thanh_cong: false, loi: data.message || "loi_khong_ro" });
   } catch (e) {
     return Response.json({ thanh_cong: false, loi: String(e) }, { status: 500 });
   }
+}
+
+// Trạng thái hiện tại — frontend gọi lúc mở app để khôi phục link cũ,
+// biết đã hoàn thành hôm nay chưa, và hiện số dư.
+async function xuLyNhiemVuHienTai(env, url) {
+  const uid = url.searchParams.get("uid");
+  if (!uid) return Response.json({ loi: "thieu_uid" }, { status: 400 });
+
+  const homNay = ngayVnHomNay();
+  const nguoiDung = await layNguoiDung(env, uid);
+  const soDu = nguoiDung ? nguoiDung.soDu || 0 : 0;
+
+  const ngayDaHoanThanh = await env.USERS.get(TIEN_TO_NGAY_HOAN_THANH + uid);
+  if (ngayDaHoanThanh === homNay) {
+    return Response.json({ trang_thai: "da_hoan_thanh", so_du: soDu });
+  }
+
+  const dangCho = await layNhiemVuHienTai(env, uid);
+  if (dangCho && dangCho.ngay === homNay && Date.now() - dangCho.taoLuc <= TTL_NHIEM_VU_MS) {
+    return Response.json({ trang_thai: "dang_cho", link: dangCho.link, so_du: soDu });
+  }
+
+  return Response.json({ trang_thai: "chua_co", so_du: soDu });
+}
+
+// Reset mã — hủy nhiệm vụ đang chờ (CHƯA hoàn thành) để tạo lại link mới,
+// dùng khi lỡ mất mã/đóng nhầm trang đích. Không cho reset nếu đã xong
+// hôm nay rồi, tránh lách giới hạn ngày.
+async function xuLyResetNhiemVu(env, url) {
+  const uid = url.searchParams.get("uid");
+  if (!uid) return Response.json({ thanh_cong: false, loi: "thieu_uid" }, { status: 400 });
+
+  const homNay = ngayVnHomNay();
+  const ngayDaHoanThanh = await env.USERS.get(TIEN_TO_NGAY_HOAN_THANH + uid);
+  if (ngayDaHoanThanh === homNay) {
+    return Response.json({ thanh_cong: false, loi: "da_hoan_thanh_khong_the_reset" });
+  }
+
+  const dangCho = await layNhiemVuHienTai(env, uid);
+  if (!dangCho || dangCho.ngay !== homNay) {
+    return Response.json({ thanh_cong: false, loi: "khong_co_gi_de_reset" });
+  }
+
+  await xoaNhiemVuHienTai(env, uid);
+  return Response.json({ thanh_cong: true });
 }
 
 function trangHtmlMa({ icon, tieuDe, ma, moTa, ghiChu }) {
@@ -450,6 +533,14 @@ async function xuLyXacNhanNhiemVu(env, url) {
   const ma = url.searchParams.get("ma");
   if (!uid || !ma) return Response.json({ hoan_thanh: false, loi: "thieu_tham_so" }, { status: 400 });
 
+  const homNay = ngayVnHomNay();
+
+  // Chốt chặn thật — dù có lách qua bước tạo link thế nào cũng dừng ở đây
+  const ngayDaHoanThanh = await env.USERS.get(TIEN_TO_NGAY_HOAN_THANH + uid);
+  if (ngayDaHoanThanh === homNay) {
+    return Response.json({ hoan_thanh: false, loi: "da_vuot_hom_nay" });
+  }
+
   const key = TIEN_TO_NHIEM_VU + ma;
   const raw = await env.USERS.get(key);
   if (!raw) return Response.json({ hoan_thanh: false, loi: "sai_ma" });
@@ -461,15 +552,15 @@ async function xuLyXacNhanNhiemVu(env, url) {
 
   banGhi.daDung = true;
   await env.USERS.put(key, JSON.stringify(banGhi));
+  await env.USERS.put(TIEN_TO_NGAY_HOAN_THANH + uid, homNay);
+  await xoaNhiemVuHienTai(env, uid); // dọn con trỏ, nhiệm vụ này xong rồi
 
-  // Cộng thưởng cho user
-  const nguoiDung = await layNguoiDung(env, uid);
-  if (nguoiDung) {
-    nguoiDung.coin = (nguoiDung.coin || 0) + Number(env.THUONG_XU_NHIEM_VU || 10);
-    await luuNguoiDung(env, uid, nguoiDung);
-  }
+  // Cộng thưởng vào số dư
+  const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, gem: 0, soDu: 0 };
+  nguoiDung.soDu = (nguoiDung.soDu || 0) + Number(env.THUONG_SO_DU_NHIEM_VU || 300);
+  await luuNguoiDung(env, uid, nguoiDung);
 
-  return Response.json({ hoan_thanh: true });
+  return Response.json({ hoan_thanh: true, so_du: nguoiDung.soDu });
 }
 
 // ==================================================
@@ -499,6 +590,10 @@ export default {
       switch (url.pathname) {
         case "/tao-nhiem-vu":
           return xuLyTaoNhiemVu(env, url, url.origin);
+        case "/nhiem-vu-hien-tai":
+          return xuLyNhiemVuHienTai(env, url);
+        case "/reset-nhiem-vu":
+          return xuLyResetNhiemVu(env, url);
         case "/xac-nhan-nhiem-vu":
           return xuLyXacNhanNhiemVu(env, url);
         case "/suc-khoe":

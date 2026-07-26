@@ -4,12 +4,18 @@ const KEY_DANH_SACH_ADMIN = "danh_sach_admin";
 const TIEN_TO_USER = "user:";
 const TIEN_TO_QC_SO_LAN_NGAY = "qc-so-lan-ngay:";
 const QC_GIOI_HAN_NGAY = 20;
+const TIEN_TO_QC_LAN_CUOI = "qc-lan-cuoi:"; // mốc thời gian lần xem quảng cáo gần nhất — chặn spam
+const QC_CHO_TOI_THIEU_MS = 30 * 1000; // phải chờ tối thiểu 30 giây giữa 2 lần xem quảng cáo
 const TIEN_TO_TAI_KHOAN_NHAN = "tai-khoan-nhan:";
+const SO_NGAY_DOI_TAI_KHOAN = 20; // chỉ cho đổi tài khoản nhận tiền 20 ngày / 1 lần
+const TIEN_TO_GIAO_DICH_RUT = "giao-dich-rut:"; // giao-dich-rut:{uid}:{id} — lịch sử + trạng thái duyệt
 const TIEN_TO_RUT_NGAY = "rut-ngay:";
 const TIEN_TO_RUT_TUAN = "rut-tuan:";
 const RUT_TOI_THIEU = 10000;
 const RUT_TOI_DA_NGAY = 15000;
 const RUT_TOI_DA_TUAN = 50000;
+const TIEN_TO_LINK4M_SO_LAN_NGAY = "link4m-so-lan-ngay:"; // số lần hoàn thành nhiệm vụ link4m hôm nay
+const LINK4M_GIOI_HAN_NGAY = 2; // tăng từ 1 lên 2 lần/ngày
 
 // ==================================================
 // 📋 QUẢN LÝ ADMIN — KV thay cho FILE_ADMIN (json)
@@ -226,6 +232,14 @@ async function xuLyGuiThongBao(env, message) {
 // 🔀 Router lệnh + bắt tất cả tin nhắn còn lại
 // ==================================================
 async function xuLyUpdate(env, update) {
+  if (update.callback_query) {
+    const data = update.callback_query.data || "";
+    if (data.startsWith("rut_ok:") || data.startsWith("rut_tc:")) {
+      return xuLyDuyetRutTien(env, update.callback_query);
+    }
+    return;
+  }
+
   const message = update.message;
   if (!message) return;
 
@@ -257,7 +271,6 @@ async function xuLyUpdate(env, update) {
 // dùng 1 lần rồi khóa — không phụ thuộc dữ liệu phía Link4M.
 // ==================================================
 const TIEN_TO_NHIEM_VU = "nhiemvu:";
-const TIEN_TO_NGAY_HOAN_THANH = "ngay_hoan_thanh:";
 const TIEN_TO_NHIEM_VU_HIEN_TAI = "nhiemvu-hientai:"; // con trỏ nhiệm vụ đang chờ, để khôi phục khi mở lại app
 const TTL_NHIEM_VU_MS = 30 * 60 * 1000; // 30 phút
 
@@ -314,9 +327,10 @@ async function xuLyTaoNhiemVu(env, url, goc) {
 
   const homNay = ngayVnHomNay();
 
-  // Chặn sớm nếu hôm nay đã hoàn thành rồi — đỡ tốn 1 lượt gọi Link4M vô ích
-  const ngayDaHoanThanh = await env.USERS.get(TIEN_TO_NGAY_HOAN_THANH + uid);
-  if (ngayDaHoanThanh === homNay) {
+  // Chặn sớm nếu hôm nay đã dùng hết lượt rồi (tối đa LINK4M_GIOI_HAN_NGAY
+  // lần/ngày) — đỡ tốn 1 lượt gọi Link4M vô ích
+  const soLanDaXong = Number((await env.USERS.get(TIEN_TO_LINK4M_SO_LAN_NGAY + uid + ":" + homNay)) || 0);
+  if (soLanDaXong >= LINK4M_GIOI_HAN_NGAY) {
     return Response.json({ thanh_cong: false, loi: "da_vuot_hom_nay" });
   }
 
@@ -363,18 +377,29 @@ async function xuLyNhiemVuHienTai(env, url) {
   const soDu = nguoiDung ? nguoiDung.soDu || 0 : 0;
 
   const soLanQcDaXem = Number((await env.USERS.get(TIEN_TO_QC_SO_LAN_NGAY + uid + ":" + homNay)) || 0);
+  const qcLanCuoi = Number((await env.USERS.get(TIEN_TO_QC_LAN_CUOI + uid)) || 0);
+  const soLanLink4mDaXong = Number((await env.USERS.get(TIEN_TO_LINK4M_SO_LAN_NGAY + uid + ":" + homNay)) || 0);
 
-  const ngayDaHoanThanh = await env.USERS.get(TIEN_TO_NGAY_HOAN_THANH + uid);
-  if (ngayDaHoanThanh === homNay) {
-    return Response.json({ trang_thai: "da_hoan_thanh", so_du: soDu, so_lan_qc_da_xem: soLanQcDaXem, qc_gioi_han_ngay: QC_GIOI_HAN_NGAY });
+  const trangThaiChung = {
+    so_du: soDu,
+    so_lan_qc_da_xem: soLanQcDaXem,
+    qc_gioi_han_ngay: QC_GIOI_HAN_NGAY,
+    qc_lan_cuoi: qcLanCuoi,
+    qc_cho_toi_thieu_giay: QC_CHO_TOI_THIEU_MS / 1000,
+    so_lan_link4m_da_xong: soLanLink4mDaXong,
+    link4m_gioi_han_ngay: LINK4M_GIOI_HAN_NGAY,
+  };
+
+  if (soLanLink4mDaXong >= LINK4M_GIOI_HAN_NGAY) {
+    return Response.json({ trang_thai: "da_hoan_thanh", ...trangThaiChung });
   }
 
   const dangCho = await layNhiemVuHienTai(env, uid);
   if (dangCho && dangCho.ngay === homNay && Date.now() - dangCho.taoLuc <= TTL_NHIEM_VU_MS) {
-    return Response.json({ trang_thai: "dang_cho", link: dangCho.link, so_du: soDu, so_lan_qc_da_xem: soLanQcDaXem, qc_gioi_han_ngay: QC_GIOI_HAN_NGAY });
+    return Response.json({ trang_thai: "dang_cho", link: dangCho.link, ...trangThaiChung });
   }
 
-  return Response.json({ trang_thai: "chua_co", so_du: soDu, so_lan_qc_da_xem: soLanQcDaXem, qc_gioi_han_ngay: QC_GIOI_HAN_NGAY });
+  return Response.json({ trang_thai: "chua_co", ...trangThaiChung });
 }
 
 // Xác nhận đã xem quảng cáo Monetag — gọi trong .then() của show_11396646().
@@ -394,8 +419,24 @@ async function xuLyXacNhanQuangCao(env, url) {
     return Response.json({ thanh_cong: false, loi: "da_vuot_hom_nay", so_lan_qc_da_xem: soLanDaXem, qc_gioi_han_ngay: QC_GIOI_HAN_NGAY });
   }
 
+  // Chặn xem liên tục — phải cách lần trước tối thiểu 30 giây
+  const keyLanCuoi = TIEN_TO_QC_LAN_CUOI + uid;
+  const lanCuoi = Number((await env.USERS.get(keyLanCuoi)) || 0);
+  const now = Date.now();
+  const daTroi = now - lanCuoi;
+  if (lanCuoi && daTroi < QC_CHO_TOI_THIEU_MS) {
+    return Response.json({
+      thanh_cong: false,
+      loi: "cho_qua_nhanh",
+      cho_con_lai_giay: Math.ceil((QC_CHO_TOI_THIEU_MS - daTroi) / 1000),
+      so_lan_qc_da_xem: soLanDaXem,
+      qc_gioi_han_ngay: QC_GIOI_HAN_NGAY,
+    });
+  }
+
   const soLanMoi = soLanDaXem + 1;
   await env.USERS.put(key, String(soLanMoi));
+  await env.USERS.put(keyLanCuoi, String(now));
 
   const soTienCong = Number(env.THUONG_QUANG_CAO || 100);
   const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, gem: 0, soDu: 0 };
@@ -408,6 +449,7 @@ async function xuLyXacNhanQuangCao(env, url) {
     so_du_cong: soTienCong,
     so_lan_qc_da_xem: soLanMoi,
     qc_gioi_han_ngay: QC_GIOI_HAN_NGAY,
+    cho_toi_thieu_giay: QC_CHO_TOI_THIEU_MS / 1000,
   });
 }
 
@@ -419,8 +461,8 @@ async function xuLyResetNhiemVu(env, url) {
   if (!uid) return Response.json({ thanh_cong: false, loi: "thieu_uid" }, { status: 400 });
 
   const homNay = ngayVnHomNay();
-  const ngayDaHoanThanh = await env.USERS.get(TIEN_TO_NGAY_HOAN_THANH + uid);
-  if (ngayDaHoanThanh === homNay) {
+  const soLanDaXong = Number((await env.USERS.get(TIEN_TO_LINK4M_SO_LAN_NGAY + uid + ":" + homNay)) || 0);
+  if (soLanDaXong >= LINK4M_GIOI_HAN_NGAY) {
     return Response.json({ thanh_cong: false, loi: "da_hoan_thanh_khong_the_reset" });
   }
 
@@ -593,8 +635,9 @@ async function xuLyXacNhanNhiemVu(env, url) {
   const homNay = ngayVnHomNay();
 
   // Chốt chặn thật — dù có lách qua bước tạo link thế nào cũng dừng ở đây
-  const ngayDaHoanThanh = await env.USERS.get(TIEN_TO_NGAY_HOAN_THANH + uid);
-  if (ngayDaHoanThanh === homNay) {
+  const keySoLan = TIEN_TO_LINK4M_SO_LAN_NGAY + uid + ":" + homNay;
+  const soLanDaXong = Number((await env.USERS.get(keySoLan)) || 0);
+  if (soLanDaXong >= LINK4M_GIOI_HAN_NGAY) {
     return Response.json({ hoan_thanh: false, loi: "da_vuot_hom_nay" });
   }
 
@@ -609,7 +652,8 @@ async function xuLyXacNhanNhiemVu(env, url) {
 
   banGhi.daDung = true;
   await env.USERS.put(key, JSON.stringify(banGhi));
-  await env.USERS.put(TIEN_TO_NGAY_HOAN_THANH + uid, homNay);
+  const soLanMoi = soLanDaXong + 1;
+  await env.USERS.put(keySoLan, String(soLanMoi));
   await xoaNhiemVuHienTai(env, uid); // dọn con trỏ, nhiệm vụ này xong rồi
 
   // Cộng thưởng vào số dư
@@ -617,7 +661,12 @@ async function xuLyXacNhanNhiemVu(env, url) {
   nguoiDung.soDu = (nguoiDung.soDu || 0) + Number(env.THUONG_SO_DU_NHIEM_VU || 300);
   await luuNguoiDung(env, uid, nguoiDung);
 
-  return Response.json({ hoan_thanh: true, so_du: nguoiDung.soDu });
+  return Response.json({
+    hoan_thanh: true,
+    so_du: nguoiDung.soDu,
+    so_lan_link4m_da_xong: soLanMoi,
+    link4m_gioi_han_ngay: LINK4M_GIOI_HAN_NGAY,
+  });
 }
 
 // ==================================================
@@ -633,7 +682,10 @@ async function xuLyBangXepHang(env) {
     daQuet += 1;
     const nguoiDung = await layNguoiDung(env, uid);
     if (nguoiDung && (nguoiDung.soDu || 0) > 0) {
-      ketQua.push({ ten: nguoiDung.ten || "Ẩn danh", soDu: nguoiDung.soDu || 0 });
+      const tenHienThi =
+        (nguoiDung.ten && nguoiDung.ten.trim()) ||
+        (nguoiDung.username ? `@${nguoiDung.username}` : `Người chơi #${uid.slice(-4)}`);
+      ketQua.push({ ten: tenHienThi, soDu: nguoiDung.soDu || 0 });
     }
   }
 
@@ -657,17 +709,45 @@ async function xuLyThongTinVi(env, url) {
   const rawTaiKhoan = await env.USERS.get(TIEN_TO_TAI_KHOAN_NHAN + uid);
   const taiKhoan = rawTaiKhoan ? JSON.parse(rawTaiKhoan) : null;
 
+  let coTheDoiTaiKhoan = true;
+  let soNgayConLaiDeDoi = 0;
+  if (taiKhoan && taiKhoan.capNhatLuc) {
+    const soNgayDaTroi = (Date.now() - taiKhoan.capNhatLuc) / (24 * 60 * 60 * 1000);
+    if (soNgayDaTroi < SO_NGAY_DOI_TAI_KHOAN) {
+      coTheDoiTaiKhoan = false;
+      soNgayConLaiDeDoi = Math.ceil(SO_NGAY_DOI_TAI_KHOAN - soNgayDaTroi);
+    }
+  }
+
   const homNay = ngayVnHomNay();
   const tuanNay = dauTuanVN();
   const daRutNgay = Number((await env.USERS.get(TIEN_TO_RUT_NGAY + uid + ":" + homNay)) || 0);
   const daRutTuan = Number((await env.USERS.get(TIEN_TO_RUT_TUAN + uid + ":" + tuanNay)) || 0);
 
+  const lichSu = await layLichSuRutTien(env, uid);
+
   return Response.json({
     so_du: soDu,
     tai_khoan: taiKhoan,
+    co_the_doi_tai_khoan: coTheDoiTaiKhoan,
+    so_ngay_con_lai_de_doi: soNgayConLaiDeDoi,
     con_lai_ngay: Math.max(0, RUT_TOI_DA_NGAY - daRutNgay),
     con_lai_tuan: Math.max(0, RUT_TOI_DA_TUAN - daRutTuan),
+    lich_su_rut: lichSu,
   });
+}
+
+// Lấy lịch sử giao dịch rút tiền của 1 user, mới nhất trước, tối đa 20 giao dịch
+async function layLichSuRutTien(env, uid) {
+  const tienTo = TIEN_TO_GIAO_DICH_RUT + uid + ":";
+  const trang = await env.USERS.list({ prefix: tienTo, limit: 100 });
+  const ketQua = [];
+  for (const key of trang.keys) {
+    const raw = await env.USERS.get(key.name);
+    if (raw) ketQua.push(JSON.parse(raw));
+  }
+  ketQua.sort((a, b) => b.taoLuc - a.taoLuc);
+  return ketQua.slice(0, 20);
 }
 
 async function xuLyYeuCauRutTien(env, url) {
@@ -690,12 +770,20 @@ async function xuLyYeuCauRutTien(env, url) {
     return Response.json({ thanh_cong: false, loi: "khong_du_so_du" });
   }
 
-  // Chỉ liên kết 1 tài khoản nhận duy nhất — lần đầu khóa lại, các lần
-  // sau bắt buộc trùng khớp, không cho đổi.
+  // Cho phép đổi sang tài khoản nhận khác, nhưng chỉ 1 lần mỗi
+  // SO_NGAY_DOI_TAI_KHOAN ngày — chống việc đổi liên tục để né kiểm soát.
   const rawTaiKhoan = await env.USERS.get(TIEN_TO_TAI_KHOAN_NHAN + uid);
   const taiKhoanDaLuu = rawTaiKhoan ? JSON.parse(rawTaiKhoan) : null;
-  if (taiKhoanDaLuu && (taiKhoanDaLuu.nganHang !== nganHang || taiKhoanDaLuu.soTk !== soTk)) {
-    return Response.json({ thanh_cong: false, loi: "sai_tai_khoan_lien_ket" });
+  const laDoiTaiKhoan = taiKhoanDaLuu && (taiKhoanDaLuu.nganHang !== nganHang || taiKhoanDaLuu.soTk !== soTk);
+  if (laDoiTaiKhoan) {
+    const soNgayDaTroi = (Date.now() - (taiKhoanDaLuu.capNhatLuc || 0)) / (24 * 60 * 60 * 1000);
+    if (soNgayDaTroi < SO_NGAY_DOI_TAI_KHOAN) {
+      return Response.json({
+        thanh_cong: false,
+        loi: "chua_du_ngay_de_doi_tai_khoan",
+        so_ngay_con_lai_de_doi: Math.ceil(SO_NGAY_DOI_TAI_KHOAN - soNgayDaTroi),
+      });
+    }
   }
 
   const homNay = ngayVnHomNay();
@@ -717,11 +805,31 @@ async function xuLyYeuCauRutTien(env, url) {
   nguoiDung.soDu = soDu - soTien;
   await luuNguoiDung(env, uid, nguoiDung);
 
-  if (!taiKhoanDaLuu) {
-    await env.USERS.put(TIEN_TO_TAI_KHOAN_NHAN + uid, JSON.stringify({ nganHang, soTk, tenNguoiNhan }));
+  if (!taiKhoanDaLuu || laDoiTaiKhoan) {
+    await env.USERS.put(
+      TIEN_TO_TAI_KHOAN_NHAN + uid,
+      JSON.stringify({ nganHang, soTk, tenNguoiNhan, capNhatLuc: Date.now() })
+    );
   }
   await env.USERS.put(keyNgay, String(daRutNgay + soTien));
   await env.USERS.put(keyTuan, String(daRutTuan + soTien));
+
+  // Tạo bản ghi giao dịch — trạng thái "cho_duyet" cho tới khi admin bấm
+  // Hoàn thành / Từ chối trên Telegram. Từ chối thì hoàn tiền cho user.
+  const idGiaoDich = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const giaoDich = {
+    id: idGiaoDich,
+    uid: String(uid),
+    nganHang,
+    soTk,
+    tenNguoiNhan,
+    soTien,
+    trangThai: "cho_duyet",
+    taoLuc: Date.now(),
+    keyNgay,
+    keyTuan,
+  };
+  await env.USERS.put(TIEN_TO_GIAO_DICH_RUT + uid + ":" + idGiaoDich, JSON.stringify(giaoDich));
 
   const thoiGian = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
   const noiDung =
@@ -731,14 +839,109 @@ async function xuLyYeuCauRutTien(env, url) {
     `🔢 Số TK/SĐT: ${soTk}\n` +
     `📛 Tên người nhận: ${tenNguoiNhan}\n` +
     `💰 Số tiền: ${soTien.toLocaleString("vi-VN")}đ\n` +
-    `🕐 Thời gian: ${thoiGian}`;
+    `🕐 Thời gian: ${thoiGian}\n` +
+    `🆔 Mã GD: ${idGiaoDich}`;
 
   const danhSachAdmin = await layDanhSachAdmin(env);
   await Promise.allSettled(
-    danhSachAdmin.map((adminId) => telegramApi(env, "sendMessage", { chat_id: Number(adminId), text: noiDung }))
+    danhSachAdmin.map((adminId) =>
+      telegramApi(env, "sendMessage", {
+        chat_id: Number(adminId),
+        text: noiDung,
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: "✅ Hoàn thành", callback_data: `rut_ok:${uid}:${idGiaoDich}` },
+              { text: "❌ Từ chối (hoàn tiền)", callback_data: `rut_tc:${uid}:${idGiaoDich}` },
+            ],
+          ],
+        },
+      })
+    )
   );
 
-  return Response.json({ thanh_cong: true, so_du_con_lai: nguoiDung.soDu });
+  return Response.json({ thanh_cong: true, so_du_con_lai: nguoiDung.soDu, ma_giao_dich: idGiaoDich });
+}
+
+// ==================================================
+// ✅❌ ADMIN DUYỆT RÚT TIỀN — bấm nút trong tin nhắn Telegram
+// Từ chối → hoàn tiền lại cho user + trả lại hạn mức ngày/tuần đã trừ.
+// ==================================================
+async function xuLyDuyetRutTien(env, callbackQuery) {
+  const data = callbackQuery.data || "";
+  const [hanhDong, uid, idGiaoDich] = data.split(":");
+  if (!["rut_ok", "rut_tc"].includes(hanhDong) || !uid || !idGiaoDich) return;
+
+  if (!(await laAdmin(env, callbackQuery.from.id))) {
+    return telegramApi(env, "answerCallbackQuery", {
+      callback_query_id: callbackQuery.id,
+      text: "❌ Bạn không có quyền duyệt giao dịch!",
+      show_alert: true,
+    });
+  }
+
+  const key = TIEN_TO_GIAO_DICH_RUT + uid + ":" + idGiaoDich;
+  const raw = await env.USERS.get(key);
+  if (!raw) {
+    return telegramApi(env, "answerCallbackQuery", {
+      callback_query_id: callbackQuery.id,
+      text: "❌ Không tìm thấy giao dịch (có thể đã bị xóa).",
+      show_alert: true,
+    });
+  }
+
+  const giaoDich = JSON.parse(raw);
+  if (giaoDich.trangThai !== "cho_duyet") {
+    return telegramApi(env, "answerCallbackQuery", {
+      callback_query_id: callbackQuery.id,
+      text: "⚠️ Giao dịch này đã được xử lý trước đó rồi.",
+      show_alert: true,
+    });
+  }
+
+  const trangThaiMoi = hanhDong === "rut_ok" ? "hoan_thanh" : "tu_choi";
+  giaoDich.trangThai = trangThaiMoi;
+  giaoDich.duyetLuc = Date.now();
+  giaoDich.duyetBoi = String(callbackQuery.from.id);
+  await env.USERS.put(key, JSON.stringify(giaoDich));
+
+  let textThongBaoUser;
+  if (trangThaiMoi === "tu_choi") {
+    // Hoàn tiền + trả lại hạn mức ngày/tuần đã trừ lúc gửi yêu cầu
+    const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, gem: 0, soDu: 0 };
+    nguoiDung.soDu = (nguoiDung.soDu || 0) + giaoDich.soTien;
+    await luuNguoiDung(env, uid, nguoiDung);
+
+    if (giaoDich.keyNgay) {
+      const daRutNgay = Number((await env.USERS.get(giaoDich.keyNgay)) || 0);
+      await env.USERS.put(giaoDich.keyNgay, String(Math.max(0, daRutNgay - giaoDich.soTien)));
+    }
+    if (giaoDich.keyTuan) {
+      const daRutTuan = Number((await env.USERS.get(giaoDich.keyTuan)) || 0);
+      await env.USERS.put(giaoDich.keyTuan, String(Math.max(0, daRutTuan - giaoDich.soTien)));
+    }
+
+    textThongBaoUser =
+      `❌ Yêu cầu rút ${giaoDich.soTien.toLocaleString("vi-VN")}đ (mã ${idGiaoDich}) đã bị từ chối.\n` +
+      `💰 Số tiền đã được hoàn lại vào số dư của bạn.`;
+  } else {
+    textThongBaoUser = `✅ Yêu cầu rút ${giaoDich.soTien.toLocaleString("vi-VN")}đ (mã ${idGiaoDich}) đã hoàn thành!`;
+  }
+
+  await Promise.allSettled([
+    telegramApi(env, "answerCallbackQuery", {
+      callback_query_id: callbackQuery.id,
+      text: trangThaiMoi === "hoan_thanh" ? "✅ Đã đánh dấu hoàn thành." : "❌ Đã từ chối và hoàn tiền.",
+    }),
+    telegramApi(env, "editMessageText", {
+      chat_id: callbackQuery.message.chat.id,
+      message_id: callbackQuery.message.message_id,
+      text:
+        callbackQuery.message.text +
+        `\n\n${trangThaiMoi === "hoan_thanh" ? "✅ ĐÃ HOÀN THÀNH" : "❌ ĐÃ TỪ CHỐI — ĐÃ HOÀN TIỀN"}`,
+    }),
+    telegramApi(env, "sendMessage", { chat_id: Number(uid), text: textThongBaoUser }),
+  ]);
 }
 
 // ==================================================

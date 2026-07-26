@@ -27,7 +27,7 @@ deleted_classes = ["IpRegistry"]
 
 [vars]
 CHU_SO_HUU = "7055595466"
-NHOM_LOG = "@nhomlogbot"
+NHOM_LOG = "-1003927768163"
 LINK_MINIAPP = "https://m.treefarmapp.workers.dev/"
 LINK_ANH = "https://i.ibb.co/7x7DFnZ9/1783599852392.jpg"
 THUONG_SO_DU_NHIEM_VU = "300"

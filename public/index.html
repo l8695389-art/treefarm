@@ -642,6 +642,34 @@
       return await res.json();
     }
 
+    // ────────────────────────────────────────────────────────────
+    // CẬP NHẬT ĐỊNH KỲ MỖI 10 GIÂY — số dư luôn hiện đúng thực tế
+    // (vd sau khi admin duyệt rút tiền ở trang web quản lý), bảng xếp
+    // hạng và tab ví cũng làm mới nếu đang mở. Tạm dừng khi app chuyển
+    // xuống nền (document.hidden) để đỡ tốn pin/mạng, chạy lại ngay khi
+    // quay lại app.
+    // ────────────────────────────────────────────────────────────
+    async function capNhatDinhKy(uid) {
+      if (!uid || document.hidden) return;
+
+      try {
+        const tt = await layThongTinVi(uid);
+        if (tt) hienThiSoDu(tt.so_du);
+      } catch (err) {
+        // lỗi mạng tạm thời — bỏ qua, vòng lặp 5s sau sẽ tự thử lại
+      }
+
+      const tabDangMo = document.querySelector('.tab-panel.active');
+      if (!tabDangMo) return;
+
+      if (tabDangMo.id === 'tab-bang-xep-hang') {
+        layBangXepHang().then(renderBangXepHang).catch(() => {});
+      }
+      if (tabDangMo.id === 'tab-vi' && window.__lamMoiVi) {
+        window.__lamMoiVi();
+      }
+    }
+
     async function guiYeuCauRutTien(uid, nganHang, soTk, tenNguoiNhan, soTien) {
       const params = new URLSearchParams({ uid, ngan_hang: nganHang, so_tk: soTk, ten_nguoi_nhan: tenNguoiNhan, so_tien: soTien });
       const endpoint = `${LINK4M_CONFIG.linkGoc}/yeu-cau-rut-tien?${params.toString()}`;
@@ -1198,6 +1226,13 @@
       setupTabBar();
       setupLinkButton(tg);
       setupViTab(tg);
+
+      // Cập nhật định kỳ mỗi 5 giây — số dư, bảng xếp hạng, ví
+      const uid = tg?.initDataUnsafe?.user?.id;
+      setInterval(() => capNhatDinhKy(uid), 10000);
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) capNhatDinhKy(uid);
+      });
 
       setTimeout(() => {
         hideLoading();

@@ -16,6 +16,7 @@ const RUT_TOI_DA_NGAY = 15000;
 const RUT_TOI_DA_TUAN = 50000;
 const TIEN_TO_LINK4M_SO_LAN_NGAY = "link4m-so-lan-ngay:"; // số lần hoàn thành nhiệm vụ link4m hôm nay
 const LINK4M_GIOI_HAN_NGAY = 2; // tăng từ 1 lên 2 lần/ngày
+const KEY_CACHE_BANG_XEP_HANG = "cache-bang-xep-hang"; // JSON { bang_xep_hang, cap_nhat_luc } — làm mới mỗi 15 phút qua Cron Trigger
 
 // ==================================================
 // 📋 QUẢN LÝ ADMIN — KV thay cho FILE_ADMIN (json)
@@ -676,8 +677,14 @@ async function xuLyXacNhanNhiemVu(env, url) {
 // ==================================================
 // 🏆 BẢNG XẾP HẠNG — sắp xếp theo TỔNG TIỀN ĐÃ KIẾM ĐƯỢC (cộng dồn),
 // KHÔNG phải số dư khả dụng hiện tại — rút tiền không làm tụt hạng.
+//
+// Để tránh quét toàn bộ KV (tốn CPU time) mỗi lần người dùng mở app,
+// bảng xếp hạng được TÍNH TRƯỚC và lưu cache, làm mới mỗi 15 phút bằng
+// Cron Trigger (xem "scheduled" ở cuối file + [triggers] trong wrangler.toml).
+// Endpoint /bang-xep-hang chỉ đọc cache; nếu chưa có cache (lần đầu deploy)
+// thì tính trực tiếp 1 lần để không trả về rỗng.
 // ==================================================
-async function xuLyBangXepHang(env) {
+async function tinhBangXepHang(env) {
   const QUET_TOI_DA = 500; // giới hạn số user quét mỗi lần gọi, tránh vượt CPU time free plan
   const ketQua = [];
   let daQuet = 0;
@@ -700,7 +707,31 @@ async function xuLyBangXepHang(env) {
   }
 
   ketQua.sort((a, b) => b.soDu - a.soDu);
-  return Response.json({ bang_xep_hang: ketQua.slice(0, 50) });
+  return ketQua.slice(0, 50);
+}
+
+// Tính lại + ghi cache — được gọi bởi Cron Trigger mỗi 15 phút.
+async function lamMoiCacheBangXepHang(env) {
+  const bangXepHang = await tinhBangXepHang(env);
+  await env.USERS.put(
+    KEY_CACHE_BANG_XEP_HANG,
+    JSON.stringify({ bang_xep_hang: bangXepHang, cap_nhat_luc: Date.now() })
+  );
+  return bangXepHang;
+}
+
+async function xuLyBangXepHang(env) {
+  const raw = await env.USERS.get(KEY_CACHE_BANG_XEP_HANG);
+  if (raw) {
+    const cache = JSON.parse(raw);
+    return Response.json({ bang_xep_hang: cache.bang_xep_hang, cap_nhat_luc: cache.cap_nhat_luc });
+  }
+
+  // Chưa có cache (ví dụ mới deploy, chưa tới lần chạy cron đầu tiên) —
+  // tính trực tiếp 1 lần và lưu luôn để lần sau có cache dùng ngay.
+  const capNhatLuc = Date.now();
+  const bangXepHang = await lamMoiCacheBangXepHang(env);
+  return Response.json({ bang_xep_hang: bangXepHang, cap_nhat_luc: capNhatLuc });
 }
 
 // ==================================================
@@ -853,8 +884,8 @@ async function xuLyYeuCauRutTien(env, url) {
     `🆔 Mã GD: ${idGiaoDich}`;
 
   const danhSachAdmin = await layDanhSachAdmin(env);
-  await Promise.allSettled(
-    danhSachAdmin.map((adminId) =>
+  await Promise.allSettled([
+    ...danhSachAdmin.map((adminId) =>
       telegramApi(env, "sendMessage", {
         chat_id: Number(adminId),
         text: noiDung,
@@ -867,8 +898,13 @@ async function xuLyYeuCauRutTien(env, url) {
           ],
         },
       })
-    )
-  );
+    ),
+    // Forward mọi yêu cầu rút tiền vào nhóm log rút tiền riêng — theo dõi tập trung,
+    // không lẫn với nhóm log chung (NHOM_LOG).
+    env.NHOM_RUT_TIEN
+      ? telegramApi(env, "sendMessage", { chat_id: env.NHOM_RUT_TIEN, text: noiDung })
+      : Promise.resolve(),
+  ]);
 
   return Response.json({ thanh_cong: true, so_du_con_lai: nguoiDung.soDu, ma_giao_dich: idGiaoDich });
 }
@@ -938,6 +974,8 @@ async function xuLyDuyetRutTien(env, callbackQuery) {
     textThongBaoUser = `✅ Yêu cầu rút ${giaoDich.soTien.toLocaleString("vi-VN")}đ (mã ${idGiaoDich}) đã hoàn thành!`;
   }
 
+  const nhanTrangThai = trangThaiMoi === "hoan_thanh" ? "✅ ĐÃ HOÀN THÀNH" : "❌ ĐÃ TỪ CHỐI — ĐÃ HOÀN TIỀN";
+
   await Promise.allSettled([
     telegramApi(env, "answerCallbackQuery", {
       callback_query_id: callbackQuery.id,
@@ -946,11 +984,16 @@ async function xuLyDuyetRutTien(env, callbackQuery) {
     telegramApi(env, "editMessageText", {
       chat_id: callbackQuery.message.chat.id,
       message_id: callbackQuery.message.message_id,
-      text:
-        callbackQuery.message.text +
-        `\n\n${trangThaiMoi === "hoan_thanh" ? "✅ ĐÃ HOÀN THÀNH" : "❌ ĐÃ TỪ CHỐI — ĐÃ HOÀN TIỀN"}`,
+      text: callbackQuery.message.text + `\n\n${nhanTrangThai}`,
     }),
     telegramApi(env, "sendMessage", { chat_id: Number(uid), text: textThongBaoUser }),
+    // Cập nhật kết quả duyệt vào nhóm log rút tiền riêng, cùng nội dung gốc để dễ đối chiếu.
+    env.NHOM_RUT_TIEN
+      ? telegramApi(env, "sendMessage", {
+          chat_id: env.NHOM_RUT_TIEN,
+          text: `${callbackQuery.message.text}\n\n${nhanTrangThai}\n👮 Duyệt bởi: ${callbackQuery.from.id}`,
+        })
+      : Promise.resolve(),
   ]);
 }
 
@@ -1002,5 +1045,10 @@ export default {
 
     // Không khớp route API nào → phục vụ static assets (index.html của miniapp)
     return env.ASSETS.fetch(request);
+  },
+
+  // Cron Trigger — làm mới cache bảng xếp hạng mỗi 15 phút (xem wrangler.toml: [triggers] crons)
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(lamMoiCacheBangXepHang(env));
   },
 };

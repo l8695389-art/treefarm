@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Quản lý rút tiền — Tree Farm</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --tg-blue: #229ED9;
+    --tg-dark: #0A0E1A;
+    --tg-surface: #0F1629;
+    --tg-surface2: #131C33;
+    --tg-border: rgba(34, 158, 217, 0.18);
+    --tg-text: #E8EDF5;
+    --tg-muted: #5A7A99;
+    --danger: #FF4D6D;
+    --danger-glow: rgba(255, 77, 109, 0.15);
+    --ok: #3DDC84;
+    --ok-glow: rgba(61, 220, 132, 0.15);
+    --gold: #F5B942;
+  }
+  html, body {
+    min-height: 100%;
+    background: var(--tg-dark);
+    font-family: -apple-system, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+    color: var(--tg-text);
+  }
+  body { padding: 20px 16px 60px; }
+
+  /* ─── LOGIN ─── */
+  #man-hinh-login {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--tg-dark);
+    z-index: 50;
+  }
+  .hop-login {
+    width: min(340px, 90vw);
+    background: var(--tg-surface);
+    border: 1px solid var(--tg-border);
+    border-radius: 16px;
+    padding: 28px 24px;
+    text-align: center;
+  }
+  .hop-login h1 { font-size: 18px; margin-bottom: 6px; }
+  .hop-login p { color: var(--tg-muted); font-size: 13px; margin-bottom: 20px; }
+  .hop-login input {
+    width: 100%;
+    background: var(--tg-surface2);
+    border: 1px solid var(--tg-border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    color: var(--tg-text);
+    font-size: 15px;
+    margin-bottom: 14px;
+    outline: none;
+  }
+  .hop-login input:focus { border-color: var(--tg-blue); }
+  .hop-login button {
+    width: 100%;
+    background: var(--tg-blue);
+    border: none;
+    border-radius: 10px;
+    padding: 12px;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .loi-login { color: var(--danger); font-size: 13px; margin-top: 10px; min-height: 16px; }
+
+  /* ─── HEADER ─── */
+  header {
+    max-width: 720px; margin: 0 auto 20px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  header h1 { font-size: 20px; }
+  header .phu { color: var(--tg-muted); font-size: 12.5px; margin-top: 3px; }
+  #nut-dang-xuat {
+    background: transparent; border: 1px solid var(--tg-border);
+    color: var(--tg-muted); border-radius: 8px; padding: 7px 12px;
+    font-size: 12.5px; cursor: pointer;
+  }
+
+  main { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+
+  #trong-rong {
+    text-align: center; color: var(--tg-muted); padding: 60px 20px; font-size: 14px;
+    border: 1px dashed var(--tg-border); border-radius: 14px;
+  }
+
+  /* ─── TAB / CARD YÊU CẦU RÚT TIỀN ─── */
+  .tab {
+    background: var(--tg-surface);
+    border: 1px solid var(--tg-border);
+    border-radius: 14px;
+    padding: 16px 18px;
+    animation: xuatHien .25s ease;
+  }
+  @keyframes xuatHien { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .tab.dang-bien-mat { animation: bienMat .25s ease forwards; }
+  @keyframes bienMat { to { opacity: 0; transform: scale(0.97); height: 0; margin: 0; padding: 0; border-width: 0; } }
+
+  .tab-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+  .tab-ten { font-size: 15.5px; font-weight: 600; }
+  .tab-uid { color: var(--tg-muted); font-size: 12px; margin-top: 2px; }
+  .tab-tien { color: var(--gold); font-size: 18px; font-weight: 700; white-space: nowrap; }
+
+  .tab-info { display: grid; grid-template-columns: auto 1fr; gap: 5px 10px; font-size: 13.5px; margin-bottom: 14px; }
+  .tab-info .nhan { color: var(--tg-muted); }
+  .tab-info .gia-tri { word-break: break-all; }
+
+  .tab-actions { display: flex; gap: 10px; }
+  .tab-actions button {
+    flex: 1; border: none; border-radius: 10px; padding: 11px; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .btn-hoan-thanh { background: var(--ok-glow); color: var(--ok); border: 1px solid rgba(61,220,132,0.4) !important; }
+  .btn-tu-choi { background: var(--danger-glow); color: var(--danger); border: 1px solid rgba(255,77,109,0.4) !important; }
+  .tab-actions button:disabled { opacity: 0.5; cursor: default; }
+
+  .thong-bao-cap-nhat {
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+    background: var(--tg-surface2); border: 1px solid var(--tg-border);
+    padding: 8px 16px; border-radius: 20px; font-size: 12.5px; color: var(--tg-muted);
+  }
+</style>
+</head>
+<body>
+
+  <div id="man-hinh-login">
+    <div class="hop-login">
+      <h1>🔐 Quản lý rút tiền</h1>
+      <p>Nhập mật khẩu admin để tiếp tục</p>
+      <input type="password" id="o-nhap-secret" placeholder="Mật khẩu" autocomplete="off" />
+      <button onclick="dangNhap()">Đăng nhập</button>
+      <div class="loi-login" id="loi-login"></div>
+    </div>
+  </div>
+
+  <header>
+    <div>
+      <h1>💸 Yêu cầu rút tiền</h1>
+      <div class="phu" id="dong-phu">Đang tải...</div>
+    </div>
+    <button id="nut-dang-xuat" onclick="dangXuat()">Đăng xuất</button>
+  </header>
+
+  <main id="danh-sach-tab"></main>
+
+  <div class="thong-bao-cap-nhat" id="thong-bao-cap-nhat" style="display:none;"></div>
+
+<script>
+  const KHOANG_CACH_POLL_MS = 10000; // tự làm mới danh sách mỗi 10 giây
+  let bomSecret = "";
+  let dangXuLy = new Set(); // id giao dịch đang gửi request, tránh bấm đúp
+
+  function dangNhap() {
+    const gt = document.getElementById("o-nhap-secret").value.trim();
+    if (!gt) return;
+    bomSecret = gt;
+    localStorage.setItem("admin_rut_tien_secret", gt);
+    document.getElementById("man-hinh-login").style.display = "none";
+    taiDanhSach();
+    setInterval(taiDanhSach, KHOANG_CACH_POLL_MS);
+  }
+
+  function dangXuat() {
+    localStorage.removeItem("admin_rut_tien_secret");
+    location.reload();
+  }
+
+  window.addEventListener("load", () => {
+    const daLuu = localStorage.getItem("admin_rut_tien_secret");
+    if (daLuu) {
+      bomSecret = daLuu;
+      document.getElementById("man-hinh-login").style.display = "none";
+      taiDanhSach();
+      setInterval(taiDanhSach, KHOANG_CACH_POLL_MS);
+    }
+  });
+
+  document.getElementById("o-nhap-secret").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") dangNhap();
+  });
+
+  async function taiDanhSach() {
+    try {
+      const res = await fetch("/admin/rut-tien/danh-sach", {
+        headers: { "X-Admin-Secret": bomSecret },
+      });
+      if (res.status === 401) {
+        document.getElementById("loi-login").textContent = "❌ Sai mật khẩu";
+        localStorage.removeItem("admin_rut_tien_secret");
+        document.getElementById("man-hinh-login").style.display = "flex";
+        return;
+      }
+      const data = await res.json();
+      render(data.danh_sach || []);
+      hienThongBaoCapNhat();
+    } catch (err) {
+      document.getElementById("dong-phu").textContent = "⚠️ Lỗi tải danh sách, đang thử lại...";
+    }
+  }
+
+  function hienThongBaoCapNhat() {
+    const el = document.getElementById("thong-bao-cap-nhat");
+    el.textContent = "✅ Đã cập nhật lúc " + new Date().toLocaleTimeString("vi-VN");
+    el.style.display = "block";
+    clearTimeout(window._toTb);
+    window._toTb = setTimeout(() => (el.style.display = "none"), 2500);
+  }
+
+  function render(danhSach) {
+    const cha = document.getElementById("danh-sach-tab");
+    document.getElementById("dong-phu").textContent =
+      danhSach.length === 0 ? "Không có yêu cầu nào đang chờ" : `${danhSach.length} yêu cầu đang chờ xử lý`;
+
+    if (danhSach.length === 0) {
+      cha.innerHTML = `<div id="trong-rong">🎉 Không có yêu cầu rút tiền nào đang chờ</div>`;
+      return;
+    }
+
+    // Giữ nguyên tab đang có, chỉ thêm/xóa theo dữ liệu mới — tránh render lại toàn bộ
+    // làm mất trạng thái nút đang xử lý.
+    const idHienTai = new Set(danhSach.map((g) => g.id));
+    [...cha.children].forEach((el) => {
+      if (el.dataset && el.dataset.id && !idHienTai.has(el.dataset.id)) xoaTab(el.dataset.id);
+    });
+
+    danhSach.forEach((gd) => {
+      let tab = cha.querySelector(`[data-id="${gd.id}"]`);
+      if (!tab) {
+        tab = document.createElement("div");
+        tab.className = "tab";
+        tab.dataset.id = gd.id;
+        cha.appendChild(tab);
+      }
+      const tenHienThi = gd.ten || (gd.username ? "@" + gd.username : "Ẩn danh");
+      tab.innerHTML = `
+        <div class="tab-top">
+          <div>
+            <div class="tab-ten">${escapeHtml(tenHienThi)}</div>
+            <div class="tab-uid">UID: ${escapeHtml(gd.uid)} · ${new Date(gd.taoLuc).toLocaleString("vi-VN")}</div>
+          </div>
+          <div class="tab-tien">${Number(gd.soTien).toLocaleString("vi-VN")}đ</div>
+        </div>
+        <div class="tab-info">
+          <div class="nhan">Ngân hàng/Ví</div><div class="gia-tri">${escapeHtml(gd.nganHang)}</div>
+          <div class="nhan">Số TK/SĐT</div><div class="gia-tri">${escapeHtml(gd.soTk)}</div>
+          <div class="nhan">Tên người nhận</div><div class="gia-tri">${escapeHtml(gd.tenNguoiNhan)}</div>
+          <div class="nhan">Mã GD</div><div class="gia-tri">${escapeHtml(gd.id)}</div>
+        </div>
+        <div class="tab-actions">
+          <button class="btn-hoan-thanh" onclick="xuLy('${gd.uid}','${gd.id}','hoan_thanh',this)">✅ Hoàn thành</button>
+          <button class="btn-tu-choi" onclick="xuLy('${gd.uid}','${gd.id}','tu_choi',this)">❌ Từ chối (hoàn tiền)</button>
+        </div>
+      `;
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  async function xuLy(uid, id, hanhDong, nutBam) {
+    if (dangXuLy.has(id)) return;
+    const xacNhan = hanhDong === "hoan_thanh"
+      ? "Xác nhận đã chuyển tiền thành công cho yêu cầu này?"
+      : "Từ chối yêu cầu này? Số tiền sẽ được hoàn lại cho người dùng.";
+    if (!confirm(xacNhan)) return;
+
+    dangXuLy.add(id);
+    const tab = nutBam.closest(".tab");
+    tab.querySelectorAll("button").forEach((b) => (b.disabled = true));
+
+    try {
+      const res = await fetch("/admin/rut-tien/xu-ly", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Admin-Secret": bomSecret },
+        body: JSON.stringify({ uid, id, hanh_dong: hanhDong }),
+      });
+      const data = await res.json();
+      if (data.thanh_cong) {
+        xoaTab(id);
+      } else {
+        alert("Không xử lý được: " + (data.loi || "loi_khong_xac_dinh"));
+        tab.querySelectorAll("button").forEach((b) => (b.disabled = false));
+      }
+    } catch (err) {
+      alert("Lỗi kết nối, thử lại.");
+      tab.querySelectorAll("button").forEach((b) => (b.disabled = false));
+    } finally {
+      dangXuLy.delete(id);
+    }
+  }
+
+  function xoaTab(id) {
+    const tab = document.querySelector(`[data-id="${id}"]`);
+    if (!tab) return;
+    tab.classList.add("dang-bien-mat");
+    setTimeout(() => {
+      tab.remove();
+      const cha = document.getElementById("danh-sach-tab");
+      if (!cha.children.length) {
+        cha.innerHTML = `<div id="trong-rong">🎉 Không có yêu cầu rút tiền nào đang chờ</div>`;
+      }
+    }, 260);
+  }
+</script>
+</body>
+</html>

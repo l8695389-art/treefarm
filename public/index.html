@@ -255,6 +255,23 @@
     .limit-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--tg-text); }
     .limit-row + .limit-row { margin-top: 8px; }
     .limit-row span:first-child { color: var(--tg-muted); }
+
+    /* Lịch sử rút tiền */
+    .giaodich-row {
+      display: flex; flex-direction: column; gap: 4px;
+      padding: 12px 14px; border-radius: 12px;
+      background: var(--tg-surface); border: 1px solid var(--tg-border);
+    }
+    .giaodich-top { display: flex; justify-content: space-between; align-items: center; }
+    .giaodich-amount { font-size: 14px; font-weight: 700; color: var(--tg-text); font-family: 'SF Mono', 'Fira Code', monospace; }
+    .giaodich-time { font-size: 11.5px; color: var(--tg-muted); }
+    .giaodich-badge {
+      display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px;
+      font-size: 11px; font-weight: 700;
+    }
+    .giaodich-badge.cho_duyet { background: rgba(245,185,66,0.16); color: var(--gold); }
+    .giaodich-badge.hoan_thanh { background: rgba(61,220,122,0.14); color: #3DDC7A; }
+    .giaodich-badge.tu_choi { background: rgba(255,77,109,0.14); color: var(--danger); }
   </style>
 </head>
 <body>
@@ -338,7 +355,7 @@
         <!-- Khối 1: Quảng cáo Monetag -->
         <div class="card highlight">
           <div class="task-title">🎬 Xem quảng cáo</div>
-          <div class="task-desc">Xem quảng cáo, nhận thưởng ngay sau mỗi lần xem. Tối đa 20 lượt/ngày.</div>
+          <div class="task-desc">Xem quảng cáo, nhận thưởng ngay sau mỗi lần xem. Tối đa 20 lượt/ngày, cách nhau ít nhất 30 giây/lượt.</div>
           <button id="btn-xem-qc" class="primary-btn" type="button">
             <span class="spinner"></span>
             <span class="btn-label">Xem quảng cáo</span>
@@ -350,7 +367,7 @@
         <!-- Khối 2: Vượt link Link4M -->
         <div class="card highlight">
           <div class="task-title">🔗 Vượt link nhận thưởng</div>
-          <div class="task-desc">Vượt link xong, nhập mã 6 số hiện ở trang đích để nhận +300đ. Giới hạn 1 lần/ngày.</div>
+          <div class="task-desc">Vượt link xong, nhập mã 6 số hiện ở trang đích để nhận +300đ. Giới hạn 2 lần/ngày.</div>
 
           <button id="btn-get-link" class="primary-btn" type="button">
             <span class="spinner"></span>
@@ -401,7 +418,7 @@
         <div class="card">
           <div class="card-label">📋 Quy định rút tiền</div>
           <ul class="rule-list">
-            <li>Mỗi tài khoản chỉ liên kết <strong>1 ngân hàng/ví (Momo, ZaloPay) duy nhất</strong></li>
+            <li>Có thể liên kết nhiều ngân hàng/ví khác nhau, nhưng chỉ được <strong>đổi tài khoản nhận tiền 1 lần mỗi 20 ngày</strong></li>
             <li>Rút tối thiểu <strong>10.000đ</strong></li>
             <li>Tối đa <strong>15.000đ/ngày</strong></li>
             <li>Tối đa <strong>50.000đ/tuần</strong></li>
@@ -421,17 +438,25 @@
 
         <div id="rut-tien-form" class="card highlight" style="display:none;">
           <div class="card-label">Thông tin nhận tiền</div>
+          <div id="doi-tk-hint" class="status-text" style="display:none;margin-bottom:10px;"></div>
           <input id="input-ngan-hang" type="text" class="text-input" placeholder="Tên ngân hàng / Momo / ZaloPay" />
           <input id="input-so-tk" type="text" inputmode="numeric" class="text-input" placeholder="Số tài khoản / Số điện thoại" />
           <input id="input-ten-nhan" type="text" class="text-input" placeholder="Tên người nhận" />
           <input id="input-so-tien" type="number" inputmode="numeric" class="text-input" placeholder="Số tiền muốn rút (đ)" style="margin-bottom:14px;" />
           <button id="btn-xac-nhan-rut" class="primary-btn" type="button">
+            <span class="spinner"></span>
             <span class="btn-label">Xác nhận rút tiền</span>
           </button>
         </div>
 
         <div id="rut-error" class="error-text"></div>
         <div id="rut-success" class="success-text"></div>
+
+        <!-- Bảng trạng thái giao dịch — hiện ngay dưới nút rút tiền -->
+        <div class="card-label" style="margin-top:6px;">Lịch sử yêu cầu rút tiền</div>
+        <div id="rut-lich-su" style="display:flex; flex-direction:column; gap:8px; width:100%;">
+          <div class="rank-loading">Chưa có yêu cầu rút tiền nào.</div>
+        </div>
       </section>
 
     </div>
@@ -697,12 +722,37 @@
       const qcErrorEl = document.getElementById('qc-error');
       const qcSuccessEl = document.getElementById('qc-success');
 
+      let qcHetLuotHomNay = false;
+      let qcDemNguoc = null; // interval id của bộ đếm ngược 30s
+
+      function batDauDemNguocQc(giayConLai, gioiHanCho) {
+        clearInterval(qcDemNguoc);
+        let conLai = Math.ceil(giayConLai);
+        const capNhat = () => {
+          if (conLai <= 0 || qcHetLuotHomNay) {
+            clearInterval(qcDemNguoc);
+            if (!qcHetLuotHomNay) {
+              btnXemQc.disabled = false;
+              labelXemQc.textContent = 'Xem quảng cáo';
+            }
+            return;
+          }
+          btnXemQc.disabled = true;
+          labelXemQc.textContent = `Chờ ${conLai}s để xem tiếp...`;
+          conLai -= 1;
+        };
+        capNhat();
+        qcDemNguoc = setInterval(capNhat, 1000);
+      }
+
       function capNhatUiQuangCao(soLanDaXem, gioiHan) {
         const conLai = Math.max(0, (gioiHan || 20) - (soLanDaXem || 0));
-        if (conLai <= 0) {
+        qcHetLuotHomNay = conLai <= 0;
+        if (qcHetLuotHomNay) {
+          clearInterval(qcDemNguoc);
           btnXemQc.disabled = true;
           labelXemQc.textContent = 'Đã hết lượt hôm nay ✅';
-        } else {
+        } else if (!qcDemNguoc) {
           btnXemQc.disabled = false;
           labelXemQc.textContent = `Xem quảng cáo (còn ${conLai} lượt)`;
         }
@@ -735,10 +785,15 @@
             qcSuccessEl.textContent = `✅ Nhận thưởng thành công! +${(ketQua.so_du_cong || 0).toLocaleString('vi-VN')}đ`;
             qcSuccessEl.style.display = 'block';
             capNhatUiQuangCao(ketQua.so_lan_qc_da_xem, ketQua.qc_gioi_han_ngay);
+            if (!qcHetLuotHomNay) batDauDemNguocQc(ketQua.cho_toi_thieu_giay || 30);
           } else if (ketQua.loi === 'da_vuot_hom_nay') {
             capNhatUiQuangCao(ketQua.so_lan_qc_da_xem, ketQua.qc_gioi_han_ngay);
             qcErrorEl.textContent = '❌ Bạn đã dùng hết lượt xem quảng cáo hôm nay rồi.';
             qcErrorEl.style.display = 'block';
+          } else if (ketQua.loi === 'cho_qua_nhanh') {
+            qcErrorEl.textContent = `❌ Vui lòng chờ thêm ${ketQua.cho_con_lai_giay}s rồi xem tiếp.`;
+            qcErrorEl.style.display = 'block';
+            batDauDemNguocQc(ketQua.cho_con_lai_giay);
           } else {
             btnXemQc.disabled = false;
             qcErrorEl.textContent = '❌ Có lỗi xảy ra, thử lại sau.';
@@ -797,6 +852,22 @@
         statusEl.style.display = 'block';
       }
 
+      function capNhatUiLink4m(soLanXong, gioiHan) {
+        const conLai = Math.max(0, (gioiHan || 2) - (soLanXong || 0));
+        if (conLai <= 0) return; // khoaHomNay() lo phần khóa
+        btn.disabled = false;
+        label.textContent = `Nhận link rút gọn (còn ${conLai} lượt)`;
+      }
+
+      // Sau khi hoàn thành 1 lượt nhưng vẫn còn lượt khác trong ngày —
+      // dọn giao diện để cho phép tạo link mới, không khóa hẳn như trước.
+      function moLaiChoLuotTiepTheo(soLanXong, gioiHan) {
+        card.style.display = 'none';
+        maCard.style.display = 'none';
+        maInput.value = '';
+        capNhatUiLink4m(soLanXong, gioiHan);
+      }
+
       // Khôi phục trạng thái ngay khi mở app — link cũ, số dư, đã xong
       // hôm nay chưa. Đây là phần xử lý "thoát app rồi mở lại vẫn còn link".
       (async () => {
@@ -805,7 +876,18 @@
         if (!tt) return;
         hienThiSoDu(tt.so_du);
 
-        if (tt.qc_gioi_han_ngay !== undefined) capNhatUiQuangCao(tt.so_lan_qc_da_xem, tt.qc_gioi_han_ngay);
+        if (tt.qc_gioi_han_ngay !== undefined) {
+          capNhatUiQuangCao(tt.so_lan_qc_da_xem, tt.qc_gioi_han_ngay);
+          if (!qcHetLuotHomNay && tt.qc_lan_cuoi) {
+            const daTroiGiay = (Date.now() - tt.qc_lan_cuoi) / 1000;
+            const conLaiGiay = (tt.qc_cho_toi_thieu_giay || 30) - daTroiGiay;
+            if (conLaiGiay > 0) batDauDemNguocQc(conLaiGiay);
+          }
+        }
+
+        if (tt.link4m_gioi_han_ngay !== undefined) {
+          capNhatUiLink4m(tt.so_lan_link4m_da_xong, tt.link4m_gioi_han_ngay);
+        }
 
         if (tt.trang_thai === 'da_hoan_thanh') {
           khoaHomNay();
@@ -874,9 +956,20 @@
 
           if (ketQua.hoan_thanh) {
             hienThiSoDu(ketQua.so_du);
-            successEl.textContent = '✅ Đã hoàn thành nhiệm vụ! +300đ vào số dư.';
+            const gioiHan = ketQua.link4m_gioi_han_ngay || 2;
+            const soLanXong = ketQua.so_lan_link4m_da_xong || 0;
+            const daHetLuot = soLanXong >= gioiHan;
+            successEl.textContent = daHetLuot
+              ? '✅ Đã hoàn thành nhiệm vụ! +300đ vào số dư.'
+              : `✅ Đã hoàn thành nhiệm vụ! +300đ vào số dư. Còn ${gioiHan - soLanXong} lượt hôm nay.`;
             successEl.style.display = 'block';
-            setTimeout(khoaHomNay, 1400);
+            setTimeout(() => {
+              if (daHetLuot) {
+                khoaHomNay();
+              } else {
+                moLaiChoLuotTiepTheo(soLanXong, gioiHan);
+              }
+            }, 1400);
           } else {
             const thongBaoLoi = {
               sai_ma: '❌ Mã không đúng.',
@@ -936,6 +1029,47 @@
       });
     }
 
+    const NHAN_TRANG_THAI_GD = { cho_duyet: '⏳ Chờ duyệt', hoan_thanh: '✅ Hoàn thành', tu_choi: '❌ Từ chối (đã hoàn tiền)' };
+
+    function renderLichSuRutTien(danhSach) {
+      const container = document.getElementById('rut-lich-su');
+      container.innerHTML = '';
+
+      if (!danhSach || !danhSach.length) {
+        container.innerHTML = '<div class="rank-loading">Chưa có yêu cầu rút tiền nào.</div>';
+        return;
+      }
+
+      danhSach.forEach((gd) => {
+        const row = document.createElement('div');
+        row.className = 'giaodich-row';
+
+        const top = document.createElement('div');
+        top.className = 'giaodich-top';
+
+        const amount = document.createElement('div');
+        amount.className = 'giaodich-amount';
+        amount.textContent = `${(gd.soTien || 0).toLocaleString('vi-VN')}đ`;
+
+        const badge = document.createElement('div');
+        badge.className = `giaodich-badge ${gd.trangThai}`;
+        badge.textContent = NHAN_TRANG_THAI_GD[gd.trangThai] || gd.trangThai;
+
+        top.appendChild(amount);
+        top.appendChild(badge);
+
+        const time = document.createElement('div');
+        time.className = 'giaodich-time';
+        time.textContent = gd.taoLuc
+          ? new Date(gd.taoLuc).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
+          : '';
+
+        row.appendChild(top);
+        row.appendChild(time);
+        container.appendChild(row);
+      });
+    }
+
     function setupViTab(tg) {
       const uid = tg?.initDataUnsafe?.user?.id;
       const btnRut = document.getElementById('btn-rut-tien');
@@ -944,6 +1078,7 @@
       const labelXacNhan = btnXacNhan.querySelector('.btn-label');
       const errorEl = document.getElementById('rut-error');
       const successEl = document.getElementById('rut-success');
+      const doiTkHintEl = document.getElementById('doi-tk-hint');
       const inputNganHang = document.getElementById('input-ngan-hang');
       const inputSoTk = document.getElementById('input-so-tk');
       const inputTenNhan = document.getElementById('input-ten-nhan');
@@ -958,12 +1093,24 @@
         document.getElementById('vi-con-lai-ngay').textContent = `${tt.con_lai_ngay.toLocaleString('vi-VN')}đ`;
         document.getElementById('vi-con-lai-tuan').textContent = `${tt.con_lai_tuan.toLocaleString('vi-VN')}đ`;
 
-        if (tt.tai_khoan) {
+        // Cho phép đổi sang tài khoản khác — không khóa cứng ô nhập nữa,
+        // chỉ báo còn bao nhiêu ngày nữa mới được đổi nếu chưa đủ 20 ngày.
+        if (tt.tai_khoan && !inputNganHang.value && !inputSoTk.value) {
           inputNganHang.value = tt.tai_khoan.nganHang;
           inputSoTk.value = tt.tai_khoan.soTk;
-          inputNganHang.disabled = true;
-          inputSoTk.disabled = true;
         }
+        if (tt.tai_khoan) {
+          if (tt.co_the_doi_tai_khoan) {
+            doiTkHintEl.textContent = 'ℹ️ Bạn có thể đổi sang ngân hàng/ví khác nếu cần (chỉ 1 lần mỗi 20 ngày).';
+          } else {
+            doiTkHintEl.textContent = `ℹ️ Còn ${tt.so_ngay_con_lai_de_doi} ngày nữa mới được đổi tài khoản nhận tiền.`;
+          }
+          doiTkHintEl.style.display = 'block';
+        } else {
+          doiTkHintEl.style.display = 'none';
+        }
+
+        renderLichSuRutTien(tt.lich_su_rut);
       }
       window.__lamMoiVi = lamMoiThongTinVi;
 
@@ -1004,7 +1151,7 @@
           labelXacNhan.textContent = 'Xác nhận rút tiền';
 
           if (ketQua.thanh_cong) {
-            successEl.textContent = '✅ Đã gửi yêu cầu rút tiền! Xử lý trong 1–3 ngày làm việc.';
+            successEl.textContent = '✅ Đã gửi yêu cầu rút tiền! Xử lý trong 1–3 ngày làm việc. Xem trạng thái ở bảng bên dưới.';
             successEl.style.display = 'block';
             form.style.display = 'none';
             inputTenNhan.value = '';
@@ -1016,7 +1163,7 @@
               thieu_tham_so: '❌ Vui lòng nhập đủ thông tin.',
               duoi_toi_thieu: '❌ Số tiền rút tối thiểu là 10.000đ.',
               khong_du_so_du: '❌ Số dư không đủ.',
-              sai_tai_khoan_lien_ket: '❌ Không khớp với ngân hàng/ví đã liên kết trước đó.',
+              chua_du_ngay_de_doi_tai_khoan: `❌ Chưa đủ 20 ngày để đổi tài khoản nhận tiền (còn ${ketQua.so_ngay_con_lai_de_doi || '?'} ngày nữa).`,
               vuot_han_muc_ngay: '❌ Vượt hạn mức rút trong ngày (tối đa 15.000đ/ngày).',
               vuot_han_muc_tuan: '❌ Vượt hạn mức rút trong tuần (tối đa 50.000đ/tuần).',
             };

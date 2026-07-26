@@ -32,11 +32,11 @@ crons = ["*/15 * * * *"]
 [vars]
 CHU_SO_HUU = "7055595466"
 NHOM_LOG = "@nhomlogbot"
-NHOM_RUT_TIEN = "@nhomlogruttien"
 LINK_MINIAPP = "https://m.treefarmapp.workers.dev/"
 LINK_ANH = "https://i.ibb.co/7x7DFnZ9/1783599852392.jpg"
 THUONG_SO_DU_NHIEM_VU = "300"
 THUONG_QUANG_CAO = "100"
 
 # Secrets — set qua Dashboard: Settings > Variables and secrets
-#   BOT_TOKEN, LINK4M_API_TOKEN, WEBHOOK_SECRET
+#   BOT_TOKEN, LINK4M_API_TOKEN, WEBHOOK_SECRET, ADMIN_WEB_SECRET
+#   (ADMIN_WEB_SECRET: mật khẩu trang web quản lý rút tiền /admin-rut-tien.html)

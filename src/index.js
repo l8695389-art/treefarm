@@ -173,6 +173,7 @@ async function xuLyStart(env, message) {
       coin: 0,
       gem: 0,
       soDu: 0,
+      tongDaKiem: 0, // tổng tiền đã kiếm được (cộng dồn, không giảm khi rút) — dùng cho bảng xếp hạng
     });
     await ghiLogVaThongBao(env, message, "| ✅ NGƯỜI DÙNG MỚI");
   } else {
@@ -439,8 +440,9 @@ async function xuLyXacNhanQuangCao(env, url) {
   await env.USERS.put(keyLanCuoi, String(now));
 
   const soTienCong = Number(env.THUONG_QUANG_CAO || 100);
-  const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, gem: 0, soDu: 0 };
+  const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, gem: 0, soDu: 0, tongDaKiem: 0 };
   nguoiDung.soDu = (nguoiDung.soDu || 0) + soTienCong;
+  nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soTienCong;
   await luuNguoiDung(env, uid, nguoiDung);
 
   return Response.json({
@@ -657,8 +659,10 @@ async function xuLyXacNhanNhiemVu(env, url) {
   await xoaNhiemVuHienTai(env, uid); // dọn con trỏ, nhiệm vụ này xong rồi
 
   // Cộng thưởng vào số dư
-  const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, gem: 0, soDu: 0 };
-  nguoiDung.soDu = (nguoiDung.soDu || 0) + Number(env.THUONG_SO_DU_NHIEM_VU || 300);
+  const soTienCong = Number(env.THUONG_SO_DU_NHIEM_VU || 300);
+  const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, gem: 0, soDu: 0, tongDaKiem: 0 };
+  nguoiDung.soDu = (nguoiDung.soDu || 0) + soTienCong;
+  nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soTienCong;
   await luuNguoiDung(env, uid, nguoiDung);
 
   return Response.json({
@@ -670,7 +674,8 @@ async function xuLyXacNhanNhiemVu(env, url) {
 }
 
 // ==================================================
-// 🏆 BẢNG XẾP HẠNG — sắp xếp theo số dư (tiền đã nhận từ vượt link)
+// 🏆 BẢNG XẾP HẠNG — sắp xếp theo TỔNG TIỀN ĐÃ KIẾM ĐƯỢC (cộng dồn),
+// KHÔNG phải số dư khả dụng hiện tại — rút tiền không làm tụt hạng.
 // ==================================================
 async function xuLyBangXepHang(env) {
   const QUET_TOI_DA = 500; // giới hạn số user quét mỗi lần gọi, tránh vượt CPU time free plan
@@ -681,12 +686,17 @@ async function xuLyBangXepHang(env) {
     if (daQuet >= QUET_TOI_DA) break;
     daQuet += 1;
     const nguoiDung = await layNguoiDung(env, uid);
-    if (nguoiDung && (nguoiDung.soDu || 0) > 0) {
-      const tenHienThi = (nguoiDung.ten && nguoiDung.ten.trim()) || (nguoiDung.username ? `@${nguoiDung.username}` : "");
-      if (tenHienThi) {
-        ketQua.push({ ten: tenHienThi, soDu: nguoiDung.soDu || 0 });
-      }
-    }
+    if (!nguoiDung) continue;
+
+    // Tài khoản cũ chưa có tongDaKiem (tạo trước khi thêm trường này) —
+    // tạm lấy số dư hiện tại làm gần đúng, còn hơn không có gì để xếp hạng.
+    const daKiem = nguoiDung.tongDaKiem != null ? nguoiDung.tongDaKiem : nguoiDung.soDu || 0;
+    if (daKiem <= 0) continue;
+
+    const tenHienThi = (nguoiDung.ten && nguoiDung.ten.trim()) || (nguoiDung.username ? `@${nguoiDung.username}` : "");
+    if (!tenHienThi) continue;
+
+    ketQua.push({ ten: tenHienThi, soDu: daKiem });
   }
 
   ketQua.sort((a, b) => b.soDu - a.soDu);

@@ -9,6 +9,7 @@ const QC_CHO_TOI_THIEU_MS = 30 * 1000; // phải chờ tối thiểu 30 giây gi
 const TIEN_TO_TAI_KHOAN_NHAN = "tai-khoan-nhan:";
 const SO_NGAY_DOI_TAI_KHOAN = 20; // chỉ cho đổi tài khoản nhận tiền 20 ngày / 1 lần
 const TIEN_TO_GIAO_DICH_RUT = "giao-dich-rut:"; // giao-dich-rut:{uid}:{id} — lịch sử + trạng thái duyệt
+const TIEN_TO_CHO_DUYET_RUT = "cho-duyet-rut:"; // cho-duyet-rut:{uid}:{id} — index riêng các giao dịch CHƯA xử lý, để web admin quét nhanh không phải duyệt toàn bộ lịch sử
 const TIEN_TO_RUT_NGAY = "rut-ngay:";
 const TIEN_TO_RUT_TUAN = "rut-tuan:";
 const RUT_TOI_THIEU = 10000;
@@ -234,13 +235,7 @@ async function xuLyGuiThongBao(env, message) {
 // 🔀 Router lệnh + bắt tất cả tin nhắn còn lại
 // ==================================================
 async function xuLyUpdate(env, update) {
-  if (update.callback_query) {
-    const data = update.callback_query.data || "";
-    if (data.startsWith("rut_ok:") || data.startsWith("rut_tc:")) {
-      return xuLyDuyetRutTien(env, update.callback_query);
-    }
-    return;
-  }
+  if (update.callback_query) return; // không còn nút duyệt rút tiền qua Telegram — xử lý ở web admin
 
   const message = update.message;
   if (!message) return;
@@ -855,8 +850,8 @@ async function xuLyYeuCauRutTien(env, url) {
   await env.USERS.put(keyNgay, String(daRutNgay + soTien));
   await env.USERS.put(keyTuan, String(daRutTuan + soTien));
 
-  // Tạo bản ghi giao dịch — trạng thái "cho_duyet" cho tới khi admin bấm
-  // Hoàn thành / Từ chối trên Telegram. Từ chối thì hoàn tiền cho user.
+  // Tạo bản ghi giao dịch — trạng thái "cho_duyet" cho tới khi admin xử lý
+  // trên trang web quản lý rút tiền. Từ chối thì hoàn tiền cho user.
   const idGiaoDich = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const giaoDich = {
     id: idGiaoDich,
@@ -871,88 +866,101 @@ async function xuLyYeuCauRutTien(env, url) {
     keyTuan,
   };
   await env.USERS.put(TIEN_TO_GIAO_DICH_RUT + uid + ":" + idGiaoDich, JSON.stringify(giaoDich));
-
-  const thoiGian = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
-  const noiDung =
-    `💸 YÊU CẦU RÚT TIỀN\n` +
-    `👤 UID: ${uid}\n` +
-    `🏦 Ngân hàng/Ví: ${nganHang}\n` +
-    `🔢 Số TK/SĐT: ${soTk}\n` +
-    `📛 Tên người nhận: ${tenNguoiNhan}\n` +
-    `💰 Số tiền: ${soTien.toLocaleString("vi-VN")}đ\n` +
-    `🕐 Thời gian: ${thoiGian}\n` +
-    `🆔 Mã GD: ${idGiaoDich}`;
-
-  const danhSachAdmin = await layDanhSachAdmin(env);
-  await Promise.allSettled([
-    ...danhSachAdmin.map((adminId) =>
-      telegramApi(env, "sendMessage", {
-        chat_id: Number(adminId),
-        text: noiDung,
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: "✅ Hoàn thành", callback_data: `rut_ok:${uid}:${idGiaoDich}` },
-              { text: "❌ Từ chối (hoàn tiền)", callback_data: `rut_tc:${uid}:${idGiaoDich}` },
-            ],
-          ],
-        },
-      })
-    ),
-    // Forward mọi yêu cầu rút tiền vào nhóm log rút tiền riêng — theo dõi tập trung,
-    // không lẫn với nhóm log chung (NHOM_LOG).
-    env.NHOM_RUT_TIEN
-      ? telegramApi(env, "sendMessage", { chat_id: env.NHOM_RUT_TIEN, text: noiDung })
-      : Promise.resolve(),
-  ]);
+  // Index riêng cho các giao dịch đang chờ — trang web admin đọc từ đây,
+  // xóa ngay khi giao dịch được xử lý xong (xem xuLyXuLyRutTienAdmin).
+  await env.USERS.put(TIEN_TO_CHO_DUYET_RUT + uid + ":" + idGiaoDich, "1");
 
   return Response.json({ thanh_cong: true, so_du_con_lai: nguoiDung.soDu, ma_giao_dich: idGiaoDich });
 }
 
 // ==================================================
-// ✅❌ ADMIN DUYỆT RÚT TIỀN — bấm nút trong tin nhắn Telegram
-// Từ chối → hoàn tiền lại cho user + trả lại hạn mức ngày/tuần đã trừ.
+// 🖥️ WEB ADMIN — DUYỆT RÚT TIỀN (thay cơ chế nút bấm Telegram)
+// Trang web tĩnh (public/admin-rut-tien.html) gọi 2 API dưới đây:
+//   GET  /admin/rut-tien/danh-sach   → danh sách các yêu cầu đang chờ, mỗi
+//                                      yêu cầu hiển thị thành 1 "tab" riêng
+//   POST /admin/rut-tien/xu-ly       → Hoàn thành / Từ chối 1 yêu cầu;
+//                                      xử lý xong thì tab đó biến mất khỏi
+//                                      danh sách (vì bị xóa khỏi index chờ)
+// Xác thực bằng secret cố định (ADMIN_WEB_SECRET, đặt qua Dashboard như
+// các secret khác) gửi kèm ở header "X-Admin-Secret".
 // ==================================================
-async function xuLyDuyetRutTien(env, callbackQuery) {
-  const data = callbackQuery.data || "";
-  const [hanhDong, uid, idGiaoDich] = data.split(":");
-  if (!["rut_ok", "rut_tc"].includes(hanhDong) || !uid || !idGiaoDich) return;
+function xacThucAdminWeb(env, request) {
+  const secret = request.headers.get("X-Admin-Secret") || "";
+  return Boolean(env.ADMIN_WEB_SECRET) && secret === env.ADMIN_WEB_SECRET;
+}
 
-  if (!(await laAdmin(env, callbackQuery.from.id))) {
-    return telegramApi(env, "answerCallbackQuery", {
-      callback_query_id: callbackQuery.id,
-      text: "❌ Bạn không có quyền duyệt giao dịch!",
-      show_alert: true,
-    });
+async function xuLyDanhSachRutTienCho(env, request) {
+  if (!xacThucAdminWeb(env, request)) {
+    return Response.json({ loi: "khong_co_quyen" }, { status: 401 });
+  }
+
+  const danhSach = [];
+  let cursor;
+  for (;;) {
+    const trang = await env.USERS.list({ prefix: TIEN_TO_CHO_DUYET_RUT, cursor });
+    for (const key of trang.keys) {
+      const phanConLai = key.name.slice(TIEN_TO_CHO_DUYET_RUT.length); // "{uid}:{id}"
+      const viTri = phanConLai.indexOf(":");
+      const uid = phanConLai.slice(0, viTri);
+      const idGiaoDich = phanConLai.slice(viTri + 1);
+
+      const raw = await env.USERS.get(TIEN_TO_GIAO_DICH_RUT + uid + ":" + idGiaoDich);
+      if (!raw) continue; // index lệch dữ liệu gốc (hiếm) — bỏ qua
+      const giaoDich = JSON.parse(raw);
+      if (giaoDich.trangThai !== "cho_duyet") continue;
+
+      const nguoiDung = await layNguoiDung(env, uid);
+      danhSach.push({
+        ...giaoDich,
+        ten: nguoiDung ? nguoiDung.ten : "",
+        username: nguoiDung ? nguoiDung.username : null,
+      });
+    }
+    if (trang.list_complete) break;
+    cursor = trang.cursor;
+  }
+
+  danhSach.sort((a, b) => a.taoLuc - b.taoLuc); // cũ nhất trước — xử lý theo thứ tự
+  return Response.json({ danh_sach: danhSach });
+}
+
+async function xuLyXuLyRutTienAdmin(env, request) {
+  if (!xacThucAdminWeb(env, request)) {
+    return Response.json({ thanh_cong: false, loi: "khong_co_quyen" }, { status: 401 });
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ thanh_cong: false, loi: "body_khong_hop_le" }, { status: 400 });
+  }
+
+  const { uid, id: idGiaoDich, hanh_dong: hanhDong } = body || {};
+  if (!uid || !idGiaoDich || !["hoan_thanh", "tu_choi"].includes(hanhDong)) {
+    return Response.json({ thanh_cong: false, loi: "thieu_tham_so" }, { status: 400 });
   }
 
   const key = TIEN_TO_GIAO_DICH_RUT + uid + ":" + idGiaoDich;
   const raw = await env.USERS.get(key);
   if (!raw) {
-    return telegramApi(env, "answerCallbackQuery", {
-      callback_query_id: callbackQuery.id,
-      text: "❌ Không tìm thấy giao dịch (có thể đã bị xóa).",
-      show_alert: true,
-    });
+    return Response.json({ thanh_cong: false, loi: "khong_tim_thay" }, { status: 404 });
   }
 
   const giaoDich = JSON.parse(raw);
   if (giaoDich.trangThai !== "cho_duyet") {
-    return telegramApi(env, "answerCallbackQuery", {
-      callback_query_id: callbackQuery.id,
-      text: "⚠️ Giao dịch này đã được xử lý trước đó rồi.",
-      show_alert: true,
-    });
+    return Response.json({ thanh_cong: false, loi: "da_xu_ly_truoc_do" });
   }
 
-  const trangThaiMoi = hanhDong === "rut_ok" ? "hoan_thanh" : "tu_choi";
-  giaoDich.trangThai = trangThaiMoi;
+  giaoDich.trangThai = hanhDong;
   giaoDich.duyetLuc = Date.now();
-  giaoDich.duyetBoi = String(callbackQuery.from.id);
+  giaoDich.duyetBoi = "web";
   await env.USERS.put(key, JSON.stringify(giaoDich));
+  // Xử lý xong → xóa khỏi index chờ, tab tương ứng biến mất khỏi trang web.
+  await env.USERS.delete(TIEN_TO_CHO_DUYET_RUT + uid + ":" + idGiaoDich);
 
   let textThongBaoUser;
-  if (trangThaiMoi === "tu_choi") {
+  if (hanhDong === "tu_choi") {
     // Hoàn tiền + trả lại hạn mức ngày/tuần đã trừ lúc gửi yêu cầu
     const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, gem: 0, soDu: 0 };
     nguoiDung.soDu = (nguoiDung.soDu || 0) + giaoDich.soTien;
@@ -974,27 +982,9 @@ async function xuLyDuyetRutTien(env, callbackQuery) {
     textThongBaoUser = `✅ Yêu cầu rút ${giaoDich.soTien.toLocaleString("vi-VN")}đ (mã ${idGiaoDich}) đã hoàn thành!`;
   }
 
-  const nhanTrangThai = trangThaiMoi === "hoan_thanh" ? "✅ ĐÃ HOÀN THÀNH" : "❌ ĐÃ TỪ CHỐI — ĐÃ HOÀN TIỀN";
+  await telegramApi(env, "sendMessage", { chat_id: Number(uid), text: textThongBaoUser });
 
-  await Promise.allSettled([
-    telegramApi(env, "answerCallbackQuery", {
-      callback_query_id: callbackQuery.id,
-      text: trangThaiMoi === "hoan_thanh" ? "✅ Đã đánh dấu hoàn thành." : "❌ Đã từ chối và hoàn tiền.",
-    }),
-    telegramApi(env, "editMessageText", {
-      chat_id: callbackQuery.message.chat.id,
-      message_id: callbackQuery.message.message_id,
-      text: callbackQuery.message.text + `\n\n${nhanTrangThai}`,
-    }),
-    telegramApi(env, "sendMessage", { chat_id: Number(uid), text: textThongBaoUser }),
-    // Cập nhật kết quả duyệt vào nhóm log rút tiền riêng, cùng nội dung gốc để dễ đối chiếu.
-    env.NHOM_RUT_TIEN
-      ? telegramApi(env, "sendMessage", {
-          chat_id: env.NHOM_RUT_TIEN,
-          text: `${callbackQuery.message.text}\n\n${nhanTrangThai}\n👮 Duyệt bởi: ${callbackQuery.from.id}`,
-        })
-      : Promise.resolve(),
-  ]);
+  return Response.json({ thanh_cong: true });
 }
 
 // ==================================================
@@ -1013,6 +1003,11 @@ export default {
       const update = await request.json();
       ctx.waitUntil(xuLyUpdate(env, update));
       return new Response("OK");
+    }
+
+    // Web admin duyệt rút tiền — POST, xác thực bằng header X-Admin-Secret
+    if (request.method === "POST" && url.pathname === "/admin/rut-tien/xu-ly") {
+      return xuLyXuLyRutTienAdmin(env, request);
     }
 
     if (request.method === "GET") {
@@ -1038,6 +1033,8 @@ export default {
           return xuLyThongTinVi(env, url);
         case "/yeu-cau-rut-tien":
           return xuLyYeuCauRutTien(env, url);
+        case "/admin/rut-tien/danh-sach":
+          return xuLyDanhSachRutTienCho(env, request);
         case "/suc-khoe":
           return Response.json({ trang_thai: "on" });
       }

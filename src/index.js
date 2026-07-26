@@ -682,10 +682,10 @@ async function xuLyBangXepHang(env) {
     daQuet += 1;
     const nguoiDung = await layNguoiDung(env, uid);
     if (nguoiDung && (nguoiDung.soDu || 0) > 0) {
-      const tenHienThi =
-        (nguoiDung.ten && nguoiDung.ten.trim()) ||
-        (nguoiDung.username ? `@${nguoiDung.username}` : `Người chơi #${uid.slice(-4)}`);
-      ketQua.push({ ten: tenHienThi, soDu: nguoiDung.soDu || 0 });
+      const tenHienThi = (nguoiDung.ten && nguoiDung.ten.trim()) || (nguoiDung.username ? `@${nguoiDung.username}` : "");
+      if (tenHienThi) {
+        ketQua.push({ ten: tenHienThi, soDu: nguoiDung.soDu || 0 });
+      }
     }
   }
 

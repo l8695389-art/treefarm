@@ -420,9 +420,9 @@
           <div class="card-label">📋 Quy định rút tiền</div>
           <ul class="rule-list">
             <li>Có thể liên kết nhiều ngân hàng/ví khác nhau, nhưng chỉ được <strong>đổi tài khoản nhận tiền 1 lần mỗi 20 ngày</strong></li>
-            <li>Rút tối thiểu <strong>10.000đ</strong></li>
-            <li>Tối đa <strong>15.000đ/ngày</strong></li>
-            <li>Tối đa <strong>50.000đ/tuần</strong></li>
+            <li>Rút tối thiểu <strong>20.000đ</strong></li>
+            <li>Tối đa <strong>30.000đ/ngày</strong></li>
+            <li>Tối đa <strong>100.000đ/tuần</strong></li>
             <li>Thời gian duyệt: <strong>1–3 ngày làm việc</strong></li>
           </ul>
         </div>
@@ -1190,11 +1190,11 @@
           } else {
             const thongBao = {
               thieu_tham_so: '❌ Vui lòng nhập đủ thông tin.',
-              duoi_toi_thieu: '❌ Số tiền rút tối thiểu là 10.000đ.',
+              duoi_toi_thieu: '❌ Số tiền rút tối thiểu là 20.000đ.',
               khong_du_so_du: '❌ Số dư không đủ.',
               chua_du_ngay_de_doi_tai_khoan: `❌ Chưa đủ 20 ngày để đổi tài khoản nhận tiền (còn ${ketQua.so_ngay_con_lai_de_doi || '?'} ngày nữa).`,
-              vuot_han_muc_ngay: '❌ Vượt hạn mức rút trong ngày (tối đa 15.000đ/ngày).',
-              vuot_han_muc_tuan: '❌ Vượt hạn mức rút trong tuần (tối đa 50.000đ/tuần).',
+              vuot_han_muc_ngay: '❌ Vượt hạn mức rút trong ngày (tối đa 30.000đ/ngày).',
+              vuot_han_muc_tuan: '❌ Vượt hạn mức rút trong tuần (tối đa 100.000đ/tuần).',
             };
             errorEl.textContent = thongBao[ketQua.loi] || '❌ Không gửi được yêu cầu, thử lại sau.';
             errorEl.style.display = 'block';

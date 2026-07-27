@@ -23,6 +23,9 @@ const LINK4M_GIOI_HAN_NGAY = 2; // tăng từ 1 lên 2 lần/ngày
 const KEY_CACHE_BANG_XEP_HANG = "cache-bang-xep-hang"; // JSON { bang_xep_hang, cap_nhat_luc } — làm mới mỗi 15 phút qua Cron Trigger
 const TIEN_TO_DIEM_DANH = "diem-danh:"; // diem-danh:{uid} — JSON { chuoi_hien_tai, ngay_cuoi }
 const THUONG_DIEM_DANH = [3000, 5000, 8000, 12000, 16000, 22000, 30000]; // coin thưởng theo ngày 1→7 trong chu kỳ điểm danh, lặp lại sau ngày 7
+const THUONG_COIN_MOI_MOI = 5000; // coin chào mừng cho người dùng mới — chỉ nhận 1 lần duy nhất khi /start lần đầu
+const THUONG_MOI_BAN_THANH_CONG = 10000; // coin thưởng cho người mời khi mời được 1 bạn mới tham gia thành công
+const TY_LE_HOA_HONG_GIOI_THIEU = [0.04, 0.02, 0.01]; // % hoa hồng nhiều tầng: cấp 1 (mời trực tiếp) 4%, cấp 2 2%, cấp 3 1% — trên số coin người được mời vừa kiếm được từ nhiệm vụ
 
 // ==================================================
 // 📋 QUẢN LÝ ADMIN — KV thay cho FILE_ADMIN (json)
@@ -62,6 +65,40 @@ async function luuNguoiDung(env, uid, duLieu) {
 function congCoin(nguoiDung, soCoinCong) {
   nguoiDung.coin = (nguoiDung.coin || 0) + soCoinCong;
   return nguoiDung;
+}
+
+// ==================================================
+// 👥 HOA HỒNG MỜI BẠN NHIỀU TẦNG (3 cấp)
+// Mỗi khi 1 người kiếm được coin từ nhiệm vụ (quảng cáo / vượt link /
+// điểm danh), người mời trực tiếp và người mời của người mời cũng được
+// trích % thưởng — KHÔNG cộng dồn qua từng tầng, mỗi cấp hưởng đúng %
+// cố định của mình trên số coin gốc:
+//   Cấp 1 (người mời trực tiếp)        4%
+//   Cấp 2 (người mời của người mời)    2%
+//   Cấp 3 (mời của mời của người mời)  1%
+// Ví dụ: A mời B, B mời C, C mời D. Khi D kiếm được coin:
+// C được 4% (cấp 1 của D), B được 2% (cấp 2 của D), A được 1% (cấp 3 của D).
+// ==================================================
+async function congHoaHongGioiThieu(env, uid, soCoinGoc) {
+  if (!soCoinGoc || soCoinGoc <= 0) return;
+
+  let uidHienTai = uid;
+  for (let cap = 0; cap < TY_LE_HOA_HONG_GIOI_THIEU.length; cap++) {
+    const nguoiHienTai = await layNguoiDung(env, uidHienTai);
+    const uidCapTren = nguoiHienTai && nguoiHienTai.gioiThieuBoi;
+    if (!uidCapTren) break;
+
+    const nguoiCapTren = await layNguoiDung(env, uidCapTren);
+    if (!nguoiCapTren) break; // đứt chuỗi (tài khoản người giới thiệu không còn tồn tại)
+
+    const hoaHong = Math.floor(soCoinGoc * TY_LE_HOA_HONG_GIOI_THIEU[cap]);
+    if (hoaHong > 0) {
+      nguoiCapTren.coin = (nguoiCapTren.coin || 0) + hoaHong;
+      nguoiCapTren.tongDaKiem = (nguoiCapTren.tongDaKiem || 0) + hoaHong;
+      await luuNguoiDung(env, uidCapTren, nguoiCapTren);
+    }
+    uidHienTai = uidCapTren;
+  }
 }
 
 async function* duyetTatCaNguoiDung(env) {
@@ -181,31 +218,39 @@ async function xuLyStart(env, message) {
   const nguoiDungCu = await layNguoiDung(env, uid);
 
   // Link mời bạn bè: /start ref_<uid_nguoi_moi> — chỉ tính khi user CHƯA từng
-  // tồn tại (né gian lận tự start lại nhiều lần) và không tự mời chính mình.
+  // tồn tại (né gian lận tự start lại nhiều lần), không tự mời chính mình,
+  // và uid trong ref_ phải là 1 tài khoản CÓ THẬT (né giả mạo ref_ tùy ý số).
   const payload = message.text.trim().split(/\s+/)[1] || "";
-  const refUid = payload.startsWith("ref_") ? payload.slice(4) : null;
+  const refUidTho = payload.startsWith("ref_") ? payload.slice(4) : null;
   const laNguoiDungMoi = !nguoiDungCu;
+
+  let refUid = null;
+  if (laNguoiDungMoi && refUidTho && refUidTho !== uid) {
+    const nguoiGioiThieu = await layNguoiDung(env, refUidTho);
+    if (nguoiGioiThieu) refUid = refUidTho;
+  }
 
   if (!nguoiDungCu) {
     await luuNguoiDung(env, uid, {
       ten: `${message.from.first_name} ${message.from.last_name || ""}`.trim(),
       username: message.from.username || null,
       ngay_tham_gia: new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }),
-      coin: 0,
+      coin: THUONG_COIN_MOI_MOI, // 5.000 coin chào mừng — chỉ nhận 1 lần duy nhất
       gem: 0,
-      tongDaKiem: 0, // tổng coin đã kiếm được (cộng dồn, không giảm khi quy đổi gem/rút) — dùng cho bảng xếp hạng
-      gioiThieuBoi: refUid && refUid !== uid ? refUid : null,
+      tongDaKiem: THUONG_COIN_MOI_MOI, // thưởng chào mừng cũng tính vào bảng xếp hạng
+      gioiThieuBoi: refUid,
     });
     await ghiLogVaThongBao(env, message, "| ✅ NGƯỜI DÙNG MỚI");
   } else {
     await ghiLogVaThongBao(env, message, "| Gọi lệnh /start");
   }
 
-  if (laNguoiDungMoi && refUid && refUid !== uid) {
+  if (laNguoiDungMoi && refUid) {
     await ghiNhanBanBeMoi(env, refUid, {
       ten: `${message.from.first_name} ${message.from.last_name || ""}`.trim() || "Người dùng",
       thamGiaLuc: Date.now(),
     });
+    await congThuongMoiBanThanhCong(env, refUid); // +10.000 coin cho người mời
   }
 
   return telegramApi(env, "sendPhoto", {
@@ -479,6 +524,7 @@ async function xuLyXacNhanQuangCao(env, url) {
   nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
   congCoin(nguoiDung, soCoinCong);
   await luuNguoiDung(env, uid, nguoiDung);
+  await congHoaHongGioiThieu(env, uid, soCoinCong);
 
   return Response.json({
     thanh_cong: true,
@@ -550,6 +596,7 @@ async function xuLyDiemDanh(env, url) {
   nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
   congCoin(nguoiDung, soCoinCong);
   await luuNguoiDung(env, uid, nguoiDung);
+  await congHoaHongGioiThieu(env, uid, soCoinCong);
 
   return Response.json({
     thanh_cong: true,
@@ -770,6 +817,7 @@ async function xuLyXacNhanNhiemVu(env, url) {
   nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
   congCoin(nguoiDung, soCoinCong);
   await luuNguoiDung(env, uid, nguoiDung);
+  await congHoaHongGioiThieu(env, uid, soCoinCong);
 
   return Response.json({
     hoan_thanh: true,
@@ -856,6 +904,16 @@ async function ghiNhanBanBeMoi(env, refUid, banMoi) {
   const danhSach = raw ? JSON.parse(raw) : [];
   danhSach.unshift(banMoi); // mới nhất lên đầu
   await env.USERS.put(key, JSON.stringify(danhSach.slice(0, 200))); // giới hạn 200 bản ghi gần nhất
+}
+
+// +10.000 coin cho người mời khi mời được 1 người bạn mới tham gia thành công
+// (chỉ tính 1 lần/người được mời, do chỉ gọi khi laNguoiDungMoi === true)
+async function congThuongMoiBanThanhCong(env, refUid) {
+  const nguoiGioiThieu = await layNguoiDung(env, refUid);
+  if (!nguoiGioiThieu) return;
+  nguoiGioiThieu.coin = (nguoiGioiThieu.coin || 0) + THUONG_MOI_BAN_THANH_CONG;
+  nguoiGioiThieu.tongDaKiem = (nguoiGioiThieu.tongDaKiem || 0) + THUONG_MOI_BAN_THANH_CONG;
+  await luuNguoiDung(env, refUid, nguoiGioiThieu);
 }
 
 async function xuLyThongTinBanBe(env, url) {

@@ -257,8 +257,8 @@ async function xuLyStart(env, message) {
     chat_id: message.chat.id,
     photo: env.LINK_ANH,
     caption:
-      "👋 Chào bạn! Chào mừng đến với Tree Farm 🌾\n\n" +
-      "Trồng trọt, làm nhiệm vụ mỗi ngày và tích xu đổi thưởng.\n" +
+      "👋 Chào bạn! Chào mừng đến với Vua Cày Tiền 💸\n\n" +
+      "Cày cuốc, làm nhiệm vụ mỗi ngày và tích xu đổi thưởng.\n" +
       "Mời bạn bè, leo bảng xếp hạng và rút kim cương khi đủ điều kiện.",
     reply_markup: {
       inline_keyboard: [

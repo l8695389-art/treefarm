@@ -105,7 +105,7 @@
   .tab-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
   .tab-ten { font-size: 15.5px; font-weight: 600; }
   .tab-uid { color: var(--tg-muted); font-size: 12px; margin-top: 2px; }
-  .tab-tien { color: var(--gold); font-size: 18px; font-weight: 700; white-space: nowrap; }
+  .tab-tien { color: var(--gold); font-size: 18px; font-weight: 700; text-align: right; }
 
   .tab-info { display: grid; grid-template-columns: auto 1fr; gap: 5px 10px; font-size: 13.5px; margin-bottom: 14px; }
   .tab-info .nhan { color: var(--tg-muted); }
@@ -243,7 +243,7 @@
             <div class="tab-ten">${escapeHtml(tenHienThi)}</div>
             <div class="tab-uid">UID: ${escapeHtml(gd.uid)} · ${new Date(gd.taoLuc).toLocaleString("vi-VN")}</div>
           </div>
-          <div class="tab-tien">${Number(gd.soTien).toLocaleString("vi-VN")}đ</div>
+          <div class="tab-tien">${Number(gd.soGem || 0).toLocaleString("vi-VN")} gem <span style="color:var(--tg-muted);font-size:12.5px;font-weight:400;">(~${Number(gd.soTien).toLocaleString("vi-VN")}đ)</span></div>
         </div>
         <div class="tab-info">
           <div class="nhan">Ngân hàng/Ví</div><div class="gia-tri">${escapeHtml(gd.nganHang)}</div>
@@ -253,7 +253,7 @@
         </div>
         <div class="tab-actions">
           <button class="btn-hoan-thanh" onclick="xuLy('${gd.uid}','${gd.id}','hoan_thanh',this)">✅ Hoàn thành</button>
-          <button class="btn-tu-choi" onclick="xuLy('${gd.uid}','${gd.id}','tu_choi',this)">❌ Từ chối (hoàn tiền)</button>
+          <button class="btn-tu-choi" onclick="xuLy('${gd.uid}','${gd.id}','tu_choi',this)">❌ Từ chối (hoàn gem)</button>
         </div>
       `;
     });
@@ -267,7 +267,7 @@
     if (dangXuLy.has(id)) return;
     const xacNhan = hanhDong === "hoan_thanh"
       ? "Xác nhận đã chuyển tiền thành công cho yêu cầu này?"
-      : "Từ chối yêu cầu này? Số tiền sẽ được hoàn lại cho người dùng.";
+      : "Từ chối yêu cầu này? Số gem sẽ được hoàn lại cho người dùng.";
     if (!confirm(xacNhan)) return;
 
     dangXuLy.add(id);

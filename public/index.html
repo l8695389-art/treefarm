@@ -353,7 +353,7 @@
       <div class="top-bar-stats">
         <div class="stat-pill coin">
           <span class="stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#F5B942"/><circle cx="12" cy="12" r="6.5" fill="none" stroke="#B87A1E" stroke-width="1.4"/></svg></span>
-          <span class="stat-value" id="header-coin">0đ</span>
+          <span class="stat-value" id="header-coin">0</span>
         </div>
         <div class="stat-pill gem">
           <span class="stat-icon"><svg viewBox="0 0 24 24"><path d="M12 2l6 6-6 14L6 8z" fill="#4FA6E8"/><path d="M6 8h12" stroke="#1A6FA0" stroke-width="1"/></svg></span>
@@ -368,9 +368,9 @@
       <section id="tab-trang-chu" class="tab-panel active">
         <div class="eyebrow">Nông trại</div>
         <div class="card highlight balance-card">
-          <div class="card-label">Số dư khả dụng</div>
-          <div class="balance-number" id="so-du-lon">0đ</div>
-          <div class="balance-sub">Cộng dồn từ các lần vượt link hoàn thành</div>
+          <div class="card-label">Coin hiện có</div>
+          <div class="balance-number" id="so-du-lon">0</div>
+          <div class="balance-sub">Cộng dồn từ xem quảng cáo & vượt link — đủ 800.000 coin tự đổi 1 gem</div>
         </div>
       </section>
 
@@ -393,7 +393,7 @@
         <!-- Khối 1: Quảng cáo Monetag -->
         <div class="card highlight">
           <div class="task-title">🎬 Xem quảng cáo</div>
-          <div class="task-desc">Xem quảng cáo, nhận thưởng ngay sau mỗi lần xem. Tối đa 20 lượt/ngày, cách nhau ít nhất 30 giây/lượt.</div>
+          <div class="task-desc">Xem quảng cáo, nhận ngay +5.000 coin sau mỗi lần xem. Tối đa 20 lượt/ngày, cách nhau ít nhất 30 giây/lượt.</div>
           <button id="btn-xem-qc" class="primary-btn" type="button">
             <span class="spinner"></span>
             <span class="btn-label">Xem quảng cáo</span>
@@ -405,7 +405,7 @@
         <!-- Khối 2: Vượt link Link4M -->
         <div class="card highlight">
           <div class="task-title">🔗 Vượt link nhận thưởng</div>
-          <div class="task-desc">Vượt link xong, nhập mã 6 số hiện ở trang đích để nhận +300đ. Giới hạn 2 lần/ngày.</div>
+          <div class="task-desc">Vượt link xong, nhập mã 6 số hiện ở trang đích để nhận +25.000 coin. Giới hạn 2 lần/ngày.</div>
 
           <button id="btn-get-link" class="primary-btn" type="button">
             <span class="spinner"></span>
@@ -472,17 +472,18 @@
         <div class="eyebrow">Ví của tôi</div>
 
         <div class="card highlight balance-card" style="padding:22px;">
-          <div class="card-label">Số dư khả dụng</div>
-          <div class="balance-number" id="so-du-vi" style="font-size:32px;">0đ</div>
+          <div class="card-label">Gem khả dụng</div>
+          <div class="balance-number" id="so-du-vi" style="font-size:32px;">0</div>
+          <div class="balance-sub">1 gem = 500đ khi rút</div>
         </div>
 
         <div class="card">
           <div class="card-label">📋 Quy định rút tiền</div>
           <ul class="rule-list">
             <li>Có thể liên kết nhiều ngân hàng/ví khác nhau, nhưng chỉ được <strong>đổi tài khoản nhận tiền 1 lần mỗi 20 ngày</strong></li>
-            <li>Rút tối thiểu <strong>20.000đ</strong></li>
-            <li>Tối đa <strong>30.000đ/ngày</strong></li>
-            <li>Tối đa <strong>100.000đ/tuần</strong></li>
+            <li>Rút tối thiểu <strong>40 gem</strong> (~20.000đ)</li>
+            <li>Tối đa <strong>60 gem/ngày</strong> (~30.000đ)</li>
+            <li>Tối đa <strong>200 gem/tuần</strong> (~100.000đ)</li>
             <li>Thời gian duyệt: <strong>1–3 ngày làm việc</strong></li>
           </ul>
         </div>
@@ -494,7 +495,7 @@
         </div>
 
         <button id="btn-rut-tien" class="primary-btn" type="button">
-          <span class="btn-label">💸 Rút tiền</span>
+          <span class="btn-label">💸 Rút gem</span>
         </button>
 
         <div id="rut-tien-form" class="card highlight" style="display:none;">
@@ -503,10 +504,10 @@
           <input id="input-ngan-hang" type="text" class="text-input" placeholder="Tên ngân hàng / Momo / ZaloPay" />
           <input id="input-so-tk" type="text" inputmode="numeric" class="text-input" placeholder="Số tài khoản / Số điện thoại" />
           <input id="input-ten-nhan" type="text" class="text-input" placeholder="Tên người nhận" />
-          <input id="input-so-tien" type="number" inputmode="numeric" class="text-input" placeholder="Số tiền muốn rút (đ)" style="margin-bottom:14px;" />
+          <input id="input-so-tien" type="number" inputmode="numeric" class="text-input" placeholder="Số gem muốn rút (tối thiểu 40)" style="margin-bottom:14px;" />
           <button id="btn-xac-nhan-rut" class="primary-btn" type="button">
             <span class="spinner"></span>
-            <span class="btn-label">Xác nhận rút tiền</span>
+            <span class="btn-label">Xác nhận rút gem</span>
           </button>
         </div>
 
@@ -523,7 +524,7 @@
       <!-- TAB 6: BXH -->
       <section id="tab-bang-xep-hang" class="tab-panel">
         <div class="eyebrow">BXH</div>
-        <div class="task-desc" style="margin-top:-8px;">Xếp hạng theo tổng số tiền đã kiếm được (rút tiền không làm tụt hạng).</div>
+        <div class="task-desc" style="margin-top:-8px;">Xếp hạng theo tổng coin đã kiếm được (quy đổi gem hay rút tiền không làm tụt hạng).</div>
         <div id="rank-list" style="display:flex; flex-direction:column; gap:8px; width:100%;">
           <div class="rank-loading">Đang tải...</div>
         </div>
@@ -737,7 +738,7 @@
 
       try {
         const tt = await layThongTinVi(uid);
-        if (tt) hienThiSoDu(tt.so_du);
+        if (tt) { hienThiCoin(tt.coin); hienThiGem(tt.gem); }
       } catch (err) {
         // lỗi mạng tạm thời — bỏ qua, vòng lặp 5s sau sẽ tự thử lại
       }
@@ -756,22 +757,27 @@
       }
     }
 
-    async function guiYeuCauRutTien(uid, nganHang, soTk, tenNguoiNhan, soTien) {
-      const params = new URLSearchParams({ uid, ngan_hang: nganHang, so_tk: soTk, ten_nguoi_nhan: tenNguoiNhan, so_tien: soTien });
+    async function guiYeuCauRutTien(uid, nganHang, soTk, tenNguoiNhan, soGem) {
+      const params = new URLSearchParams({ uid, ngan_hang: nganHang, so_tk: soTk, ten_nguoi_nhan: tenNguoiNhan, so_gem: soGem });
       const endpoint = `${LINK4M_CONFIG.linkGoc}/yeu-cau-rut-tien?${params.toString()}`;
       const res = await fetch(endpoint);
       if (!res.ok) return { thanh_cong: false, loi: 'network' };
       return await res.json();
     }
 
-    // Số 6: số dư — hiện ở tab Trang chủ (số lớn) — dùng chung cho mọi nơi
-    // khác cần cập nhật số dư (vd sau khi hoàn thành nhiệm vụ).
-    function hienThiSoDu(soDu) {
-      const text = `${(soDu || 0).toLocaleString('vi-VN')}đ`;
+    // Số coin — hiện ở tab Trang chủ (số lớn) và pill trên header — dùng
+    // chung cho mọi nơi khác cần cập nhật coin (vd sau khi hoàn thành nhiệm vụ).
+    function hienThiCoin(coin) {
+      const text = (coin || 0).toLocaleString('vi-VN');
       const el = document.getElementById('so-du-lon');
       if (el) el.textContent = text;
       const elHeader = document.getElementById('header-coin');
       if (elHeader) elHeader.textContent = text;
+    }
+
+    function hienThiGem(gem) {
+      const el = document.getElementById('header-gem');
+      if (el) el.textContent = (gem || 0).toLocaleString('vi-VN');
     }
 
     function renderBangXepHang(list) {
@@ -798,7 +804,7 @@
 
         const amount = document.createElement('div');
         amount.className = 'rank-amount';
-        amount.textContent = `${nguoiDung.soDu.toLocaleString('vi-VN')}đ`;
+        amount.textContent = `${nguoiDung.coin.toLocaleString('vi-VN')} coin`;
 
         row.appendChild(badge);
         row.appendChild(name);
@@ -902,8 +908,9 @@
           btnXemQc.classList.remove('loading');
 
           if (ketQua.thanh_cong) {
-            hienThiSoDu(ketQua.so_du);
-            qcSuccessEl.textContent = `✅ Nhận thưởng thành công! +${(ketQua.so_du_cong || 0).toLocaleString('vi-VN')}đ`;
+            hienThiCoin(ketQua.coin);
+            hienThiGem(ketQua.gem);
+            qcSuccessEl.textContent = `✅ Nhận thưởng thành công! +${(ketQua.coin_cong || 0).toLocaleString('vi-VN')} coin`;
             qcSuccessEl.style.display = 'block';
             capNhatUiQuangCao(ketQua.so_lan_qc_da_xem, ketQua.qc_gioi_han_ngay);
             if (!qcHetLuotHomNay) batDauDemNguocQc(ketQua.cho_toi_thieu_giay || 30);
@@ -995,7 +1002,8 @@
         if (!uid) return;
         const tt = await layTrangThaiHienTai(uid);
         if (!tt) return;
-        hienThiSoDu(tt.so_du);
+        hienThiCoin(tt.coin);
+        hienThiGem(tt.gem);
 
         if (tt.qc_gioi_han_ngay !== undefined) {
           capNhatUiQuangCao(tt.so_lan_qc_da_xem, tt.qc_gioi_han_ngay);
@@ -1037,7 +1045,7 @@
           if (!data.thanh_cong) {
             if (data.loi === 'da_vuot_hom_nay') {
               const tt = await layTrangThaiHienTai(uid);
-              if (tt) hienThiSoDu(tt.so_du);
+              if (tt) { hienThiCoin(tt.coin); hienThiGem(tt.gem); }
               return khoaHomNay();
             }
             return batLoi('❌ Không tạo được link, thử lại sau nhé.');
@@ -1076,13 +1084,15 @@
           labelXacNhan.textContent = 'Xác nhận hoàn thành';
 
           if (ketQua.hoan_thanh) {
-            hienThiSoDu(ketQua.so_du);
+            hienThiCoin(ketQua.coin);
+            hienThiGem(ketQua.gem);
             const gioiHan = ketQua.link4m_gioi_han_ngay || 2;
             const soLanXong = ketQua.so_lan_link4m_da_xong || 0;
             const daHetLuot = soLanXong >= gioiHan;
+            const dongThuong = `+${(ketQua.coin_cong || 0).toLocaleString('vi-VN')} coin`;
             successEl.textContent = daHetLuot
-              ? '✅ Đã hoàn thành nhiệm vụ! +300đ vào số dư.'
-              : `✅ Đã hoàn thành nhiệm vụ! +300đ vào số dư. Còn ${gioiHan - soLanXong} lượt hôm nay.`;
+              ? `✅ Đã hoàn thành nhiệm vụ! ${dongThuong}.`
+              : `✅ Đã hoàn thành nhiệm vụ! ${dongThuong}. Còn ${gioiHan - soLanXong} lượt hôm nay.`;
             successEl.style.display = 'block';
             setTimeout(() => {
               if (daHetLuot) {
@@ -1150,7 +1160,7 @@
       });
     }
 
-    const NHAN_TRANG_THAI_GD = { cho_duyet: '⏳ Chờ duyệt', hoan_thanh: '✅ Hoàn thành', tu_choi: '❌ Từ chối (đã hoàn tiền)' };
+    const NHAN_TRANG_THAI_GD = { cho_duyet: '⏳ Chờ duyệt', hoan_thanh: '✅ Hoàn thành', tu_choi: '❌ Từ chối (đã hoàn gem)' };
 
     function renderLichSuRutTien(danhSach) {
       const container = document.getElementById('rut-lich-su');
@@ -1170,7 +1180,7 @@
 
         const amount = document.createElement('div');
         amount.className = 'giaodich-amount';
-        amount.textContent = `${(gd.soTien || 0).toLocaleString('vi-VN')}đ`;
+        amount.textContent = `${(gd.soGem || 0).toLocaleString('vi-VN')} gem (~${(gd.soTien || 0).toLocaleString('vi-VN')}đ)`;
 
         const badge = document.createElement('div');
         badge.className = `giaodich-badge ${gd.trangThai}`;
@@ -1272,9 +1282,11 @@
         const tt = await layThongTinVi(uid);
         if (!tt) return;
 
-        document.getElementById('so-du-vi').textContent = `${(tt.so_du || 0).toLocaleString('vi-VN')}đ`;
-        document.getElementById('vi-con-lai-ngay').textContent = `${tt.con_lai_ngay.toLocaleString('vi-VN')}đ`;
-        document.getElementById('vi-con-lai-tuan').textContent = `${tt.con_lai_tuan.toLocaleString('vi-VN')}đ`;
+        document.getElementById('so-du-vi').textContent = `${(tt.gem || 0).toLocaleString('vi-VN')}`;
+        hienThiCoin(tt.coin);
+        hienThiGem(tt.gem);
+        document.getElementById('vi-con-lai-ngay').textContent = `${tt.con_lai_ngay.toLocaleString('vi-VN')} gem`;
+        document.getElementById('vi-con-lai-tuan').textContent = `${tt.con_lai_tuan.toLocaleString('vi-VN')} gem`;
 
         // Cho phép đổi sang tài khoản khác — không khóa cứng ô nhập nữa,
         // chỉ báo còn bao nhiêu ngày nữa mới được đổi nếu chưa đủ 20 ngày.
@@ -1310,14 +1322,14 @@
         const nganHang = inputNganHang.value.trim();
         const soTk = inputSoTk.value.trim();
         const tenNhan = inputTenNhan.value.trim();
-        const soTien = Number(inputSoTien.value);
+        const soGem = Number(inputSoTien.value);
 
         if (!uid) {
           errorEl.textContent = '❌ Không xác định được tài khoản Telegram.';
           errorEl.style.display = 'block';
           return;
         }
-        if (!nganHang || !soTk || !tenNhan || !soTien) {
+        if (!nganHang || !soTk || !tenNhan || !soGem) {
           errorEl.textContent = '❌ Vui lòng nhập đủ thông tin.';
           errorEl.style.display = 'block';
           return;
@@ -1328,36 +1340,36 @@
         labelXacNhan.textContent = 'Đang gửi yêu cầu...';
 
         try {
-          const ketQua = await guiYeuCauRutTien(uid, nganHang, soTk, tenNhan, soTien);
+          const ketQua = await guiYeuCauRutTien(uid, nganHang, soTk, tenNhan, soGem);
           btnXacNhan.disabled = false;
           btnXacNhan.classList.remove('loading');
-          labelXacNhan.textContent = 'Xác nhận rút tiền';
+          labelXacNhan.textContent = 'Xác nhận rút gem';
 
           if (ketQua.thanh_cong) {
-            successEl.textContent = '✅ Đã gửi yêu cầu rút tiền! Xử lý trong 1–3 ngày làm việc. Xem trạng thái ở bảng bên dưới.';
+            successEl.textContent = '✅ Đã gửi yêu cầu rút gem! Xử lý trong 1–3 ngày làm việc. Xem trạng thái ở bảng bên dưới.';
             successEl.style.display = 'block';
             form.style.display = 'none';
             inputTenNhan.value = '';
             inputSoTien.value = '';
-            hienThiSoDu(ketQua.so_du_con_lai);
+            hienThiGem(ketQua.gem_con_lai);
             lamMoiThongTinVi();
           } else {
             const thongBao = {
               thieu_tham_so: '❌ Vui lòng nhập đủ thông tin.',
-              duoi_toi_thieu: '❌ Số tiền rút tối thiểu là 20.000đ.',
-              khong_du_so_du: '❌ Số dư không đủ.',
+              duoi_toi_thieu: '❌ Số gem rút tối thiểu là 40 gem.',
+              khong_du_gem: '❌ Số gem không đủ.',
               chua_du_ngay_de_doi_tai_khoan: `❌ Chưa đủ 20 ngày để đổi tài khoản nhận tiền (còn ${ketQua.so_ngay_con_lai_de_doi || '?'} ngày nữa).`,
-              vuot_han_muc_ngay: '❌ Vượt hạn mức rút trong ngày (tối đa 30.000đ/ngày).',
-              vuot_han_muc_tuan: '❌ Vượt hạn mức rút trong tuần (tối đa 100.000đ/tuần).',
+              vuot_han_muc_ngay: '❌ Vượt hạn mức rút trong ngày (tối đa 60 gem/ngày).',
+              vuot_han_muc_tuan: '❌ Vượt hạn mức rút trong tuần (tối đa 200 gem/tuần).',
             };
             errorEl.textContent = thongBao[ketQua.loi] || '❌ Không gửi được yêu cầu, thử lại sau.';
             errorEl.style.display = 'block';
           }
         } catch (err) {
-          console.error('Lỗi gửi yêu cầu rút tiền:', err);
+          console.error('Lỗi gửi yêu cầu rút gem:', err);
           btnXacNhan.disabled = false;
           btnXacNhan.classList.remove('loading');
-          labelXacNhan.textContent = 'Xác nhận rút tiền';
+          labelXacNhan.textContent = 'Xác nhận rút gem';
           errorEl.textContent = '❌ Lỗi kết nối, thử lại sau.';
           errorEl.style.display = 'block';
         }

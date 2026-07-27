@@ -12,8 +12,8 @@ const COIN_DOI_GEM = 800000; // đủ 800.000 coin thì tự động quy đổi 
 const SO_NGAY_DOI_TAI_KHOAN = 20; // chỉ cho đổi tài khoản nhận tiền 20 ngày / 1 lần
 const TIEN_TO_GIAO_DICH_RUT = "giao-dich-rut:"; // giao-dich-rut:{uid}:{id} — lịch sử + trạng thái duyệt
 const TIEN_TO_CHO_DUYET_RUT = "cho-duyet-rut:"; // cho-duyet-rut:{uid}:{id} — index riêng các giao dịch CHƯA xử lý, để web admin quét nhanh không phải duyệt toàn bộ lịch sử
-const TIEN_TO_RUT_NGAY = "rut-ngay:";
-const TIEN_TO_RUT_TUAN = "rut-tuan:";
+const TIEN_TO_RUT_NGAY = "rut-gem-ngay:"; // đổi tiền tố so với bản cũ (rut-ngay: tính bằng đ) để không lẫn dữ liệu cũ khi chuyển sang tính bằng gem
+const TIEN_TO_RUT_TUAN = "rut-gem-tuan:"; // tương tự, tránh lẫn với rut-tuan: (đơn vị đ) của bản cũ
 const GEM_QUY_DOI_DONG = 500; // 1 gem = 500đ khi rút (chỉ dùng để tính số tiền chuyển khoản)
 const RUT_TOI_THIEU = 40; // gem
 const RUT_TOI_DA_NGAY = 60; // gem / ngày

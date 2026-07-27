@@ -32,7 +32,7 @@ crons = ["*/15 * * * *"]
 [vars]
 CHU_SO_HUU = "7055595466"
 NHOM_LOG = "@nhomlogbot"
-LINK_MINIAPP = "https://m.treefarmapp.workers.dev/"
+LINK_MINIAPP = "https://m.vuacaytien.workers.dev/"
 LINK_ANH = "https://i.ibb.co/7x7DFnZ9/1783599852392.jpg"
 # THUONG_COIN_QUANG_CAO (mặc định 5000) và THUONG_COIN_NHIEM_VU (mặc định 25000)
 # có thể khai báo ở đây nếu muốn ghi đè mặc định trong code.

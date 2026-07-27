@@ -212,6 +212,45 @@
     .empty-title { font-size: 15px; font-weight: 700; color: var(--tg-text); }
     .empty-sub { font-size: 13px; color: var(--tg-muted); line-height: 1.5; max-width: 260px; }
 
+    /* Điểm danh chuỗi ngày */
+    .diem-danh-card { padding: 16px 18px 18px; }
+    .diem-danh-top { display: flex; align-items: center; gap: 12px; }
+    .diem-danh-calendar {
+      flex-shrink: 0; width: 46px; height: 46px; border-radius: 12px;
+      background: #fff; border: 1px solid var(--tg-border); overflow: hidden;
+      display: flex; flex-direction: column; text-align: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+    }
+    .diem-danh-cal-thang {
+      background: var(--danger); color: #fff; font-size: 9px; font-weight: 700;
+      letter-spacing: 0.03em; padding: 2.5px 0; text-transform: uppercase;
+    }
+    .diem-danh-cal-ngay { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; color: #1A1A1A; }
+    .diem-danh-info { flex: 1; min-width: 0; }
+    .diem-danh-btn {
+      flex-shrink: 0; padding: 9px 16px; border-radius: 30px; border: none;
+      background: linear-gradient(135deg, var(--tg-blue), #1A6FA0); color: #fff;
+      font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
+      white-space: nowrap; transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
+    }
+    .diem-danh-btn:active { transform: scale(0.96); }
+    .diem-danh-btn.da-diem-danh { background: rgba(90,122,153,0.16); color: var(--tg-muted); cursor: default; }
+    .diem-danh-btn:disabled { opacity: 0.75; cursor: default; }
+    .diem-danh-rewards { display: flex; justify-content: space-between; gap: 4px; margin-top: 18px; }
+    .diem-danh-reward { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+    .diem-danh-reward-circle {
+      width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(90,122,153,0.14); border: 1.5px solid var(--tg-border);
+      color: var(--tg-muted); font-size: 12px; font-weight: 700;
+    }
+    .diem-danh-reward.dat .diem-danh-reward-circle {
+      background: #3DDC7A; border-color: #3DDC7A; color: #fff;
+      box-shadow: 0 0 8px rgba(61,220,122,0.4);
+    }
+    .diem-danh-reward-label { font-size: 10px; color: var(--tg-muted); font-weight: 600; white-space: nowrap; }
+    .diem-danh-reward.dat .diem-danh-reward-label { color: var(--tg-text); }
+
     /* Nhiệm vụ */
     .primary-btn {
       width: 100%; padding: 17px 20px; border: none; border-radius: 14px;
@@ -417,6 +456,23 @@
       <!-- TAB 3: NHIỆM VỤ -->
       <section id="tab-nhiem-vu" class="tab-panel">
         <div class="eyebrow">Nhiệm vụ hôm nay</div>
+
+        <!-- Khối 0: Điểm danh chuỗi ngày -->
+        <div class="card highlight diem-danh-card">
+          <div class="diem-danh-top">
+            <div class="diem-danh-calendar">
+              <div class="diem-danh-cal-thang" id="diem-danh-thang">Th7</div>
+              <div class="diem-danh-cal-ngay" id="diem-danh-ngay">27</div>
+            </div>
+            <div class="diem-danh-info">
+              <div class="task-title" style="margin-bottom:2px;">Điểm danh chuỗi ngày</div>
+              <div class="task-desc" style="margin:0;">Chuỗi hiện tại: <strong id="diem-danh-chuoi">0</strong> ngày 🔥</div>
+            </div>
+            <button id="btn-diem-danh" class="diem-danh-btn" type="button">Điểm danh</button>
+          </div>
+          <div class="diem-danh-rewards" id="diem-danh-rewards"></div>
+          <div id="diem-danh-error" class="error-text"></div>
+        </div>
 
         <!-- Khối 1: Quảng cáo Monetag -->
         <div class="card highlight">
@@ -752,6 +808,22 @@
       return await res.json();
     }
 
+    // Điểm danh chuỗi ngày — chỉ đọc trạng thái, không cộng thưởng
+    async function layThongTinDiemDanh(uid) {
+      const endpoint = `${LINK4M_CONFIG.linkGoc}/thong-tin-diem-danh?uid=${encodeURIComponent(uid)}`;
+      const res = await fetch(endpoint);
+      if (!res.ok) return null;
+      return await res.json();
+    }
+
+    // Xác nhận điểm danh hôm nay — cộng thưởng coin theo chuỗi
+    async function guiDiemDanh(uid) {
+      const endpoint = `${LINK4M_CONFIG.linkGoc}/diem-danh?uid=${encodeURIComponent(uid)}`;
+      const res = await fetch(endpoint);
+      if (!res.ok) return { thanh_cong: false, loi: 'network' };
+      return await res.json();
+    }
+
     // Tab Bạn bè — số lượng đã mời, link mời riêng theo uid, danh sách bạn bè.
     // Endpoint /thong-tin-ban-be cần được bổ sung phía Worker (index.js),
     // trả về { so_luong, danh_sach: [{ ten, tham_gia_luc }] }.
@@ -790,6 +862,9 @@
       }
       if (tabDangMo.id === 'tab-ban-be' && window.__lamMoiBanBe) {
         window.__lamMoiBanBe();
+      }
+      if (tabDangMo.id === 'tab-nhiem-vu' && window.__lamMoiDiemDanh) {
+        window.__lamMoiDiemDanh();
       }
     }
 
@@ -871,6 +946,9 @@
           }
           if (target === 'tab-ban-be' && window.__lamMoiBanBe) {
             window.__lamMoiBanBe();
+          }
+          if (target === 'tab-nhiem-vu' && window.__lamMoiDiemDanh) {
+            window.__lamMoiDiemDanh();
           }
         });
       });
@@ -1480,6 +1558,107 @@
       lamMoiThongTinVi();
     }
 
+    // ────────────────────────────────────────────────────────────
+    // TAB NHIỆM VỤ — Điểm danh chuỗi ngày
+    // ────────────────────────────────────────────────────────────
+    function renderDiemDanhThuong(thuong, chuoiHienTai) {
+      const container = document.getElementById('diem-danh-rewards');
+      container.innerHTML = '';
+      const viTriTrongChuKy = chuoiHienTai > 0 ? ((chuoiHienTai - 1) % thuong.length) + 1 : 0;
+
+      thuong.forEach((coin, idx) => {
+        const ngayThu = idx + 1;
+        const dat = ngayThu <= viTriTrongChuKy;
+
+        const item = document.createElement('div');
+        item.className = 'diem-danh-reward' + (dat ? ' dat' : '');
+
+        const circle = document.createElement('div');
+        circle.className = 'diem-danh-reward-circle';
+        circle.textContent = dat ? '✓' : String(ngayThu);
+
+        const label = document.createElement('div');
+        label.className = 'diem-danh-reward-label';
+        label.textContent = coin >= 1000 ? `${Math.round(coin / 1000)}k` : String(coin);
+
+        item.appendChild(circle);
+        item.appendChild(label);
+        container.appendChild(item);
+      });
+    }
+
+    function setupDiemDanhTab(tg) {
+      const uid = tg?.initDataUnsafe?.user?.id;
+      const btn = document.getElementById('btn-diem-danh');
+      const errorEl = document.getElementById('diem-danh-error');
+      const chuoiEl = document.getElementById('diem-danh-chuoi');
+
+      // Icon lịch hiển thị đúng ngày/tháng hôm nay
+      const thangTen = ['Th1','Th2','Th3','Th4','Th5','Th6','Th7','Th8','Th9','Th10','Th11','Th12'];
+      const homNay = new Date();
+      document.getElementById('diem-danh-thang').textContent = thangTen[homNay.getMonth()];
+      document.getElementById('diem-danh-ngay').textContent = String(homNay.getDate());
+
+      function capNhatNutTheoTrangThai(daDiemDanhHomNay) {
+        if (daDiemDanhHomNay) {
+          btn.textContent = 'Đã điểm danh ✓';
+          btn.classList.add('da-diem-danh');
+          btn.disabled = true;
+        } else {
+          btn.textContent = 'Điểm danh';
+          btn.classList.remove('da-diem-danh');
+          btn.disabled = false;
+        }
+      }
+
+      async function lamMoiDiemDanh() {
+        if (!uid) return;
+        const tt = await layThongTinDiemDanh(uid);
+        if (!tt || !tt.thanh_cong) return;
+        chuoiEl.textContent = tt.chuoi_hien_tai || 0;
+        capNhatNutTheoTrangThai(tt.da_diem_danh_hom_nay);
+        renderDiemDanhThuong(tt.thuong, tt.chuoi_hien_tai || 0);
+      }
+      window.__lamMoiDiemDanh = lamMoiDiemDanh;
+
+      btn.addEventListener('click', async () => {
+        if (!uid) {
+          errorEl.textContent = '❌ Không xác định được tài khoản Telegram.';
+          errorEl.style.display = 'block';
+          return;
+        }
+
+        btn.disabled = true;
+        errorEl.style.display = 'none';
+
+        try {
+          const ketQua = await guiDiemDanh(uid);
+          if (ketQua.thanh_cong) {
+            hienThiCoin(ketQua.coin);
+            hienThiGem(ketQua.gem);
+            chuoiEl.textContent = ketQua.chuoi_hien_tai;
+            renderDiemDanhThuong(ketQua.thuong, ketQua.chuoi_hien_tai);
+            capNhatNutTheoTrangThai(true);
+          } else if (ketQua.loi === 'da_diem_danh_hom_nay') {
+            chuoiEl.textContent = ketQua.chuoi_hien_tai || 0;
+            if (ketQua.thuong) renderDiemDanhThuong(ketQua.thuong, ketQua.chuoi_hien_tai || 0);
+            capNhatNutTheoTrangThai(true);
+          } else {
+            btn.disabled = false;
+            errorEl.textContent = '❌ Không điểm danh được, thử lại sau.';
+            errorEl.style.display = 'block';
+          }
+        } catch (err) {
+          console.error('Lỗi điểm danh:', err);
+          btn.disabled = false;
+          errorEl.textContent = '❌ Lỗi kết nối, thử lại sau.';
+          errorEl.style.display = 'block';
+        }
+      });
+
+      lamMoiDiemDanh();
+    }
+
     (function init() {
       if (!isTelegramMiniApp()) {
         document.getElementById('screen-loading').style.display = 'none';
@@ -1496,6 +1675,7 @@
       setupKhoTab(tg);
       setupViTab(tg);
       setupBanBeTab(tg);
+      setupDiemDanhTab(tg);
 
       // Cập nhật định kỳ mỗi 5 giây — số dư, bảng xếp hạng, ví
       const uid = tg?.initDataUnsafe?.user?.id;

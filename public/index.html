@@ -114,7 +114,7 @@
     }
     .tab-content {
       flex: 1; overflow-y: auto; display: flex; flex-direction: column; align-items: center;
-      padding: env(safe-area-inset-top, 16px) 20px 24px;
+      padding: 16px 20px 24px;
     }
     .tab-panel { width: 100%; max-width: 420px; display: none; flex-direction: column; gap: 14px; }
     .tab-panel.active { display: flex; }
@@ -137,6 +137,33 @@
     .tab-btn.active { color: var(--tg-blue); }
     .tab-btn.active svg { filter: drop-shadow(0 0 6px var(--tg-glow)); }
     .tab-btn:active { opacity: 0.7; }
+
+    /* ─── THANH THÔNG TIN TRÊN CÙNG ───
+       Nằm ngoài .tab-content nên KHÔNG cuộn theo nội dung và
+       KHÔNG mất/đổi khi chuyển tab — luôn hiển thị avatar + coin + gem. */
+    .top-bar {
+      flex-shrink: 0; display: flex; align-items: center; gap: 10px;
+      width: 100%; padding: calc(env(safe-area-inset-top, 10px) + 10px) 16px 12px;
+      background: var(--tg-surface); border-bottom: 1px solid var(--tg-border);
+    }
+    .top-bar .avatar { width: 36px; height: 36px; font-size: 14px; }
+    .top-bar-user { display: flex; flex-direction: column; min-width: 0; }
+    .top-bar-name { font-size: 13px; font-weight: 700; color: var(--tg-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+    .top-bar-id { font-size: 10px; color: var(--tg-muted); font-family: 'SF Mono', 'Fira Code', monospace; }
+    .top-bar-stats { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0; }
+    .stat-pill {
+      display: flex; align-items: center; gap: 6px;
+      background: rgba(34,158,217,0.08); border: 1px solid var(--tg-border);
+      border-radius: 40px; padding: 5px 12px 5px 6px;
+    }
+    .stat-pill .stat-icon {
+      width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .stat-pill.coin .stat-icon { background: radial-gradient(circle at 35% 30%, #FFE9A8, var(--gold)); box-shadow: 0 0 6px rgba(245,185,66,0.4); }
+    .stat-pill.gem .stat-icon { background: radial-gradient(circle at 35% 30%, #C9E6FF, #4FA6E8); box-shadow: 0 0 6px rgba(79,166,232,0.4); }
+    .stat-pill .stat-icon svg { width: 12px; height: 12px; }
+    .stat-pill .stat-value { font-size: 12.5px; font-weight: 700; color: var(--tg-text); white-space: nowrap; }
 
     /* Cards (shared) */
     .card { background: var(--tg-surface); border: 1px solid var(--tg-border); border-radius: 16px; padding: 20px; position: relative; overflow: hidden; }
@@ -313,22 +340,33 @@
     </div>
   </div>
 
-  <!-- MAIN APP: 4 TABS -->
+  <!-- MAIN APP: 6 TABS -->
   <div id="screen-main">
+
+    <!-- THANH THÔNG TIN TRÊN CÙNG — cố định, không cuộn, không đổi khi chuyển tab -->
+    <header class="top-bar">
+      <div class="avatar" id="user-avatar">?</div>
+      <div class="top-bar-user">
+        <div class="top-bar-name" id="user-name">Đang tải...</div>
+        <div class="top-bar-id" id="user-id">ID: —</div>
+      </div>
+      <div class="top-bar-stats">
+        <div class="stat-pill coin">
+          <span class="stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#F5B942"/><circle cx="12" cy="12" r="6.5" fill="none" stroke="#B87A1E" stroke-width="1.4"/></svg></span>
+          <span class="stat-value" id="header-coin">0đ</span>
+        </div>
+        <div class="stat-pill gem">
+          <span class="stat-icon"><svg viewBox="0 0 24 24"><path d="M12 2l6 6-6 14L6 8z" fill="#4FA6E8"/><path d="M6 8h12" stroke="#1A6FA0" stroke-width="1"/></svg></span>
+          <span class="stat-value" id="header-gem">0</span>
+        </div>
+      </div>
+    </header>
+
     <div class="tab-content">
 
-      <!-- TAB 1: TRANG CHỦ -->
+      <!-- TAB 1: NÔNG TRẠI -->
       <section id="tab-trang-chu" class="tab-panel active">
-        <div class="eyebrow">Trang chủ</div>
-        <div class="card">
-          <div class="profile-row">
-            <div class="avatar" id="user-avatar">?</div>
-            <div>
-              <div class="profile-name" id="user-name">Đang tải...</div>
-              <div class="profile-id" id="user-id">ID: —</div>
-            </div>
-          </div>
-        </div>
+        <div class="eyebrow">Nông trại</div>
         <div class="card highlight balance-card">
           <div class="card-label">Số dư khả dụng</div>
           <div class="balance-number" id="so-du-lon">0đ</div>
@@ -336,14 +374,14 @@
         </div>
       </section>
 
-      <!-- TAB 2: SẢN PHẨM -->
+      <!-- TAB 2: KHO -->
       <section id="tab-san-pham" class="tab-panel">
-        <div class="eyebrow">Sản phẩm</div>
+        <div class="eyebrow">Kho</div>
         <div class="empty-state">
           <div class="empty-icon">
             <svg viewBox="0 0 24 24"><path d="M4 8l1-4h14l1 4"/><path d="M4 8h16v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8z"/><path d="M9 12a3 3 0 0 0 6 0"/></svg>
           </div>
-          <div class="empty-title">Chưa có sản phẩm nào</div>
+          <div class="empty-title">Kho trống</div>
           <div class="empty-sub">Mục này đang được chuẩn bị. Quay lại sau nhé.</div>
         </div>
       </section>
@@ -398,12 +436,34 @@
         </div>
       </section>
 
-      <!-- TAB 4: BẢNG XẾP HẠNG -->
-      <section id="tab-bang-xep-hang" class="tab-panel">
-        <div class="eyebrow">Bảng xếp hạng</div>
-        <div class="task-desc" style="margin-top:-8px;">Xếp hạng theo tổng số tiền đã kiếm được (rút tiền không làm tụt hạng).</div>
-        <div id="rank-list" style="display:flex; flex-direction:column; gap:8px; width:100%;">
-          <div class="rank-loading">Đang tải...</div>
+      <!-- TAB 4: BẠN BÈ -->
+      <section id="tab-ban-be" class="tab-panel">
+        <div class="eyebrow">Bạn bè</div>
+
+        <div class="card highlight" style="text-align:center;padding:24px;">
+          <div class="card-label">Bạn đã mời</div>
+          <div class="balance-number" id="ban-be-so-luong" style="font-size:32px;">0</div>
+          <div class="balance-sub">người bạn</div>
+        </div>
+
+        <div class="card">
+          <div class="card-label">🔗 Link mời bạn bè</div>
+          <div class="card-value mono" id="ban-be-link" style="margin-bottom:14px;">—</div>
+          <button id="btn-copy-ban-be" class="secondary-btn" type="button" style="width:100%;">Sao chép link mời</button>
+        </div>
+
+        <div class="card">
+          <div class="card-label">📋 Phần thưởng mời bạn</div>
+          <ul class="rule-list">
+            <li>Mỗi người bạn mời tham gia qua link, cả hai đều nhận thưởng</li>
+            <li>Thưởng cộng thẳng vào số dư khả dụng ở tab Ví</li>
+            <li>Không giới hạn số lượng bạn bè mời được</li>
+          </ul>
+        </div>
+
+        <div class="card-label" style="margin-top:6px;">Danh sách bạn bè đã mời</div>
+        <div id="ban-be-danh-sach" style="display:flex; flex-direction:column; gap:8px; width:100%;">
+          <div class="rank-loading">Chưa mời được người bạn nào.</div>
         </div>
       </section>
 
@@ -460,29 +520,42 @@
         </div>
       </section>
 
+      <!-- TAB 6: BXH -->
+      <section id="tab-bang-xep-hang" class="tab-panel">
+        <div class="eyebrow">BXH</div>
+        <div class="task-desc" style="margin-top:-8px;">Xếp hạng theo tổng số tiền đã kiếm được (rút tiền không làm tụt hạng).</div>
+        <div id="rank-list" style="display:flex; flex-direction:column; gap:8px; width:100%;">
+          <div class="rank-loading">Đang tải...</div>
+        </div>
+      </section>
+
     </div>
 
     <!-- TAB BAR -->
     <nav class="tab-bar">
       <button class="tab-btn active" data-tab="tab-trang-chu" type="button">
         <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/></svg>
-        <span>Trang chủ</span>
+        <span>Nông trại</span>
       </button>
       <button class="tab-btn" data-tab="tab-san-pham" type="button">
         <svg viewBox="0 0 24 24"><path d="M4 8l1-4h14l1 4"/><path d="M4 8h16v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8z"/><path d="M9 12a3 3 0 0 0 6 0"/></svg>
-        <span>Sản phẩm</span>
+        <span>Kho</span>
       </button>
       <button class="tab-btn" data-tab="tab-nhiem-vu" type="button">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4.3"/><circle cx="12" cy="12" r="0.8" fill="currentColor"/></svg>
         <span>Nhiệm vụ</span>
       </button>
-      <button class="tab-btn" data-tab="tab-bang-xep-hang" type="button">
-        <svg viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 5H5a3 3 0 0 0 3 5"/><path d="M16 5h3a3 3 0 0 1-3 5"/><path d="M12 13v3"/><path d="M9 20h6"/><path d="M10 16h4l.5 4h-5l.5-4z"/></svg>
-        <span>Xếp hạng</span>
+      <button class="tab-btn" data-tab="tab-ban-be" type="button">
+        <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.6"/><path d="M15.2 14.2c2.6.4 4.8 2.7 4.8 5.8"/></svg>
+        <span>Bạn bè</span>
       </button>
       <button class="tab-btn" data-tab="tab-vi" type="button">
         <svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10.5h18"/><circle cx="16.5" cy="14.5" r="1" fill="currentColor" stroke="none"/></svg>
         <span>Ví</span>
+      </button>
+      <button class="tab-btn" data-tab="tab-bang-xep-hang" type="button">
+        <svg viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 5H5a3 3 0 0 0 3 5"/><path d="M16 5h3a3 3 0 0 1-3 5"/><path d="M12 13v3"/><path d="M9 20h6"/><path d="M10 16h4l.5 4h-5l.5-4z"/></svg>
+        <span>BXH</span>
       </button>
     </nav>
   </div>
@@ -642,6 +715,16 @@
       return await res.json();
     }
 
+    // Tab Bạn bè — số lượng đã mời, link mời riêng theo uid, danh sách bạn bè.
+    // Endpoint /thong-tin-ban-be cần được bổ sung phía Worker (index.js),
+    // trả về { so_luong, danh_sach: [{ ten, tham_gia_luc }] }.
+    async function layThongTinBanBe(uid) {
+      const endpoint = `${LINK4M_CONFIG.linkGoc}/thong-tin-ban-be?uid=${encodeURIComponent(uid)}`;
+      const res = await fetch(endpoint);
+      if (!res.ok) return null;
+      return await res.json();
+    }
+
     // ────────────────────────────────────────────────────────────
     // CẬP NHẬT ĐỊNH KỲ MỖI 10 GIÂY — số dư luôn hiện đúng thực tế
     // (vd sau khi admin duyệt rút tiền ở trang web quản lý), bảng xếp
@@ -668,6 +751,9 @@
       if (tabDangMo.id === 'tab-vi' && window.__lamMoiVi) {
         window.__lamMoiVi();
       }
+      if (tabDangMo.id === 'tab-ban-be' && window.__lamMoiBanBe) {
+        window.__lamMoiBanBe();
+      }
     }
 
     async function guiYeuCauRutTien(uid, nganHang, soTk, tenNguoiNhan, soTien) {
@@ -681,8 +767,11 @@
     // Số 6: số dư — hiện ở tab Trang chủ (số lớn) — dùng chung cho mọi nơi
     // khác cần cập nhật số dư (vd sau khi hoàn thành nhiệm vụ).
     function hienThiSoDu(soDu) {
+      const text = `${(soDu || 0).toLocaleString('vi-VN')}đ`;
       const el = document.getElementById('so-du-lon');
-      if (el) el.textContent = `${(soDu || 0).toLocaleString('vi-VN')}đ`;
+      if (el) el.textContent = text;
+      const elHeader = document.getElementById('header-coin');
+      if (elHeader) elHeader.textContent = text;
     }
 
     function renderBangXepHang(list) {
@@ -737,6 +826,9 @@
           }
           if (target === 'tab-vi' && window.__lamMoiVi) {
             window.__lamMoiVi();
+          }
+          if (target === 'tab-ban-be' && window.__lamMoiBanBe) {
+            window.__lamMoiBanBe();
           }
         });
       });
@@ -1099,6 +1191,68 @@
       });
     }
 
+    function renderDanhSachBanBe(danhSach) {
+      const container = document.getElementById('ban-be-danh-sach');
+      container.innerHTML = '';
+
+      if (!danhSach || !danhSach.length) {
+        container.innerHTML = '<div class="rank-loading">Chưa mời được người bạn nào.</div>';
+        return;
+      }
+
+      danhSach.forEach((nb) => {
+        const row = document.createElement('div');
+        row.className = 'giaodich-row';
+
+        const top = document.createElement('div');
+        top.className = 'giaodich-top';
+
+        const ten = document.createElement('div');
+        ten.className = 'giaodich-amount';
+        ten.textContent = nb.ten || 'Người dùng';
+
+        top.appendChild(ten);
+        row.appendChild(top);
+
+        if (nb.tham_gia_luc) {
+          const time = document.createElement('div');
+          time.className = 'giaodich-time';
+          time.textContent = new Date(nb.tham_gia_luc).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+          row.appendChild(time);
+        }
+
+        container.appendChild(row);
+      });
+    }
+
+    function setupBanBeTab(tg) {
+      const uid = tg?.initDataUnsafe?.user?.id;
+      const linkEl = document.getElementById('ban-be-link');
+      const btnCopy = document.getElementById('btn-copy-ban-be');
+
+      const linkMoi = uid ? `https://t.me/treefarm_bot?start=ref_${uid}` : '—';
+      if (linkEl) linkEl.textContent = linkMoi;
+
+      btnCopy.addEventListener('click', async () => {
+        if (!uid) return;
+        await copyText(linkMoi);
+        const label = btnCopy.textContent;
+        btnCopy.textContent = 'Đã sao chép ✓';
+        setTimeout(() => { btnCopy.textContent = label; }, 1500);
+      });
+
+      async function lamMoiBanBe() {
+        if (!uid) return;
+        const tt = await layThongTinBanBe(uid);
+        if (!tt) return;
+        document.getElementById('ban-be-so-luong').textContent = tt.so_luong || 0;
+        renderDanhSachBanBe(tt.danh_sach);
+      }
+      window.__lamMoiBanBe = lamMoiBanBe;
+
+      lamMoiBanBe();
+    }
+
     function setupViTab(tg) {
       const uid = tg?.initDataUnsafe?.user?.id;
       const btnRut = document.getElementById('btn-rut-tien');
@@ -1226,6 +1380,7 @@
       setupTabBar();
       setupLinkButton(tg);
       setupViTab(tg);
+      setupBanBeTab(tg);
 
       // Cập nhật định kỳ mỗi 5 giây — số dư, bảng xếp hạng, ví
       const uid = tg?.initDataUnsafe?.user?.id;

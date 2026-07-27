@@ -7,14 +7,17 @@ const QC_GIOI_HAN_NGAY = 20;
 const TIEN_TO_QC_LAN_CUOI = "qc-lan-cuoi:"; // mốc thời gian lần xem quảng cáo gần nhất — chặn spam
 const QC_CHO_TOI_THIEU_MS = 30 * 1000; // phải chờ tối thiểu 30 giây giữa 2 lần xem quảng cáo
 const TIEN_TO_TAI_KHOAN_NHAN = "tai-khoan-nhan:";
+const TIEN_TO_BAN_BE = "ban-be:"; // ban-be:{uid_nguoi_moi} — JSON array các bạn đã mời qua link ref_
+const COIN_DOI_GEM = 800000; // đủ 800.000 coin thì tự động quy đổi thành 1 gem
 const SO_NGAY_DOI_TAI_KHOAN = 20; // chỉ cho đổi tài khoản nhận tiền 20 ngày / 1 lần
 const TIEN_TO_GIAO_DICH_RUT = "giao-dich-rut:"; // giao-dich-rut:{uid}:{id} — lịch sử + trạng thái duyệt
 const TIEN_TO_CHO_DUYET_RUT = "cho-duyet-rut:"; // cho-duyet-rut:{uid}:{id} — index riêng các giao dịch CHƯA xử lý, để web admin quét nhanh không phải duyệt toàn bộ lịch sử
 const TIEN_TO_RUT_NGAY = "rut-ngay:";
 const TIEN_TO_RUT_TUAN = "rut-tuan:";
-const RUT_TOI_THIEU = 20000;
-const RUT_TOI_DA_NGAY = 30000;
-const RUT_TOI_DA_TUAN = 100000;
+const GEM_QUY_DOI_DONG = 500; // 1 gem = 500đ khi rút (chỉ dùng để tính số tiền chuyển khoản)
+const RUT_TOI_THIEU = 40; // gem
+const RUT_TOI_DA_NGAY = 60; // gem / ngày
+const RUT_TOI_DA_TUAN = 200; // gem / tuần
 const TIEN_TO_LINK4M_SO_LAN_NGAY = "link4m-so-lan-ngay:"; // số lần hoàn thành nhiệm vụ link4m hôm nay
 const LINK4M_GIOI_HAN_NGAY = 2; // tăng từ 1 lên 2 lần/ngày
 const KEY_CACHE_BANG_XEP_HANG = "cache-bang-xep-hang"; // JSON { bang_xep_hang, cap_nhat_luc } — làm mới mỗi 15 phút qua Cron Trigger
@@ -49,6 +52,19 @@ async function layNguoiDung(env, uid) {
 
 async function luuNguoiDung(env, uid, duLieu) {
   await env.USERS.put(TIEN_TO_USER + uid, JSON.stringify(duLieu));
+}
+
+// Cộng coin cho user (mutate tại chỗ), rồi tự động quy đổi từng mốc
+// COIN_DOI_GEM coin thành 1 gem, giữ lại phần dư — không lưu KV ở đây,
+// gọi luuNguoiDung() sau khi xong (để gộp chung 1 lần ghi với các field khác).
+function congCoinVaQuyDoiGem(nguoiDung, soCoinCong) {
+  nguoiDung.coin = (nguoiDung.coin || 0) + soCoinCong;
+  const soGemMoi = Math.floor(nguoiDung.coin / COIN_DOI_GEM);
+  if (soGemMoi > 0) {
+    nguoiDung.coin -= soGemMoi * COIN_DOI_GEM;
+    nguoiDung.gem = (nguoiDung.gem || 0) + soGemMoi;
+  }
+  return nguoiDung;
 }
 
 async function* duyetTatCaNguoiDung(env) {
@@ -167,6 +183,12 @@ async function xuLyStart(env, message) {
   const uid = String(message.from.id);
   const nguoiDungCu = await layNguoiDung(env, uid);
 
+  // Link mời bạn bè: /start ref_<uid_nguoi_moi> — chỉ tính khi user CHƯA từng
+  // tồn tại (né gian lận tự start lại nhiều lần) và không tự mời chính mình.
+  const payload = message.text.trim().split(/\s+/)[1] || "";
+  const refUid = payload.startsWith("ref_") ? payload.slice(4) : null;
+  const laNguoiDungMoi = !nguoiDungCu;
+
   if (!nguoiDungCu) {
     await luuNguoiDung(env, uid, {
       ten: `${message.from.first_name} ${message.from.last_name || ""}`.trim(),
@@ -174,12 +196,19 @@ async function xuLyStart(env, message) {
       ngay_tham_gia: new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }),
       coin: 0,
       gem: 0,
-      soDu: 0,
-      tongDaKiem: 0, // tổng tiền đã kiếm được (cộng dồn, không giảm khi rút) — dùng cho bảng xếp hạng
+      tongDaKiem: 0, // tổng coin đã kiếm được (cộng dồn, không giảm khi quy đổi gem/rút) — dùng cho bảng xếp hạng
+      gioiThieuBoi: refUid && refUid !== uid ? refUid : null,
     });
     await ghiLogVaThongBao(env, message, "| ✅ NGƯỜI DÙNG MỚI");
   } else {
     await ghiLogVaThongBao(env, message, "| Gọi lệnh /start");
+  }
+
+  if (laNguoiDungMoi && refUid && refUid !== uid) {
+    await ghiNhanBanBeMoi(env, refUid, {
+      ten: `${message.from.first_name} ${message.from.last_name || ""}`.trim() || "Người dùng",
+      thamGiaLuc: Date.now(),
+    });
   }
 
   return telegramApi(env, "sendPhoto", {
@@ -371,14 +400,16 @@ async function xuLyNhiemVuHienTai(env, url) {
 
   const homNay = ngayVnHomNay();
   const nguoiDung = await layNguoiDung(env, uid);
-  const soDu = nguoiDung ? nguoiDung.soDu || 0 : 0;
+  const coin = nguoiDung ? nguoiDung.coin || 0 : 0;
+  const gem = nguoiDung ? nguoiDung.gem || 0 : 0;
 
   const soLanQcDaXem = Number((await env.USERS.get(TIEN_TO_QC_SO_LAN_NGAY + uid + ":" + homNay)) || 0);
   const qcLanCuoi = Number((await env.USERS.get(TIEN_TO_QC_LAN_CUOI + uid)) || 0);
   const soLanLink4mDaXong = Number((await env.USERS.get(TIEN_TO_LINK4M_SO_LAN_NGAY + uid + ":" + homNay)) || 0);
 
   const trangThaiChung = {
-    so_du: soDu,
+    coin,
+    gem,
     so_lan_qc_da_xem: soLanQcDaXem,
     qc_gioi_han_ngay: QC_GIOI_HAN_NGAY,
     qc_lan_cuoi: qcLanCuoi,
@@ -435,16 +466,17 @@ async function xuLyXacNhanQuangCao(env, url) {
   await env.USERS.put(key, String(soLanMoi));
   await env.USERS.put(keyLanCuoi, String(now));
 
-  const soTienCong = Number(env.THUONG_QUANG_CAO || 100);
-  const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, gem: 0, soDu: 0, tongDaKiem: 0 };
-  nguoiDung.soDu = (nguoiDung.soDu || 0) + soTienCong;
-  nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soTienCong;
+  const soCoinCong = Number(env.THUONG_COIN_QUANG_CAO || 5000);
+  const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, gem: 0, tongDaKiem: 0 };
+  nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
+  congCoinVaQuyDoiGem(nguoiDung, soCoinCong);
   await luuNguoiDung(env, uid, nguoiDung);
 
   return Response.json({
     thanh_cong: true,
-    so_du: nguoiDung.soDu,
-    so_du_cong: soTienCong,
+    coin: nguoiDung.coin,
+    coin_cong: soCoinCong,
+    gem: nguoiDung.gem,
     so_lan_qc_da_xem: soLanMoi,
     qc_gioi_han_ngay: QC_GIOI_HAN_NGAY,
     cho_toi_thieu_giay: QC_CHO_TOI_THIEU_MS / 1000,
@@ -654,16 +686,18 @@ async function xuLyXacNhanNhiemVu(env, url) {
   await env.USERS.put(keySoLan, String(soLanMoi));
   await xoaNhiemVuHienTai(env, uid); // dọn con trỏ, nhiệm vụ này xong rồi
 
-  // Cộng thưởng vào số dư
-  const soTienCong = Number(env.THUONG_SO_DU_NHIEM_VU || 300);
-  const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, gem: 0, soDu: 0, tongDaKiem: 0 };
-  nguoiDung.soDu = (nguoiDung.soDu || 0) + soTienCong;
-  nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soTienCong;
+  // Cộng thưởng coin
+  const soCoinCong = Number(env.THUONG_COIN_NHIEM_VU || 25000);
+  const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, gem: 0, tongDaKiem: 0 };
+  nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
+  congCoinVaQuyDoiGem(nguoiDung, soCoinCong);
   await luuNguoiDung(env, uid, nguoiDung);
 
   return Response.json({
     hoan_thanh: true,
-    so_du: nguoiDung.soDu,
+    coin: nguoiDung.coin,
+    coin_cong: soCoinCong,
+    gem: nguoiDung.gem,
     so_lan_link4m_da_xong: soLanMoi,
     link4m_gioi_han_ngay: LINK4M_GIOI_HAN_NGAY,
   });
@@ -691,17 +725,17 @@ async function tinhBangXepHang(env) {
     if (!nguoiDung) continue;
 
     // Tài khoản cũ chưa có tongDaKiem (tạo trước khi thêm trường này) —
-    // tạm lấy số dư hiện tại làm gần đúng, còn hơn không có gì để xếp hạng.
-    const daKiem = nguoiDung.tongDaKiem != null ? nguoiDung.tongDaKiem : nguoiDung.soDu || 0;
+    // tạm lấy coin hiện tại làm gần đúng, còn hơn không có gì để xếp hạng.
+    const daKiem = nguoiDung.tongDaKiem != null ? nguoiDung.tongDaKiem : nguoiDung.coin || 0;
     if (daKiem <= 0) continue;
 
     const tenHienThi = (nguoiDung.ten && nguoiDung.ten.trim()) || (nguoiDung.username ? `@${nguoiDung.username}` : "");
     if (!tenHienThi) continue;
 
-    ketQua.push({ ten: tenHienThi, soDu: daKiem });
+    ketQua.push({ ten: tenHienThi, coin: daKiem });
   }
 
-  ketQua.sort((a, b) => b.soDu - a.soDu);
+  ketQua.sort((a, b) => b.coin - a.coin);
   return ketQua.slice(0, 50);
 }
 
@@ -735,12 +769,37 @@ async function xuLyBangXepHang(env) {
 // khóa 1 tài khoản nhận duy nhất) được enforce ở SERVER, không tin
 // client — vì đây là chỗ liên quan trực tiếp tới tiền thật.
 // ==================================================
+// ==================================================
+// 👥 BẠN BÈ — ghi nhận lượt mời qua link ref_, tra cứu cho tab Bạn bè
+// ==================================================
+async function ghiNhanBanBeMoi(env, refUid, banMoi) {
+  const key = TIEN_TO_BAN_BE + refUid;
+  const raw = await env.USERS.get(key);
+  const danhSach = raw ? JSON.parse(raw) : [];
+  danhSach.unshift(banMoi); // mới nhất lên đầu
+  await env.USERS.put(key, JSON.stringify(danhSach.slice(0, 200))); // giới hạn 200 bản ghi gần nhất
+}
+
+async function xuLyThongTinBanBe(env, url) {
+  const uid = url.searchParams.get("uid");
+  if (!uid) return Response.json({ loi: "thieu_uid" }, { status: 400 });
+
+  const raw = await env.USERS.get(TIEN_TO_BAN_BE + uid);
+  const danhSach = raw ? JSON.parse(raw) : [];
+
+  return Response.json({
+    so_luong: danhSach.length,
+    danh_sach: danhSach.map((nb) => ({ ten: nb.ten, tham_gia_luc: nb.thamGiaLuc })),
+  });
+}
+
 async function xuLyThongTinVi(env, url) {
   const uid = url.searchParams.get("uid");
   if (!uid) return Response.json({ loi: "thieu_uid" }, { status: 400 });
 
   const nguoiDung = await layNguoiDung(env, uid);
-  const soDu = nguoiDung ? nguoiDung.soDu || 0 : 0;
+  const coin = nguoiDung ? nguoiDung.coin || 0 : 0;
+  const gem = nguoiDung ? nguoiDung.gem || 0 : 0;
 
   const rawTaiKhoan = await env.USERS.get(TIEN_TO_TAI_KHOAN_NHAN + uid);
   const taiKhoan = rawTaiKhoan ? JSON.parse(rawTaiKhoan) : null;
@@ -763,7 +822,10 @@ async function xuLyThongTinVi(env, url) {
   const lichSu = await layLichSuRutTien(env, uid);
 
   return Response.json({
-    so_du: soDu,
+    coin: coin,
+    gem: gem,
+    gem_quy_doi_dong: GEM_QUY_DOI_DONG,
+    rut_toi_thieu: RUT_TOI_THIEU,
     tai_khoan: taiKhoan,
     co_the_doi_tai_khoan: coTheDoiTaiKhoan,
     so_ngay_con_lai_de_doi: soNgayConLaiDeDoi,
@@ -791,20 +853,22 @@ async function xuLyYeuCauRutTien(env, url) {
   const nganHang = (url.searchParams.get("ngan_hang") || "").trim();
   const soTk = (url.searchParams.get("so_tk") || "").trim();
   const tenNguoiNhan = (url.searchParams.get("ten_nguoi_nhan") || "").trim();
-  const soTien = Number(url.searchParams.get("so_tien"));
+  const soGem = Number(url.searchParams.get("so_gem"));
 
-  if (!uid || !nganHang || !soTk || !tenNguoiNhan || !soTien) {
+  if (!uid || !nganHang || !soTk || !tenNguoiNhan || !soGem) {
     return Response.json({ thanh_cong: false, loi: "thieu_tham_so" }, { status: 400 });
   }
-  if (!Number.isFinite(soTien) || soTien < RUT_TOI_THIEU) {
+  if (!Number.isFinite(soGem) || !Number.isInteger(soGem) || soGem < RUT_TOI_THIEU) {
     return Response.json({ thanh_cong: false, loi: "duoi_toi_thieu" });
   }
 
   const nguoiDung = await layNguoiDung(env, uid);
-  const soDu = nguoiDung ? nguoiDung.soDu || 0 : 0;
-  if (soTien > soDu) {
-    return Response.json({ thanh_cong: false, loi: "khong_du_so_du" });
+  const gemHienCo = nguoiDung ? nguoiDung.gem || 0 : 0;
+  if (soGem > gemHienCo) {
+    return Response.json({ thanh_cong: false, loi: "khong_du_gem" });
   }
+
+  const soTien = soGem * GEM_QUY_DOI_DONG; // số tiền quy đổi để admin chuyển khoản
 
   // Cho phép đổi sang tài khoản nhận khác, nhưng chỉ 1 lần mỗi
   // SO_NGAY_DOI_TAI_KHOAN ngày — chống việc đổi liên tục để né kiểm soát.
@@ -829,16 +893,16 @@ async function xuLyYeuCauRutTien(env, url) {
   const daRutNgay = Number((await env.USERS.get(keyNgay)) || 0);
   const daRutTuan = Number((await env.USERS.get(keyTuan)) || 0);
 
-  if (daRutNgay + soTien > RUT_TOI_DA_NGAY) {
+  if (daRutNgay + soGem > RUT_TOI_DA_NGAY) {
     return Response.json({ thanh_cong: false, loi: "vuot_han_muc_ngay" });
   }
-  if (daRutTuan + soTien > RUT_TOI_DA_TUAN) {
+  if (daRutTuan + soGem > RUT_TOI_DA_TUAN) {
     return Response.json({ thanh_cong: false, loi: "vuot_han_muc_tuan" });
   }
 
-  // Trừ số dư ngay — coi như tiền bị giữ lại chờ admin xử lý thủ công,
-  // tránh gửi trùng nhiều yêu cầu vượt quá số dư thực có.
-  nguoiDung.soDu = soDu - soTien;
+  // Trừ gem ngay — coi như gem bị giữ lại chờ admin xử lý thủ công,
+  // tránh gửi trùng nhiều yêu cầu vượt quá số gem thực có.
+  nguoiDung.gem = gemHienCo - soGem;
   await luuNguoiDung(env, uid, nguoiDung);
 
   if (!taiKhoanDaLuu || laDoiTaiKhoan) {
@@ -847,8 +911,8 @@ async function xuLyYeuCauRutTien(env, url) {
       JSON.stringify({ nganHang, soTk, tenNguoiNhan, capNhatLuc: Date.now() })
     );
   }
-  await env.USERS.put(keyNgay, String(daRutNgay + soTien));
-  await env.USERS.put(keyTuan, String(daRutTuan + soTien));
+  await env.USERS.put(keyNgay, String(daRutNgay + soGem));
+  await env.USERS.put(keyTuan, String(daRutTuan + soGem));
 
   // Tạo bản ghi giao dịch — trạng thái "cho_duyet" cho tới khi admin xử lý
   // trên trang web quản lý rút tiền. Từ chối thì hoàn tiền cho user.
@@ -859,7 +923,8 @@ async function xuLyYeuCauRutTien(env, url) {
     nganHang,
     soTk,
     tenNguoiNhan,
-    soTien,
+    soGem,
+    soTien, // số tiền quy đổi (soGem * GEM_QUY_DOI_DONG) — để admin chuyển khoản
     trangThai: "cho_duyet",
     taoLuc: Date.now(),
     keyNgay,
@@ -870,7 +935,7 @@ async function xuLyYeuCauRutTien(env, url) {
   // xóa ngay khi giao dịch được xử lý xong (xem xuLyXuLyRutTienAdmin).
   await env.USERS.put(TIEN_TO_CHO_DUYET_RUT + uid + ":" + idGiaoDich, "1");
 
-  return Response.json({ thanh_cong: true, so_du_con_lai: nguoiDung.soDu, ma_giao_dich: idGiaoDich });
+  return Response.json({ thanh_cong: true, gem_con_lai: nguoiDung.gem, ma_giao_dich: idGiaoDich });
 }
 
 // ==================================================
@@ -961,25 +1026,25 @@ async function xuLyXuLyRutTienAdmin(env, request) {
 
   let textThongBaoUser;
   if (hanhDong === "tu_choi") {
-    // Hoàn tiền + trả lại hạn mức ngày/tuần đã trừ lúc gửi yêu cầu
-    const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, gem: 0, soDu: 0 };
-    nguoiDung.soDu = (nguoiDung.soDu || 0) + giaoDich.soTien;
+    // Hoàn gem + trả lại hạn mức ngày/tuần đã trừ lúc gửi yêu cầu
+    const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, gem: 0 };
+    nguoiDung.gem = (nguoiDung.gem || 0) + giaoDich.soGem;
     await luuNguoiDung(env, uid, nguoiDung);
 
     if (giaoDich.keyNgay) {
       const daRutNgay = Number((await env.USERS.get(giaoDich.keyNgay)) || 0);
-      await env.USERS.put(giaoDich.keyNgay, String(Math.max(0, daRutNgay - giaoDich.soTien)));
+      await env.USERS.put(giaoDich.keyNgay, String(Math.max(0, daRutNgay - giaoDich.soGem)));
     }
     if (giaoDich.keyTuan) {
       const daRutTuan = Number((await env.USERS.get(giaoDich.keyTuan)) || 0);
-      await env.USERS.put(giaoDich.keyTuan, String(Math.max(0, daRutTuan - giaoDich.soTien)));
+      await env.USERS.put(giaoDich.keyTuan, String(Math.max(0, daRutTuan - giaoDich.soGem)));
     }
 
     textThongBaoUser =
-      `❌ Yêu cầu rút ${giaoDich.soTien.toLocaleString("vi-VN")}đ (mã ${idGiaoDich}) đã bị từ chối.\n` +
-      `💰 Số tiền đã được hoàn lại vào số dư của bạn.`;
+      `❌ Yêu cầu rút ${giaoDich.soGem} gem (~${giaoDich.soTien.toLocaleString("vi-VN")}đ, mã ${idGiaoDich}) đã bị từ chối.\n` +
+      `💎 Số gem đã được hoàn lại vào tài khoản của bạn.`;
   } else {
-    textThongBaoUser = `✅ Yêu cầu rút ${giaoDich.soTien.toLocaleString("vi-VN")}đ (mã ${idGiaoDich}) đã hoàn thành!`;
+    textThongBaoUser = `✅ Yêu cầu rút ${giaoDich.soGem} gem (~${giaoDich.soTien.toLocaleString("vi-VN")}đ, mã ${idGiaoDich}) đã hoàn thành!`;
   }
 
   await telegramApi(env, "sendMessage", { chat_id: Number(uid), text: textThongBaoUser });
@@ -1031,6 +1096,8 @@ export default {
           return xuLyBangXepHang(env);
         case "/thong-tin-vi":
           return xuLyThongTinVi(env, url);
+        case "/thong-tin-ban-be":
+          return xuLyThongTinBanBe(env, url);
         case "/yeu-cau-rut-tien":
           return xuLyYeuCauRutTien(env, url);
         case "/admin/rut-tien/danh-sach":

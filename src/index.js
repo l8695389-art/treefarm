@@ -21,6 +21,8 @@ const RUT_TOI_DA_TUAN = 200; // gem / tuần
 const TIEN_TO_LINK4M_SO_LAN_NGAY = "link4m-so-lan-ngay:"; // số lần hoàn thành nhiệm vụ link4m hôm nay
 const LINK4M_GIOI_HAN_NGAY = 2; // tăng từ 1 lên 2 lần/ngày
 const KEY_CACHE_BANG_XEP_HANG = "cache-bang-xep-hang"; // JSON { bang_xep_hang, cap_nhat_luc } — làm mới mỗi 15 phút qua Cron Trigger
+const TIEN_TO_DIEM_DANH = "diem-danh:"; // diem-danh:{uid} — JSON { chuoi_hien_tai, ngay_cuoi }
+const THUONG_DIEM_DANH = [3000, 5000, 8000, 12000, 16000, 22000, 30000]; // coin thưởng theo ngày 1→7 trong chu kỳ điểm danh, lặp lại sau ngày 7
 
 // ==================================================
 // 📋 QUẢN LÝ ADMIN — KV thay cho FILE_ADMIN (json)
@@ -312,6 +314,17 @@ function dauTuanVN() {
   return `${y}-${m}-${d}`;
 }
 
+function ngayTruocVN(ngayStr) {
+  // nhận "YYYY-MM-DD", trả về ngày liền trước cùng định dạng — dùng để
+  // kiểm tra điểm danh có liên tục (hôm qua) hay bị đứt chuỗi
+  const d = new Date(ngayStr + "T00:00:00");
+  d.setDate(d.getDate() - 1);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
 function sinhMaNgauNhien() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
@@ -475,6 +488,76 @@ async function xuLyXacNhanQuangCao(env, url) {
     so_lan_qc_da_xem: soLanMoi,
     qc_gioi_han_ngay: QC_GIOI_HAN_NGAY,
     cho_toi_thieu_giay: QC_CHO_TOI_THIEU_MS / 1000,
+  });
+}
+
+// ==================================================
+// 📅 ĐIỂM DANH CHUỖI NGÀY — thưởng coin tăng dần theo 7 ngày liên tiếp,
+// đứt quãng (bỏ lỡ 1 ngày) thì chuỗi reset về 1. Chu kỳ 7 ngày lặp lại
+// (ngày 8 tính thưởng như ngày 1, v.v.)
+// ==================================================
+async function layDiemDanh(env, uid) {
+  const raw = await env.USERS.get(TIEN_TO_DIEM_DANH + uid);
+  return raw ? JSON.parse(raw) : { chuoi_hien_tai: 0, ngay_cuoi: null };
+}
+
+async function luuDiemDanh(env, uid, duLieu) {
+  await env.USERS.put(TIEN_TO_DIEM_DANH + uid, JSON.stringify(duLieu));
+}
+
+// Chỉ đọc trạng thái — dùng khi mở tab / làm mới định kỳ, KHÔNG cộng thưởng
+async function xuLyThongTinDiemDanh(env, url) {
+  const uid = url.searchParams.get("uid");
+  if (!uid) return Response.json({ thanh_cong: false, loi: "thieu_uid" }, { status: 400 });
+
+  const homNay = ngayVnHomNay();
+  const dd = await layDiemDanh(env, uid);
+
+  return Response.json({
+    thanh_cong: true,
+    chuoi_hien_tai: dd.chuoi_hien_tai || 0,
+    da_diem_danh_hom_nay: dd.ngay_cuoi === homNay,
+    thuong: THUONG_DIEM_DANH,
+  });
+}
+
+// Điểm danh — cộng thưởng coin theo vị trí trong chu kỳ 7 ngày
+async function xuLyDiemDanh(env, url) {
+  const uid = url.searchParams.get("uid");
+  if (!uid) return Response.json({ thanh_cong: false, loi: "thieu_uid" }, { status: 400 });
+
+  const homNay = ngayVnHomNay();
+  const dd = await layDiemDanh(env, uid);
+
+  if (dd.ngay_cuoi === homNay) {
+    return Response.json({
+      thanh_cong: false,
+      loi: "da_diem_danh_hom_nay",
+      chuoi_hien_tai: dd.chuoi_hien_tai || 0,
+      thuong: THUONG_DIEM_DANH,
+    });
+  }
+
+  const homQua = ngayTruocVN(homNay);
+  const chuoiMoi = dd.ngay_cuoi === homQua ? (dd.chuoi_hien_tai || 0) + 1 : 1;
+
+  const viTriThuong = (chuoiMoi - 1) % THUONG_DIEM_DANH.length;
+  const soCoinCong = THUONG_DIEM_DANH[viTriThuong];
+
+  await luuDiemDanh(env, uid, { chuoi_hien_tai: chuoiMoi, ngay_cuoi: homNay });
+
+  const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, gem: 0, tongDaKiem: 0 };
+  nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
+  congCoin(nguoiDung, soCoinCong);
+  await luuNguoiDung(env, uid, nguoiDung);
+
+  return Response.json({
+    thanh_cong: true,
+    coin: nguoiDung.coin,
+    gem: nguoiDung.gem,
+    coin_cong: soCoinCong,
+    chuoi_hien_tai: chuoiMoi,
+    thuong: THUONG_DIEM_DANH,
   });
 }
 
@@ -1119,6 +1202,10 @@ export default {
           return xuLyXacNhanNhiemVu(env, url);
         case "/xac-nhan-quang-cao":
           return xuLyXacNhanQuangCao(env, url);
+        case "/thong-tin-diem-danh":
+          return xuLyThongTinDiemDanh(env, url);
+        case "/diem-danh":
+          return xuLyDiemDanh(env, url);
         case "/bang-xep-hang":
           return xuLyBangXepHang(env);
         case "/thong-tin-vi":

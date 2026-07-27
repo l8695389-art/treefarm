@@ -262,7 +262,7 @@ async function xuLyStart(env, message) {
       "Mời bạn bè, leo bảng xếp hạng và rút kim cương khi đủ điều kiện.",
     reply_markup: {
       inline_keyboard: [
-        [{ text: "🌾 MỞ TRANG TRẠI NGAY", web_app: { url: env.LINK_MINIAPP } }],
+        [{ text: "💸 BẮT ĐẦU CÀY TIỀN", web_app: { url: env.LINK_MINIAPP } }],
         [{ text: "📢 Kênh thông báo", url: "https://t.me/vuacaytien_news" }],
         [{ text: "🌐 Nhóm trò chuyện", url: "https://t.me/vuacaytien_chat" }],
       ],

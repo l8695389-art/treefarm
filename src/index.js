@@ -8,7 +8,7 @@ const TIEN_TO_QC_LAN_CUOI = "qc-lan-cuoi:"; // mốc thời gian lần xem quả
 const QC_CHO_TOI_THIEU_MS = 30 * 1000; // phải chờ tối thiểu 30 giây giữa 2 lần xem quảng cáo
 const TIEN_TO_TAI_KHOAN_NHAN = "tai-khoan-nhan:";
 const TIEN_TO_BAN_BE = "ban-be:"; // ban-be:{uid_nguoi_moi} — JSON array các bạn đã mời qua link ref_
-const COIN_DOI_GEM = 800000; // đủ 800.000 coin thì tự động quy đổi thành 1 gem
+const COIN_DOI_GEM = 800000; // 800.000 coin đổi thủ công được 1 gem (nút "Đổi" ở tab Kho)
 const SO_NGAY_DOI_TAI_KHOAN = 20; // chỉ cho đổi tài khoản nhận tiền 20 ngày / 1 lần
 const TIEN_TO_GIAO_DICH_RUT = "giao-dich-rut:"; // giao-dich-rut:{uid}:{id} — lịch sử + trạng thái duyệt
 const TIEN_TO_CHO_DUYET_RUT = "cho-duyet-rut:"; // cho-duyet-rut:{uid}:{id} — index riêng các giao dịch CHƯA xử lý, để web admin quét nhanh không phải duyệt toàn bộ lịch sử
@@ -54,16 +54,11 @@ async function luuNguoiDung(env, uid, duLieu) {
   await env.USERS.put(TIEN_TO_USER + uid, JSON.stringify(duLieu));
 }
 
-// Cộng coin cho user (mutate tại chỗ), rồi tự động quy đổi từng mốc
-// COIN_DOI_GEM coin thành 1 gem, giữ lại phần dư — không lưu KV ở đây,
-// gọi luuNguoiDung() sau khi xong (để gộp chung 1 lần ghi với các field khác).
-function congCoinVaQuyDoiGem(nguoiDung, soCoinCong) {
+// Cộng coin cho user (mutate tại chỗ) — không lưu KV ở đây, gọi luuNguoiDung()
+// sau khi xong (để gộp chung 1 lần ghi với các field khác). Việc quy đổi
+// coin → gem giờ là thủ công, xem xuLyDoiCoinSangGem().
+function congCoin(nguoiDung, soCoinCong) {
   nguoiDung.coin = (nguoiDung.coin || 0) + soCoinCong;
-  const soGemMoi = Math.floor(nguoiDung.coin / COIN_DOI_GEM);
-  if (soGemMoi > 0) {
-    nguoiDung.coin -= soGemMoi * COIN_DOI_GEM;
-    nguoiDung.gem = (nguoiDung.gem || 0) + soGemMoi;
-  }
   return nguoiDung;
 }
 
@@ -469,7 +464,7 @@ async function xuLyXacNhanQuangCao(env, url) {
   const soCoinCong = Number(env.THUONG_COIN_QUANG_CAO || 5000);
   const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, gem: 0, tongDaKiem: 0 };
   nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
-  congCoinVaQuyDoiGem(nguoiDung, soCoinCong);
+  congCoin(nguoiDung, soCoinCong);
   await luuNguoiDung(env, uid, nguoiDung);
 
   return Response.json({
@@ -690,7 +685,7 @@ async function xuLyXacNhanNhiemVu(env, url) {
   const soCoinCong = Number(env.THUONG_COIN_NHIEM_VU || 25000);
   const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, gem: 0, tongDaKiem: 0 };
   nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
-  congCoinVaQuyDoiGem(nguoiDung, soCoinCong);
+  congCoin(nguoiDung, soCoinCong);
   await luuNguoiDung(env, uid, nguoiDung);
 
   return Response.json({
@@ -790,6 +785,38 @@ async function xuLyThongTinBanBe(env, url) {
   return Response.json({
     so_luong: danhSach.length,
     danh_sach: danhSach.map((nb) => ({ ten: nb.ten, tham_gia_luc: nb.thamGiaLuc })),
+  });
+}
+
+// Đổi coin → gem thủ công (nút "Đổi" ở tab Kho) — số coin nhập phải là bội
+// số dương của COIN_DOI_GEM (800.000). Không tự động đổi ở bất kỳ đâu khác.
+async function xuLyDoiCoinSangGem(env, url) {
+  const uid = url.searchParams.get("uid");
+  const soCoin = Number(url.searchParams.get("so_coin"));
+
+  if (!uid || !soCoin) {
+    return Response.json({ thanh_cong: false, loi: "thieu_tham_so" }, { status: 400 });
+  }
+  if (!Number.isFinite(soCoin) || !Number.isInteger(soCoin) || soCoin <= 0 || soCoin % COIN_DOI_GEM !== 0) {
+    return Response.json({ thanh_cong: false, loi: "so_coin_khong_hop_le", coin_doi_gem: COIN_DOI_GEM });
+  }
+
+  const nguoiDung = await layNguoiDung(env, uid);
+  const coinHienCo = nguoiDung ? nguoiDung.coin || 0 : 0;
+  if (soCoin > coinHienCo) {
+    return Response.json({ thanh_cong: false, loi: "khong_du_coin" });
+  }
+
+  const soGemMoi = soCoin / COIN_DOI_GEM;
+  nguoiDung.coin = coinHienCo - soCoin;
+  nguoiDung.gem = (nguoiDung.gem || 0) + soGemMoi;
+  await luuNguoiDung(env, uid, nguoiDung);
+
+  return Response.json({
+    thanh_cong: true,
+    coin: nguoiDung.coin,
+    gem: nguoiDung.gem,
+    so_gem_nhan: soGemMoi,
   });
 }
 
@@ -1096,6 +1123,8 @@ export default {
           return xuLyBangXepHang(env);
         case "/thong-tin-vi":
           return xuLyThongTinVi(env, url);
+        case "/doi-coin-gem":
+          return xuLyDoiCoinSangGem(env, url);
         case "/thong-tin-ban-be":
           return xuLyThongTinBanBe(env, url);
         case "/yeu-cau-rut-tien":

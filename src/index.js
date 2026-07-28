@@ -8,7 +8,7 @@ const TIEN_TO_QC_LAN_CUOI = "qc-lan-cuoi:"; // mốc thời gian lần xem quả
 const QC_CHO_TOI_THIEU_MS = 30 * 1000; // phải chờ tối thiểu 30 giây giữa 2 lần xem quảng cáo
 const TIEN_TO_TAI_KHOAN_NHAN = "tai-khoan-nhan:";
 const TIEN_TO_BAN_BE = "ban-be:"; // ban-be:{uid_nguoi_moi} — JSON array các bạn đã mời qua link ref_
-const COIN_DOI_GEM = 500000; // 800.000 coin đổi thủ công được 1 gem (nút "Đổi" ở tab Kho)
+const COIN_DOI_GEM = 500000; // 500.000 coin đổi thủ công được 1 gem (nút "Đổi" ở tab Kho)
 const SO_NGAY_DOI_TAI_KHOAN = 20; // chỉ cho đổi tài khoản nhận tiền 20 ngày / 1 lần
 const TIEN_TO_GIAO_DICH_RUT = "giao-dich-rut:"; // giao-dich-rut:{uid}:{id} — lịch sử + trạng thái duyệt
 const TIEN_TO_CHO_DUYET_RUT = "cho-duyet-rut:"; // cho-duyet-rut:{uid}:{id} — index riêng các giao dịch CHƯA xử lý, để web admin quét nhanh không phải duyệt toàn bộ lịch sử
@@ -1094,7 +1094,7 @@ async function xuLyThongTinBanBe(env, url) {
 }
 
 // Đổi coin → gem thủ công (nút "Đổi" ở tab Kho) — số coin nhập phải là bội
-// số dương của COIN_DOI_GEM (800.000). Không tự động đổi ở bất kỳ đâu khác.
+// số dương của COIN_DOI_GEM (500.000). Không tự động đổi ở bất kỳ đâu khác.
 async function xuLyDoiCoinSangGem(env, url) {
   const uid = url.searchParams.get("uid");
   const soCoin = Number(url.searchParams.get("so_coin"));

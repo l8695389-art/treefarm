@@ -515,7 +515,7 @@
               <div class="task-desc" style="margin:0;">500.000 🪙 = 1 💎</div>
             </div>
           </div>
-          <input id="input-so-coin-doi" type="number" inputmode="numeric" class="text-input" placeholder="Số coin muốn đổi (bội số của 800.000)" style="margin-top:14px;margin-bottom:12px;" />
+          <input id="input-so-coin-doi" type="number" inputmode="numeric" class="text-input" placeholder="Số coin muốn đổi (bội số của 500.000)" style="margin-top:14px;margin-bottom:12px;" />
           <button id="btn-doi-coin-gem" class="primary-btn" type="button">
             <span class="spinner"></span>
             <span class="btn-label">💎 Đổi</span>
@@ -1684,8 +1684,8 @@
           errorEl.style.display = 'block';
           return;
         }
-        if (soCoin % 800000 !== 0) {
-          errorEl.textContent = '❌ Số coin phải là bội số của 800.000 (800.000, 1.600.000, ...).';
+        if (soCoin % 500000 !== 0) {
+          errorEl.textContent = '❌ Số coin phải là bội số của 500.000 (500.000, 1.000.000, ...).';
           errorEl.style.display = 'block';
           return;
         }
@@ -1709,7 +1709,7 @@
           } else {
             const thongBao = {
               thieu_tham_so: '❌ Vui lòng nhập số coin muốn đổi.',
-              so_coin_khong_hop_le: '❌ Số coin phải là bội số dương của 800.000.',
+              so_coin_khong_hop_le: '❌ Số coin phải là bội số dương của 500.000.',
               khong_du_coin: '❌ Bạn không đủ coin để đổi.',
             };
             errorEl.textContent = thongBao[ketQua.loi] || '❌ Không đổi được, thử lại sau.';

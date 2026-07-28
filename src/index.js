@@ -24,8 +24,21 @@ const KEY_CACHE_BANG_XEP_HANG = "cache-bang-xep-hang"; // JSON { kiem_xu, moi_ba
 const KEY_MUA_GIAI = "mua-giai-bxh-hien-tai"; // JSON { bat_dau, ket_thuc } — mùa giải BXH hiện tại, tự mở mùa mới khi hết hạn
 const MUA_GIAI_SO_NGAY = 14; // độ dài 1 mùa giải BXH (ngày)
 const TOP_NHAN_THUONG = 10; // chỉ Top 10 mỗi bảng xếp hạng mới nhận thưởng khi kết thúc mùa giải (admin trao thủ công, giống quy trình duyệt rút tiền)
-const PHAN_THUONG_KIEM_XU = [100000, 70000, 50000, 35000, 25000, 18000, 14000, 10000, 7000, 5000]; // coin thưởng hạng 1→10, BXH "Đua Top Kiếm Xu"
-const PHAN_THUONG_MOI_BAN = [15, 10, 7, 5, 4, 3, 2, 2, 1, 1]; // gem thưởng hạng 1→10, BXH "Đua Top Mời Bạn"
+const PHAN_THUONG_KIEM_XU = [1000000, 600000, 400000, 200000, 200000, 100000, 100000, 100000, 100000, 100000]; // xu thưởng hạng 1→10, BXH "Đua Top Xu"
+const PHAN_THUONG_MOI_BAN = [
+  // xu + gem thưởng hạng 1→10, BXH "Đua Top Mời Bạn" — mỗi bậc có mốc số bạn tối thiểu (can) riêng;
+  // đạt hạng nhưng chưa đủ mốc thì chỉ nhận 50% thưởng (xem tinhPhanThuong()).
+  { xu: 500000, gem: 30, can: 10 },
+  { xu: 300000, gem: 20, can: 5 },
+  { xu: 200000, gem: 10, can: 5 },
+  { xu: 50000, gem: 5, can: 2 },
+  { xu: 50000, gem: 5, can: 2 },
+  { xu: 50000, gem: 5, can: 2 },
+  { xu: 50000, gem: 5, can: 2 },
+  { xu: 50000, gem: 5, can: 2 },
+  { xu: 50000, gem: 5, can: 2 },
+  { xu: 50000, gem: 5, can: 2 },
+];
 const TIEN_TO_DIEM_DANH = "diem-danh:"; // diem-danh:{uid} — JSON { chuoi_hien_tai, ngay_cuoi }
 const THUONG_DIEM_DANH = [3000, 5000, 8000, 12000, 16000, 22000, 30000]; // coin thưởng theo ngày 1→7 trong chu kỳ điểm danh, lặp lại sau ngày 7
 const THUONG_COIN_MOI_MOI = 5000; // coin chào mừng cho người dùng mới — chỉ nhận 1 lần duy nhất khi /start lần đầu
@@ -836,10 +849,16 @@ async function xuLyXacNhanNhiemVu(env, url) {
 
 // ==================================================
 // 🏆 BẢNG XẾP HẠNG — 2 chế độ:
-//   • "kiem_xu"  Đua Top Kiếm Xu  — xếp theo TỔNG COIN ĐÃ KIẾM ĐƯỢC (cộng dồn,
-//                                    KHÔNG phải số dư hiện tại — rút/đổi không làm tụt hạng)
-//   • "moi_ban"  Đua Top Mời Bạn  — xếp theo SỐ LƯỢNG BẠN BÈ đã mời qua link ref_
+//   • "kiem_xu"  Đua Top Xu       — xếp theo XU KIẾM ĐƯỢC TRONG MÙA GIẢI hiện tại
+//   • "moi_ban"  Đua Top Mời Bạn  — xếp theo SỐ BẠN ĐÃ MỜI TRONG MÙA GIẢI hiện tại
 // Chỉ Top 10 mỗi bảng mới nhận phần thưởng khi kết thúc mùa giải.
+//
+// Điểm số tính THEO MÙA (không phải lũy kế toàn thời gian): mỗi user lưu 1
+// "mốc mùa giải" (mocMuaGiai) chụp lại tongDaKiem + số bạn bè tại thời điểm
+// mùa hiện tại bắt đầu quét user đó lần đầu (lazy — chỉ ghi lại khi phát
+// hiện số mùa đã đổi). Điểm hiển thị = giá trị lũy kế hiện tại − giá trị
+// tại mốc. Nhờ vậy KHÔNG cần sửa mọi nơi cộng coin/bạn bè trong toàn bộ
+// file, mùa mới tự "reset" điểm về 0 ngay lần quét đầu tiên của mùa đó.
 //
 // Để tránh quét toàn bộ KV (tốn CPU time) mỗi lần người dùng mở app, cả 2
 // bảng được TÍNH TRƯỚC và lưu chung 1 cache, làm mới mỗi 15 phút bằng Cron
@@ -847,7 +866,25 @@ async function xuLyXacNhanNhiemVu(env, url) {
 // Endpoint /bang-xep-hang chỉ đọc cache; nếu chưa có cache (lần đầu deploy)
 // thì tính trực tiếp 1 lần để không trả về rỗng.
 // ==================================================
-async function tinhBangXepHangKiemXu(env) {
+const MUC_TOI_THIEU_KIEM_XU = 50000; // xu tối thiểu kiếm được TRONG MÙA để được xếp vào BXH Đua Top Xu
+
+// Đảm bảo user có mốc mùa giải khớp với mùa hiện tại — nếu chưa có hoặc
+// mùa đã đổi thì chụp lại (coin, số bạn bè) hiện tại làm mốc 0 của mùa mới.
+async function damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai) {
+  const moc = nguoiDung.mocMuaGiai;
+  if (moc && moc.so_mua === soMuaHienTai) return moc;
+
+  const coinHienTai = nguoiDung.tongDaKiem != null ? nguoiDung.tongDaKiem : nguoiDung.coin || 0;
+  const rawBanBe = await env.USERS.get(TIEN_TO_BAN_BE + uid);
+  const banBeHienTai = rawBanBe ? JSON.parse(rawBanBe).length : 0;
+
+  const mocMoi = { so_mua: soMuaHienTai, coin_goc: coinHienTai, ban_be_goc: banBeHienTai };
+  nguoiDung.mocMuaGiai = mocMoi;
+  await luuNguoiDung(env, uid, nguoiDung);
+  return mocMoi;
+}
+
+async function tinhBangXepHangKiemXu(env, soMuaHienTai) {
   const QUET_TOI_DA = 500; // giới hạn số user quét mỗi lần gọi, tránh vượt CPU time free plan
   const ketQua = [];
   let daQuet = 0;
@@ -858,22 +895,22 @@ async function tinhBangXepHangKiemXu(env) {
     const nguoiDung = await layNguoiDung(env, uid);
     if (!nguoiDung) continue;
 
-    // Tài khoản cũ chưa có tongDaKiem (tạo trước khi thêm trường này) —
-    // tạm lấy coin hiện tại làm gần đúng, còn hơn không có gì để xếp hạng.
-    const daKiem = nguoiDung.tongDaKiem != null ? nguoiDung.tongDaKiem : nguoiDung.coin || 0;
-    if (daKiem <= 0) continue;
+    const coinHienTai = nguoiDung.tongDaKiem != null ? nguoiDung.tongDaKiem : nguoiDung.coin || 0;
+    const moc = await damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai);
+    const daKiemTrongMua = Math.max(0, coinHienTai - moc.coin_goc);
+    if (daKiemTrongMua < MUC_TOI_THIEU_KIEM_XU) continue;
 
     const tenHienThi = (nguoiDung.ten && nguoiDung.ten.trim()) || (nguoiDung.username ? `@${nguoiDung.username}` : "");
     if (!tenHienThi) continue;
 
-    ketQua.push({ uid, ten: tenHienThi, gia_tri: daKiem });
+    ketQua.push({ uid, ten: tenHienThi, gia_tri: daKiemTrongMua });
   }
 
   ketQua.sort((a, b) => b.gia_tri - a.gia_tri);
   return ketQua.slice(0, 50);
 }
 
-async function tinhBangXepHangMoiBan(env) {
+async function tinhBangXepHangMoiBan(env, soMuaHienTai) {
   const QUET_TOI_DA = 500;
   const ketQua = [];
   let daQuet = 0;
@@ -882,16 +919,19 @@ async function tinhBangXepHangMoiBan(env) {
     if (daQuet >= QUET_TOI_DA) break;
     daQuet += 1;
 
-    const raw = await env.USERS.get(TIEN_TO_BAN_BE + uid);
-    if (!raw) continue;
-    const soLuong = JSON.parse(raw).length;
-    if (soLuong <= 0) continue;
-
     const nguoiDung = await layNguoiDung(env, uid);
-    const tenHienThi = (nguoiDung?.ten && nguoiDung.ten.trim()) || (nguoiDung?.username ? `@${nguoiDung.username}` : "");
+    if (!nguoiDung) continue;
+
+    const rawBanBe = await env.USERS.get(TIEN_TO_BAN_BE + uid);
+    const banBeHienTai = rawBanBe ? JSON.parse(rawBanBe).length : 0;
+    const moc = await damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai);
+    const moiTrongMua = Math.max(0, banBeHienTai - moc.ban_be_goc);
+    if (moiTrongMua <= 0) continue;
+
+    const tenHienThi = (nguoiDung.ten && nguoiDung.ten.trim()) || (nguoiDung.username ? `@${nguoiDung.username}` : "");
     if (!tenHienThi) continue;
 
-    ketQua.push({ uid, ten: tenHienThi, gia_tri: soLuong });
+    ketQua.push({ uid, ten: tenHienThi, gia_tri: moiTrongMua });
   }
 
   ketQua.sort((a, b) => b.gia_tri - a.gia_tri);
@@ -899,28 +939,56 @@ async function tinhBangXepHangMoiBan(env) {
 }
 
 // Tính lại + ghi cache — được gọi bởi Cron Trigger mỗi 15 phút.
-async function lamMoiCacheBangXepHang(env) {
-  const [kiemXu, moiBan] = await Promise.all([tinhBangXepHangKiemXu(env), tinhBangXepHangMoiBan(env)]);
-  const duLieu = { kiem_xu: kiemXu, moi_ban: moiBan, cap_nhat_luc: Date.now() };
+async function lamMoiCacheBangXepHang(env, muaGiai) {
+  const mg = muaGiai || (await layHoacTaoMuaGiai(env));
+  const [kiemXu, moiBan] = await Promise.all([
+    tinhBangXepHangKiemXu(env, mg.so),
+    tinhBangXepHangMoiBan(env, mg.so),
+  ]);
+  const duLieu = { so_mua: mg.so, kiem_xu: kiemXu, moi_ban: moiBan, cap_nhat_luc: Date.now() };
   await env.USERS.put(KEY_CACHE_BANG_XEP_HANG, JSON.stringify(duLieu));
   return duLieu;
 }
 
-// Mùa giải BXH — lưu mốc bắt đầu/kết thúc trong KV. Tự động mở mùa mới ngay
-// khi phát hiện mùa hiện tại đã hết hạn (đọc lazy, không cần cron riêng).
-// Lưu ý: điểm số 2 bảng vẫn tính lũy kế toàn thời gian (giống dữ liệu coin/
-// bạn bè sẵn có) — mùa giải ở đây đóng vai trò chốt mốc thời gian để admin
-// trao thưởng Top 10 định kỳ, tương tự quy trình duyệt rút tiền thủ công.
+// Mùa giải BXH — lưu số mùa + mốc bắt đầu/kết thúc trong KV. Tự động mở
+// mùa mới ngay khi phát hiện mùa hiện tại đã hết hạn (đọc lazy, không cần
+// cron riêng). Khi kết thúc mùa, admin trao thưởng Top 10 thủ công (tương
+// tự quy trình duyệt rút tiền) rồi mùa mới tự mở ở lượt đọc kế tiếp —
+// điểm 2 bảng tự về 0 nhờ cơ chế mốc mùa giải ở trên.
 async function layHoacTaoMuaGiai(env) {
   const raw = await env.USERS.get(KEY_MUA_GIAI);
   const bayGio = Date.now();
   if (raw) {
     const mg = JSON.parse(raw);
     if (mg.ket_thuc > bayGio) return mg;
+    const moi = { so: (mg.so || 0) + 1, bat_dau: bayGio, ket_thuc: bayGio + MUA_GIAI_SO_NGAY * 24 * 60 * 60 * 1000 };
+    await env.USERS.put(KEY_MUA_GIAI, JSON.stringify(moi));
+    return moi;
   }
-  const moi = { bat_dau: bayGio, ket_thuc: bayGio + MUA_GIAI_SO_NGAY * 24 * 60 * 60 * 1000 };
+  const moi = { so: 1, bat_dau: bayGio, ket_thuc: bayGio + MUA_GIAI_SO_NGAY * 24 * 60 * 60 * 1000 };
   await env.USERS.put(KEY_MUA_GIAI, JSON.stringify(moi));
   return moi;
+}
+
+// Tính phần thưởng hiển thị cho 1 hạng — với BXH Mời Bạn, mỗi bậc thưởng có
+// mốc số bạn tối thiểu riêng (vd hạng 1 cần ≥10 bạn); nếu đạt hạng nhưng
+// chưa đủ mốc thì thưởng giảm 50%.
+function tinhPhanThuong(loai, hang, giaTri) {
+  if (hang > TOP_NHAN_THUONG) return { xu: 0, gem: 0, dieu_kien_toi_thieu: null, dat_dieu_kien: true };
+
+  if (loai === "moi_ban") {
+    const bac = PHAN_THUONG_MOI_BAN[hang - 1];
+    const datDieuKien = giaTri >= bac.can;
+    const heSo = datDieuKien ? 1 : 0.5;
+    return {
+      xu: Math.floor(bac.xu * heSo),
+      gem: Math.floor(bac.gem * heSo),
+      dieu_kien_toi_thieu: bac.can,
+      dat_dieu_kien: datDieuKien,
+    };
+  }
+
+  return { xu: PHAN_THUONG_KIEM_XU[hang - 1], gem: 0, dieu_kien_toi_thieu: null, dat_dieu_kien: true };
 }
 
 async function xuLyBangXepHang(env, url) {
@@ -930,10 +998,13 @@ async function xuLyBangXepHang(env, url) {
   const muaGiai = await layHoacTaoMuaGiai(env);
 
   const raw = await env.USERS.get(KEY_CACHE_BANG_XEP_HANG);
-  const cache = raw ? JSON.parse(raw) : await lamMoiCacheBangXepHang(env);
+  let cache = raw ? JSON.parse(raw) : null;
+  // Cache thuộc mùa cũ (chưa kịp cron làm mới) — tính lại ngay để điểm không bị lẫn mùa.
+  if (!cache || cache.so_mua !== muaGiai.so) {
+    cache = await lamMoiCacheBangXepHang(env, muaGiai);
+  }
 
   const danhSach = cache[loai] || [];
-  const phanThuong = loai === "moi_ban" ? PHAN_THUONG_MOI_BAN : PHAN_THUONG_KIEM_XU;
 
   let hangCuaToi = null;
   let giaTriCuaToi = 0;
@@ -942,28 +1013,42 @@ async function xuLyBangXepHang(env, url) {
     if (idx >= 0) {
       hangCuaToi = idx + 1;
       giaTriCuaToi = danhSach[idx].gia_tri;
-    } else if (loai === "kiem_xu") {
-      const nd = await layNguoiDung(env, uid);
-      giaTriCuaToi = nd ? (nd.tongDaKiem != null ? nd.tongDaKiem : nd.coin || 0) : 0;
     } else {
-      const rawBanBe = await env.USERS.get(TIEN_TO_BAN_BE + uid);
-      giaTriCuaToi = rawBanBe ? JSON.parse(rawBanBe).length : 0;
+      const nd = await layNguoiDung(env, uid);
+      if (nd) {
+        const moc = await damBaoMocMuaGiai(env, uid, nd, muaGiai.so);
+        if (loai === "kiem_xu") {
+          const coinHienTai = nd.tongDaKiem != null ? nd.tongDaKiem : nd.coin || 0;
+          giaTriCuaToi = Math.max(0, coinHienTai - moc.coin_goc);
+        } else {
+          const rawBanBe = await env.USERS.get(TIEN_TO_BAN_BE + uid);
+          const banBeHienTai = rawBanBe ? JSON.parse(rawBanBe).length : 0;
+          giaTriCuaToi = Math.max(0, banBeHienTai - moc.ban_be_goc);
+        }
+      }
     }
   }
 
   return Response.json({
+    mua_giai: muaGiai,
+    loai,
+    don_vi_gia_tri: loai === "moi_ban" ? "luot_moi" : "xu",
+    muc_toi_thieu_bxh: loai === "kiem_xu" ? MUC_TOI_THIEU_KIEM_XU : null,
+    top_nhan_thuong: TOP_NHAN_THUONG,
+    bang_thuong: Array.from({ length: TOP_NHAN_THUONG }, (_, i) =>
+      loai === "moi_ban"
+        ? { hang: i + 1, xu: PHAN_THUONG_MOI_BAN[i].xu, gem: PHAN_THUONG_MOI_BAN[i].gem, dieu_kien_toi_thieu: PHAN_THUONG_MOI_BAN[i].can }
+        : { hang: i + 1, xu: PHAN_THUONG_KIEM_XU[i], gem: 0, dieu_kien_toi_thieu: null }
+    ),
     bang_xep_hang: danhSach.map((nd, idx) => ({
       hang: idx + 1,
       uid: nd.uid,
       ten: nd.ten,
       gia_tri: nd.gia_tri,
-      phan_thuong: idx < TOP_NHAN_THUONG ? phanThuong[idx] : 0,
+      phan_thuong: tinhPhanThuong(loai, idx + 1, nd.gia_tri),
     })),
     hang_cua_toi: hangCuaToi,
     gia_tri_cua_toi: giaTriCuaToi,
-    top_nhan_thuong: TOP_NHAN_THUONG,
-    don_vi: loai === "moi_ban" ? "gem" : "coin",
-    mua_giai: muaGiai,
     cap_nhat_luc: cache.cap_nhat_luc,
   });
 }

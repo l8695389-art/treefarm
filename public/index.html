@@ -294,94 +294,95 @@
     }
 
     /* ══════════════════════════════════════════════════════════
-       TAB BXH — phong cách riêng (cream/farm) theo thiết kế tham khảo,
-       tách biệt hoàn toàn khỏi theme tối của các tab khác.
+       TAB BXH — dùng chung theme tối với toàn app (--tg-dark/--tg-surface/
+       --tg-blue...), chỉ khác các tab khác ở bố cục riêng (mode switch,
+       thẻ mùa giải, thẻ hạng của tôi, thẻ thưởng top 10).
        ══════════════════════════════════════════════════════════ */
-    .bxh-panel {
-      padding: 16px 14px 20px !important; border-radius: 22px;
-      gap: 12px !important;
-      background: linear-gradient(180deg, #8FD3E4 0%, #A9DFAE 55%, #8FCE84 100%);
-    }
     .bxh-header { padding: 2px 4px 0; }
-    .bxh-title { font-size: 19px; font-weight: 800; color: #1F2A1A; letter-spacing: -0.01em; }
-    .bxh-subtitle { font-size: 12px; font-weight: 600; color: rgba(31,42,26,0.65); margin-top: 2px; }
+    .bxh-title { font-size: 19px; font-weight: 800; color: var(--tg-text); letter-spacing: -0.01em; }
+    .bxh-subtitle { font-size: 12px; font-weight: 600; color: var(--tg-muted); margin-top: 2px; }
 
-    .bxh-switch { display: flex; gap: 8px; padding: 0; }
+    .bxh-switch {
+      display: flex; gap: 6px; padding: 4px; border-radius: 14px;
+      background: var(--tg-surface); border: 1px solid var(--tg-border);
+    }
     .bxh-switch-btn {
-      flex: 1; padding: 13px 8px; border: none; border-radius: 40px; cursor: pointer;
-      background: #FBF3E0; color: #6B5B43; font-family: inherit;
-      font-size: 13px; font-weight: 800; letter-spacing: -0.01em;
-      box-shadow: 0 3px 8px rgba(31,42,26,0.12);
-      transition: background 0.18s ease, color 0.18s ease, transform 0.15s ease;
+      flex: 1; padding: 11px 8px; border: none; border-radius: 10px; cursor: pointer;
+      background: transparent; color: var(--tg-muted); font-family: inherit;
+      font-size: 12.5px; font-weight: 700; letter-spacing: -0.01em;
+      transition: background 0.18s ease, color 0.18s ease;
     }
-    .bxh-switch-btn.active { background: linear-gradient(135deg, #F9C468, #E8862C); color: #3A2408; }
-    .bxh-switch-btn:active { transform: scale(0.97); }
+    .bxh-switch-btn.active { background: linear-gradient(135deg, var(--tg-blue), #1A6FA0); color: #fff; box-shadow: 0 6px 16px -6px var(--tg-glow); }
+    .bxh-switch-btn:active { opacity: 0.85; }
 
-    .bxh-card {
-      background: #FBF1DC; border-radius: 18px; padding: 18px 18px;
-      box-shadow: 0 4px 14px rgba(31,42,26,0.14);
-    }
+    .bxh-card { background: var(--tg-surface); border: 1px solid var(--tg-border); border-radius: 16px; padding: 18px; }
     .bxh-season-card { text-align: center; }
-    .bxh-season-label { font-size: 12px; font-weight: 700; color: #9A8768; }
-    .bxh-season-title { font-size: 19px; font-weight: 800; color: #2B2118; margin: 6px 0 8px; }
-    .bxh-season-sub { font-size: 12.5px; font-weight: 600; color: #6B5B43; line-height: 1.6; }
-    .bxh-season-sub strong { color: #2B2118; }
+    .bxh-season-label { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tg-muted); }
+    .bxh-season-title { font-size: 18px; font-weight: 800; color: var(--tg-text); margin: 6px 0 8px; }
+    .bxh-season-sub { font-size: 12.5px; font-weight: 500; color: var(--tg-muted); line-height: 1.6; }
+    .bxh-season-sub strong { color: var(--tg-blue); font-family: 'SF Mono', 'Fira Code', monospace; }
 
     .bxh-my-rank-card { text-align: center; }
-    .bxh-my-rank-label { font-size: 12px; font-weight: 700; color: #9A8768; letter-spacing: 0.02em; }
-    .bxh-my-rank-value { font-size: 30px; font-weight: 800; color: #2B2118; margin: 4px 0 2px; }
-    .bxh-my-rank-sub { font-size: 12.5px; font-weight: 600; color: #6B5B43; }
-    .bxh-my-rank-flag { display: inline-block; margin-top: 8px; padding: 5px 12px; border-radius: 30px; font-size: 11px; font-weight: 700; background: rgba(232,134,44,0.16); color: #B85E12; }
-    .bxh-my-rank-flag.top10 { background: rgba(61,180,110,0.16); color: #1F8A4C; }
+    .bxh-my-rank-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tg-muted); }
+    .bxh-my-rank-value { font-size: 30px; font-weight: 800; color: var(--tg-blue); text-shadow: 0 0 16px var(--tg-glow); margin: 4px 0 2px; }
+    .bxh-my-rank-sub { font-size: 12.5px; font-weight: 500; color: var(--tg-muted); }
+    .bxh-my-rank-flag {
+      display: inline-block; margin-top: 10px; padding: 6px 14px; border-radius: 30px;
+      font-size: 11px; font-weight: 700;
+      background: rgba(255,77,109,0.1); border: 1px solid rgba(255,77,109,0.3); color: var(--danger);
+    }
+    .bxh-my-rank-flag.top10 { background: rgba(61,220,122,0.1); border-color: rgba(61,220,122,0.35); color: #3DDC7A; }
 
-    .bxh-reward-title, .bxh-list-title { font-size: 15px; font-weight: 800; color: #2B2118; margin-bottom: 12px; }
+    .bxh-reward-title, .bxh-list-title { font-size: 14px; font-weight: 700; color: var(--tg-text); margin-bottom: 12px; }
     .bxh-reward-list { display: flex; flex-direction: column; }
     .bxh-reward-row {
       display: flex; align-items: center; gap: 12px; padding: 11px 0;
-      border-bottom: 1px solid rgba(43,33,24,0.09);
+      border-bottom: 1px solid var(--tg-border);
     }
     .bxh-reward-row:last-child { border-bottom: none; padding-bottom: 0; }
     .bxh-medal, .bxh-num-badge {
-      flex-shrink: 0; width: 40px; height: 40px; border-radius: 12px;
+      flex-shrink: 0; width: 38px; height: 38px; border-radius: 12px;
       display: flex; align-items: center; justify-content: center;
-      background: #fff; box-shadow: 0 2px 6px rgba(31,42,26,0.15);
+      background: rgba(90,122,153,0.12);
     }
-    .bxh-medal { font-size: 20px; }
-    .bxh-num-badge { font-size: 15px; font-weight: 800; color: #4A3E2C; }
+    .bxh-medal { font-size: 19px; }
+    .bxh-num-badge { font-size: 14px; font-weight: 800; color: var(--tg-muted); }
     .bxh-reward-info { flex: 1; min-width: 0; }
-    .bxh-reward-hang { font-size: 14px; font-weight: 700; color: #2B2118; }
-    .bxh-reward-dieu-kien { font-size: 10.5px; font-weight: 600; color: #9A8768; margin-top: 1px; }
+    .bxh-reward-hang { font-size: 13.5px; font-weight: 700; color: var(--tg-text); }
+    .bxh-reward-dieu-kien { font-size: 10.5px; font-weight: 600; color: var(--tg-muted); margin-top: 1px; }
     .bxh-pill {
-      flex-shrink: 0; padding: 9px 16px; border-radius: 30px;
-      background: linear-gradient(135deg, #A79AF0, #8172E5); color: #fff;
-      font-size: 12.5px; font-weight: 800; white-space: nowrap;
-      box-shadow: 0 3px 8px rgba(129,114,229,0.35);
+      flex-shrink: 0; padding: 8px 14px; border-radius: 30px;
+      background: rgba(34,158,217,0.1); border: 1px solid var(--tg-border); color: var(--tg-blue);
+      font-size: 12px; font-weight: 700; white-space: nowrap;
     }
-    .bxh-reward-note { margin-top: 12px; font-size: 11px; font-weight: 600; color: #9A8768; line-height: 1.6; }
+    .bxh-reward-note { margin-top: 12px; font-size: 11px; font-weight: 500; color: var(--tg-muted); line-height: 1.6; }
 
     .bxh-rank-list { display: flex; flex-direction: column; }
     .rank-row {
       display: flex; align-items: center; gap: 12px; padding: 11px 0;
-      border-bottom: 1px solid rgba(43,33,24,0.09);
+      border-bottom: 1px solid var(--tg-border);
     }
     .rank-row:last-child { border-bottom: none; padding-bottom: 0; }
-    .rank-row.me { background: rgba(232,134,44,0.08); border-radius: 12px; padding: 11px 10px; margin: 0 -10px; border-bottom-color: transparent; }
+    .rank-row.me { background: rgba(34,158,217,0.08); border-radius: 12px; padding: 11px 10px; margin: 0 -10px; border-bottom-color: transparent; }
     .rank-badge {
-      width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
+      width: 38px; height: 38px; border-radius: 12px; flex-shrink: 0;
       display: flex; align-items: center; justify-content: center;
-      font-size: 15px; font-weight: 800; color: #4A3E2C;
-      background: #fff; box-shadow: 0 2px 6px rgba(31,42,26,0.15);
+      font-size: 14px; font-weight: 800; color: var(--tg-muted);
+      background: rgba(90,122,153,0.12);
     }
-    .rank-badge.gold, .rank-badge.silver, .rank-badge.bronze { font-size: 20px; }
-    .rank-name { flex: 1; min-width: 0; font-size: 14px; font-weight: 700; color: #2B2118; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .rank-row.me .rank-name::after { content: ' (Bạn)'; color: #B85E12; font-weight: 700; }
+    .rank-badge.gold   { background: rgba(245,185,66,0.18);  color: var(--gold); }
+    .rank-badge.silver { background: rgba(199,208,220,0.18); color: var(--silver); }
+    .rank-badge.bronze { background: rgba(208,138,90,0.18);  color: var(--bronze); }
+    .rank-badge.gold, .rank-badge.silver, .rank-badge.bronze { font-size: 19px; }
+    .rank-name { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; color: var(--tg-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rank-row.me .rank-name::after { content: ' (Bạn)'; color: var(--tg-blue); font-weight: 700; }
     .rank-values { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
-    .rank-amount { font-size: 12.5px; font-weight: 700; color: #6B5B43; white-space: nowrap; }
-    .rank-reward { font-size: 10.5px; font-weight: 700; color: #B85E12; white-space: nowrap; }
+    .rank-amount { font-size: 12.5px; font-weight: 700; color: var(--tg-muted); white-space: nowrap; }
+    .rank-reward { font-size: 10.5px; font-weight: 700; color: var(--gold); white-space: nowrap; }
     .rank-loading { text-align: center; padding: 40px 0; color: var(--tg-muted); font-size: 13px; }
     .bxh-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 30px 10px 10px; text-align: center; }
-    .bxh-empty-icon { font-size: 34px; }
-    .bxh-empty-text { font-size: 13px; font-weight: 600; color: #9A8768; }
+    .bxh-empty-icon { font-size: 34px; opacity: 0.7; }
+    .bxh-empty-text { font-size: 13px; font-weight: 500; color: var(--tg-muted); }
 
     /* Nhiệm vụ — 2 khối song song (quảng cáo + link4m) */
     .task-title { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: var(--tg-text); margin-bottom: 4px; }
@@ -694,7 +695,7 @@
       </section>
 
       <!-- TAB 6: BXH -->
-      <section id="tab-bang-xep-hang" class="tab-panel bxh-panel">
+      <section id="tab-bang-xep-hang" class="tab-panel">
         <div class="bxh-header">
           <div class="bxh-title">Đua top mùa giải</div>
           <div class="bxh-subtitle" id="bxh-phu-de">Xếp theo xu kiếm được trong mùa</div>

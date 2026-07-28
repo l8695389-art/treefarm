@@ -293,71 +293,95 @@
       font-size: 13px; color: #3DDC7A; text-align: center; line-height: 1.5; font-weight: 600;
     }
 
-    /* Bảng xếp hạng */
+    /* ══════════════════════════════════════════════════════════
+       TAB BXH — phong cách riêng (cream/farm) theo thiết kế tham khảo,
+       tách biệt hoàn toàn khỏi theme tối của các tab khác.
+       ══════════════════════════════════════════════════════════ */
+    .bxh-panel {
+      padding: 16px 14px 20px !important; border-radius: 22px;
+      gap: 12px !important;
+      background: linear-gradient(180deg, #8FD3E4 0%, #A9DFAE 55%, #8FCE84 100%);
+    }
+    .bxh-header { padding: 2px 4px 0; }
+    .bxh-title { font-size: 19px; font-weight: 800; color: #1F2A1A; letter-spacing: -0.01em; }
+    .bxh-subtitle { font-size: 12px; font-weight: 600; color: rgba(31,42,26,0.65); margin-top: 2px; }
+
+    .bxh-switch { display: flex; gap: 8px; padding: 0; }
+    .bxh-switch-btn {
+      flex: 1; padding: 13px 8px; border: none; border-radius: 40px; cursor: pointer;
+      background: #FBF3E0; color: #6B5B43; font-family: inherit;
+      font-size: 13px; font-weight: 800; letter-spacing: -0.01em;
+      box-shadow: 0 3px 8px rgba(31,42,26,0.12);
+      transition: background 0.18s ease, color 0.18s ease, transform 0.15s ease;
+    }
+    .bxh-switch-btn.active { background: linear-gradient(135deg, #F9C468, #E8862C); color: #3A2408; }
+    .bxh-switch-btn:active { transform: scale(0.97); }
+
+    .bxh-card {
+      background: #FBF1DC; border-radius: 18px; padding: 18px 18px;
+      box-shadow: 0 4px 14px rgba(31,42,26,0.14);
+    }
+    .bxh-season-card { text-align: center; }
+    .bxh-season-label { font-size: 12px; font-weight: 700; color: #9A8768; }
+    .bxh-season-title { font-size: 19px; font-weight: 800; color: #2B2118; margin: 6px 0 8px; }
+    .bxh-season-sub { font-size: 12.5px; font-weight: 600; color: #6B5B43; line-height: 1.6; }
+    .bxh-season-sub strong { color: #2B2118; }
+
+    .bxh-my-rank-card { text-align: center; }
+    .bxh-my-rank-label { font-size: 12px; font-weight: 700; color: #9A8768; letter-spacing: 0.02em; }
+    .bxh-my-rank-value { font-size: 30px; font-weight: 800; color: #2B2118; margin: 4px 0 2px; }
+    .bxh-my-rank-sub { font-size: 12.5px; font-weight: 600; color: #6B5B43; }
+    .bxh-my-rank-flag { display: inline-block; margin-top: 8px; padding: 5px 12px; border-radius: 30px; font-size: 11px; font-weight: 700; background: rgba(232,134,44,0.16); color: #B85E12; }
+    .bxh-my-rank-flag.top10 { background: rgba(61,180,110,0.16); color: #1F8A4C; }
+
+    .bxh-reward-title, .bxh-list-title { font-size: 15px; font-weight: 800; color: #2B2118; margin-bottom: 12px; }
+    .bxh-reward-list { display: flex; flex-direction: column; }
+    .bxh-reward-row {
+      display: flex; align-items: center; gap: 12px; padding: 11px 0;
+      border-bottom: 1px solid rgba(43,33,24,0.09);
+    }
+    .bxh-reward-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .bxh-medal, .bxh-num-badge {
+      flex-shrink: 0; width: 40px; height: 40px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      background: #fff; box-shadow: 0 2px 6px rgba(31,42,26,0.15);
+    }
+    .bxh-medal { font-size: 20px; }
+    .bxh-num-badge { font-size: 15px; font-weight: 800; color: #4A3E2C; }
+    .bxh-reward-info { flex: 1; min-width: 0; }
+    .bxh-reward-hang { font-size: 14px; font-weight: 700; color: #2B2118; }
+    .bxh-reward-dieu-kien { font-size: 10.5px; font-weight: 600; color: #9A8768; margin-top: 1px; }
+    .bxh-pill {
+      flex-shrink: 0; padding: 9px 16px; border-radius: 30px;
+      background: linear-gradient(135deg, #A79AF0, #8172E5); color: #fff;
+      font-size: 12.5px; font-weight: 800; white-space: nowrap;
+      box-shadow: 0 3px 8px rgba(129,114,229,0.35);
+    }
+    .bxh-reward-note { margin-top: 12px; font-size: 11px; font-weight: 600; color: #9A8768; line-height: 1.6; }
+
+    .bxh-rank-list { display: flex; flex-direction: column; }
     .rank-row {
-      display: flex; align-items: center; gap: 12px;
-      padding: 12px 14px; border-radius: 12px;
-      background: var(--tg-surface); border: 1px solid var(--tg-border);
+      display: flex; align-items: center; gap: 12px; padding: 11px 0;
+      border-bottom: 1px solid rgba(43,33,24,0.09);
     }
+    .rank-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .rank-row.me { background: rgba(232,134,44,0.08); border-radius: 12px; padding: 11px 10px; margin: 0 -10px; border-bottom-color: transparent; }
     .rank-badge {
-      width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+      width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
       display: flex; align-items: center; justify-content: center;
-      font-size: 13px; font-weight: 700; color: var(--tg-muted);
-      background: rgba(90,122,153,0.12);
+      font-size: 15px; font-weight: 800; color: #4A3E2C;
+      background: #fff; box-shadow: 0 2px 6px rgba(31,42,26,0.15);
     }
-    .rank-badge.gold   { background: rgba(245,185,66,0.18);  color: var(--gold); }
-    .rank-badge.silver { background: rgba(199,208,220,0.18); color: var(--silver); }
-    .rank-badge.bronze { background: rgba(208,138,90,0.18);  color: var(--bronze); }
-    .rank-name { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; color: var(--tg-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rank-badge.gold, .rank-badge.silver, .rank-badge.bronze { font-size: 20px; }
+    .rank-name { flex: 1; min-width: 0; font-size: 14px; font-weight: 700; color: #2B2118; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rank-row.me .rank-name::after { content: ' (Bạn)'; color: #B85E12; font-weight: 700; }
     .rank-values { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
-    .rank-amount { font-size: 13px; font-weight: 700; color: var(--tg-blue); font-family: 'SF Mono', 'Fira Code', monospace; white-space: nowrap; }
-    .rank-reward { font-size: 10.5px; font-weight: 600; color: var(--gold); white-space: nowrap; }
+    .rank-amount { font-size: 12.5px; font-weight: 700; color: #6B5B43; white-space: nowrap; }
+    .rank-reward { font-size: 10.5px; font-weight: 700; color: #B85E12; white-space: nowrap; }
     .rank-loading { text-align: center; padding: 40px 0; color: var(--tg-muted); font-size: 13px; }
-    .rank-row.me { background: rgba(34,158,217,0.1); border-color: rgba(34,158,217,0.5); box-shadow: 0 0 0 1px rgba(34,158,217,0.25); }
-    .rank-row.me .rank-name::after { content: ' (Bạn)'; color: var(--tg-blue); font-weight: 700; }
-
-    /* BXH — thẻ mùa giải (đếm ngược) */
-    .season-card {
-      display: flex; align-items: center; gap: 14px; padding: 16px 18px;
-      background: linear-gradient(135deg, rgba(255,77,109,0.14), rgba(34,158,217,0.08));
-      border-color: rgba(255,77,109,0.28);
-    }
-    .season-icon { font-size: 26px; flex-shrink: 0; filter: drop-shadow(0 0 6px rgba(255,77,109,0.4)); }
-    .season-info { flex: 1; min-width: 0; }
-    .season-label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--tg-muted); }
-    .season-countdown { font-size: 18px; font-weight: 700; color: var(--tg-text); font-family: 'SF Mono', 'Fira Code', monospace; margin-top: 2px; }
-
-    /* BXH — chuyển chế độ (2 nút) */
-    .mode-switch {
-      display: flex; gap: 6px; padding: 4px; border-radius: 14px;
-      background: var(--tg-surface); border: 1px solid var(--tg-border);
-    }
-    .mode-btn {
-      flex: 1; padding: 11px 8px; border: none; border-radius: 10px; cursor: pointer;
-      background: transparent; color: var(--tg-muted); font-family: inherit;
-      font-size: 12.5px; font-weight: 700; letter-spacing: -0.01em;
-      transition: background 0.18s ease, color 0.18s ease;
-    }
-    .mode-btn.active { background: linear-gradient(135deg, var(--tg-blue), #1A6FA0); color: #fff; box-shadow: 0 6px 16px -6px var(--tg-glow); }
-    .mode-btn:active { opacity: 0.85; }
-
-    /* BXH — hạng hiện tại của người chơi */
-    .my-rank-card {
-      display: flex; align-items: center; gap: 14px; padding: 16px 18px;
-    }
-    .my-rank-badge {
-      flex-shrink: 0; width: 46px; height: 46px; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 16px; font-weight: 800; color: #fff;
-      background: linear-gradient(135deg, var(--tg-blue), #1A6FA0);
-      box-shadow: 0 0 10px var(--tg-glow);
-    }
-    .my-rank-badge.top10 { background: linear-gradient(135deg, var(--gold), #C98A1E); box-shadow: 0 0 10px rgba(245,185,66,0.45); }
-    .my-rank-info { flex: 1; min-width: 0; }
-    .my-rank-label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--tg-muted); }
-    .my-rank-value { font-size: 16px; font-weight: 700; color: var(--tg-text); margin-top: 2px; }
-    .my-rank-hint { flex-shrink: 0; max-width: 90px; text-align: right; font-size: 10.5px; font-weight: 600; line-height: 1.4; color: var(--gold); }
-    .my-rank-hint.chua-dat { color: var(--tg-muted); }
+    .bxh-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 30px 10px 10px; text-align: center; }
+    .bxh-empty-icon { font-size: 34px; }
+    .bxh-empty-text { font-size: 13px; font-weight: 600; color: #9A8768; }
 
     /* Nhiệm vụ — 2 khối song song (quảng cáo + link4m) */
     .task-title { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: var(--tg-text); margin-bottom: 4px; }
@@ -670,35 +694,41 @@
       </section>
 
       <!-- TAB 6: BXH -->
-      <section id="tab-bang-xep-hang" class="tab-panel">
-        <div class="eyebrow">Bảng xếp hạng mùa giải</div>
+      <section id="tab-bang-xep-hang" class="tab-panel bxh-panel">
+        <div class="bxh-header">
+          <div class="bxh-title">Đua top mùa giải</div>
+          <div class="bxh-subtitle" id="bxh-phu-de">Xếp theo xu kiếm được trong mùa</div>
+        </div>
 
-        <div class="card season-card">
-          <div class="season-icon">⏳</div>
-          <div class="season-info">
-            <div class="season-label">Mùa giải kết thúc sau</div>
-            <div class="season-countdown" id="bxh-dem-nguoc">—</div>
+        <div class="bxh-switch" id="bxh-mode-switch">
+          <button class="bxh-switch-btn active" data-loai="kiem-xu" type="button">Đua Top Xu</button>
+          <button class="bxh-switch-btn" data-loai="moi-ban" type="button">Đua Top Mời Bạn</button>
+        </div>
+
+        <div class="bxh-card bxh-season-card">
+          <div class="bxh-season-label" id="bxh-mua-giai-so">Mùa giải #—</div>
+          <div class="bxh-season-title">🏆 Đua top mùa</div>
+          <div class="bxh-season-sub">Còn <strong id="bxh-dem-nguoc">—</strong> · <span id="bxh-nguong-toi-thieu">—</span></div>
+        </div>
+
+        <div class="bxh-card bxh-my-rank-card">
+          <div class="bxh-my-rank-label">Hạng của bạn</div>
+          <div class="bxh-my-rank-value" id="bxh-hang-badge">#—</div>
+          <div class="bxh-my-rank-sub" id="bxh-gia-tri-cua-toi">—</div>
+          <div class="bxh-my-rank-flag" id="bxh-hint">Đang tải...</div>
+        </div>
+
+        <div class="bxh-card bxh-reward-card">
+          <div class="bxh-reward-title">🎁 Thưởng top 10</div>
+          <div id="bxh-thuong-list" class="bxh-reward-list"></div>
+          <div class="bxh-reward-note" id="bxh-reward-note"></div>
+        </div>
+
+        <div class="bxh-card bxh-list-card">
+          <div class="bxh-list-title">Bảng xếp hạng</div>
+          <div id="rank-list" class="bxh-rank-list">
+            <div class="rank-loading">Đang tải...</div>
           </div>
-        </div>
-
-        <div class="mode-switch" id="bxh-mode-switch">
-          <button class="mode-btn active" data-loai="kiem-xu" type="button">🪙 Đua Top Kiếm Xu</button>
-          <button class="mode-btn" data-loai="moi-ban" type="button">👥 Đua Top Mời Bạn</button>
-        </div>
-
-        <div class="card my-rank-card">
-          <div class="my-rank-badge" id="bxh-hang-badge">—</div>
-          <div class="my-rank-info">
-            <div class="my-rank-label">Hạng của bạn</div>
-            <div class="my-rank-value" id="bxh-gia-tri-cua-toi">—</div>
-          </div>
-          <div class="my-rank-hint" id="bxh-hint">Đang tải...</div>
-        </div>
-
-        <div class="task-desc" id="bxh-mo-ta" style="margin-top:-4px;">Xếp hạng theo tổng coin đã kiếm được (quy đổi gem hay rút tiền không làm tụt hạng). Chỉ Top 10 nhận thưởng khi kết thúc mùa giải.</div>
-
-        <div id="rank-list" style="display:flex; flex-direction:column; gap:8px; width:100%;">
-          <div class="rank-loading">Đang tải...</div>
         </div>
       </section>
 
@@ -981,19 +1011,26 @@
     }
 
     // ────────────────────────────────────────────────────────────
-    // TAB BXH — 2 chế độ (Đua Top Kiếm Xu / Đua Top Mời Bạn), chỉ
-    // Top 10 nhận thưởng, hiển thị hạng của người chơi + đếm ngược mùa giải.
+    // TAB BXH — 2 chế độ (Đua Top Xu / Đua Top Mời Bạn), điểm tính THEO
+    // MÙA GIẢI hiện tại, chỉ Top 10 nhận thưởng, hiển thị hạng của người
+    // chơi + đếm ngược mùa giải.
     // ────────────────────────────────────────────────────────────
-    const BXH_MO_TA = {
-      'kiem-xu': 'Xếp hạng theo tổng coin đã kiếm được (quy đổi gem hay rút tiền không làm tụt hạng). Chỉ Top 10 nhận thưởng khi kết thúc mùa giải.',
-      'moi-ban': 'Xếp hạng theo số lượng bạn bè đã mời tham gia qua link giới thiệu. Chỉ Top 10 nhận thưởng khi kết thúc mùa giải.',
+    const BXH_PHU_DE = {
+      'kiem-xu': 'Xếp theo xu kiếm được trong mùa',
+      'moi-ban': 'Xếp theo số bạn mời được trong mùa',
     };
     let bxhLoaiHienTai = 'kiem-xu';
     let bxhDemNguocTimer = null;
 
     function dinhDangGiaTriBXH(giaTri, donVi) {
       const so = (giaTri || 0).toLocaleString('vi-VN');
-      return donVi === 'gem' ? `${so} gem` : `${so} coin`;
+      return donVi === 'luot_moi' ? `${so} lượt mời` : `${so} xu`;
+    }
+
+    function dinhDangThuong(thuong) {
+      let text = `${(thuong.xu || 0).toLocaleString('vi-VN')} xu`;
+      if (thuong.gem > 0) text += ` + ${thuong.gem} 💎`;
+      return text;
     }
 
     function dinhDangDemNguoc(msConLai) {
@@ -1003,7 +1040,7 @@
       const gio = Math.floor((giay % 86400) / 3600);
       const phut = Math.floor((giay % 3600) / 60);
       const s = giay % 60;
-      if (ngay > 0) return `${ngay} ngày ${gio}g ${phut}p`;
+      if (ngay > 0) return `${ngay} ngày ${gio} giờ`;
       if (gio > 0) return `${gio}g ${phut}p ${s}s`;
       return `${phut}p ${s}s`;
     }
@@ -1016,6 +1053,17 @@
       bxhDemNguocTimer = setInterval(capNhat, 1000);
     }
 
+    function renderHeaderMuaGiai(data) {
+      document.getElementById('bxh-phu-de').textContent = BXH_PHU_DE[bxhLoaiHienTai];
+      document.getElementById('bxh-mua-giai-so').textContent = `Mùa giải #${data.mua_giai.so}`;
+      batDauDemNguocMuaGiai(data.mua_giai.ket_thuc);
+
+      const nguongEl = document.getElementById('bxh-nguong-toi-thieu');
+      nguongEl.textContent = data.muc_toi_thieu_bxh
+        ? `tối thiểu ${data.muc_toi_thieu_bxh.toLocaleString('vi-VN')} xu kiếm để vào BXH`
+        : 'mời càng nhiều, thưởng càng cao';
+    }
+
     function renderHangCuaToi(data) {
       const badge = document.getElementById('bxh-hang-badge');
       const gia = document.getElementById('bxh-gia-tri-cua-toi');
@@ -1023,32 +1071,71 @@
       const trongTop10 = data.hang_cua_toi && data.hang_cua_toi <= (data.top_nhan_thuong || 10);
 
       badge.textContent = data.hang_cua_toi ? `#${data.hang_cua_toi}` : '—';
-      badge.classList.toggle('top10', !!trongTop10);
-      gia.textContent = dinhDangGiaTriBXH(data.gia_tri_cua_toi, data.don_vi);
+      gia.textContent = `${dinhDangGiaTriBXH(data.gia_tri_cua_toi, data.don_vi_gia_tri)} trong mùa này`;
 
+      hint.classList.toggle('top10', !!trongTop10);
       if (trongTop10) {
-        hint.classList.remove('chua-dat');
         hint.textContent = '🎉 Đang trong Top 10 nhận thưởng!';
       } else if (data.hang_cua_toi) {
-        hint.classList.add('chua-dat');
         hint.textContent = 'Vào Top 10 để nhận thưởng!';
       } else {
-        hint.classList.add('chua-dat');
-        hint.textContent = 'Chưa có hạng — bắt đầu kiếm ngay!';
+        hint.textContent = 'Chưa có hạng — bắt đầu ngay!';
       }
     }
 
-    function renderBangXepHang(data, uidHienTai) {
+    function renderBangThuong(data) {
+      const container = document.getElementById('bxh-thuong-list');
+      container.innerHTML = '';
+
+      (data.bang_thuong || []).forEach((bac) => {
+        const row = document.createElement('div');
+        row.className = 'bxh-reward-row';
+
+        const icon = document.createElement('div');
+        if (bac.hang <= 3) {
+          icon.className = 'bxh-medal';
+          icon.textContent = bac.hang === 1 ? '🥇' : bac.hang === 2 ? '🥈' : '🥉';
+        } else {
+          icon.className = 'bxh-num-badge';
+          icon.textContent = `#${bac.hang}`;
+        }
+
+        const info = document.createElement('div');
+        info.className = 'bxh-reward-info';
+        const hangEl = document.createElement('div');
+        hangEl.className = 'bxh-reward-hang';
+        hangEl.textContent = `Hạng ${bac.hang}`;
+        info.appendChild(hangEl);
+        if (bac.dieu_kien_toi_thieu) {
+          const dk = document.createElement('div');
+          dk.className = 'bxh-reward-dieu-kien';
+          dk.textContent = `Cần ≥${bac.dieu_kien_toi_thieu} ref`;
+          info.appendChild(dk);
+        }
+
+        const pill = document.createElement('div');
+        pill.className = 'bxh-pill';
+        pill.textContent = dinhDangThuong(bac);
+
+        row.appendChild(icon);
+        row.appendChild(info);
+        row.appendChild(pill);
+        container.appendChild(row);
+      });
+
+      const note = document.getElementById('bxh-reward-note');
+      note.textContent = bxhLoaiHienTai === 'moi-ban'
+        ? 'Mời không đạt mốc tối thiểu sẽ giảm 50% thưởng. Thưởng tự cộng vào ví khi hết mùa.'
+        : 'Hết mùa thưởng xu tự cộng vào ví.';
+    }
+
+    function renderDanhSachBXH(data, uidHienTai) {
       const container = document.getElementById('rank-list');
       container.innerHTML = '';
 
-      document.getElementById('bxh-mo-ta').textContent = BXH_MO_TA[bxhLoaiHienTai];
-      renderHangCuaToi(data);
-      batDauDemNguocMuaGiai(data.mua_giai.ket_thuc);
-
       const list = data.bang_xep_hang || [];
       if (!list.length) {
-        container.innerHTML = '<div class="rank-loading">Chưa có ai xếp hạng cả.</div>';
+        container.innerHTML = `<div class="bxh-empty"><div class="bxh-empty-icon">👥</div><div class="bxh-empty-text">Chưa có ai xếp hạng trong mùa này cả.</div></div>`;
         return;
       }
 
@@ -1070,13 +1157,13 @@
 
         const amount = document.createElement('div');
         amount.className = 'rank-amount';
-        amount.textContent = dinhDangGiaTriBXH(nguoiDung.gia_tri, data.don_vi);
+        amount.textContent = dinhDangGiaTriBXH(nguoiDung.gia_tri, data.don_vi_gia_tri);
         values.appendChild(amount);
 
-        if (nguoiDung.phan_thuong > 0) {
+        if (nguoiDung.phan_thuong && nguoiDung.phan_thuong.xu > 0) {
           const reward = document.createElement('div');
           reward.className = 'rank-reward';
-          reward.textContent = `🎁 +${dinhDangGiaTriBXH(nguoiDung.phan_thuong, data.don_vi)}`;
+          reward.textContent = `🎁 ${dinhDangThuong(nguoiDung.phan_thuong)}` + (nguoiDung.phan_thuong.dat_dieu_kien === false ? ' (-50%)' : '');
           values.appendChild(reward);
         }
 
@@ -1094,12 +1181,15 @@
         container.innerHTML = '<div class="rank-loading">Không tải được bảng xếp hạng, thử lại sau.</div>';
         return;
       }
-      renderBangXepHang(data, uid);
+      renderHeaderMuaGiai(data);
+      renderHangCuaToi(data);
+      renderBangThuong(data);
+      renderDanhSachBXH(data, uid);
     }
 
     function setupBangXepHangTab(tg) {
       const uid = tg?.initDataUnsafe?.user?.id;
-      const btns = document.querySelectorAll('#bxh-mode-switch .mode-btn');
+      const btns = document.querySelectorAll('#bxh-mode-switch .bxh-switch-btn');
 
       btns.forEach((btn) => {
         btn.addEventListener('click', () => {

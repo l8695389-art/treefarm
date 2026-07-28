@@ -281,8 +281,8 @@ async function xuLyStart(env, message) {
     reply_markup: {
       inline_keyboard: [
         [{ text: "💸 BẮT ĐẦU CÀY TIỀN NGAY", web_app: { url: env.LINK_MINIAPP } }],
-        [{ text: "📢 Kênh thông báo", url: "https://t.me/treefarm_news" }],
-        [{ text: "🌐 Nhóm trò chuyện", url: "https://t.me/treefarm_chat" }],
+        [{ text: "📢 Kênh thông báo", url: "https://t.me/vuacaytien_news" }],
+        [{ text: "🌐 Nhóm trò chuyện", url: "https://t.me/vuacaytien_chat" }],
       ],
     },
   });

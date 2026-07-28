@@ -15,9 +15,9 @@ const TIEN_TO_CHO_DUYET_RUT = "cho-duyet-rut:"; // cho-duyet-rut:{uid}:{id} — 
 const TIEN_TO_RUT_NGAY = "rut-gem-ngay:"; // đổi tiền tố so với bản cũ (rut-ngay: tính bằng đ) để không lẫn dữ liệu cũ khi chuyển sang tính bằng gem
 const TIEN_TO_RUT_TUAN = "rut-gem-tuan:"; // tương tự, tránh lẫn với rut-tuan: (đơn vị đ) của bản cũ
 const GEM_QUY_DOI_DONG = 500; // 1 gem = 500đ khi rút (chỉ dùng để tính số tiền chuyển khoản)
-const RUT_TOI_THIEU = 40; // gem
-const RUT_TOI_DA_NGAY = 60; // gem / ngày
-const RUT_TOI_DA_TUAN = 200; // gem / tuần
+const RUT_TOI_THIEU = 4; // gem (~2.000đ)
+const RUT_TOI_DA_NGAY = 36; // gem / ngày (~18.000đ)
+const RUT_TOI_DA_TUAN = 100; // gem / tuần (~50.000đ)
 const TIEN_TO_LINK4M_SO_LAN_NGAY = "link4m-so-lan-ngay:"; // số lần hoàn thành nhiệm vụ link4m hôm nay
 const LINK4M_GIOI_HAN_NGAY = 2; // tăng từ 1 lên 2 lần/ngày
 const KEY_CACHE_BANG_XEP_HANG = "cache-bang-xep-hang"; // JSON { kiem_xu, moi_ban, cap_nhat_luc } — làm mới mỗi 15 phút qua Cron Trigger
@@ -44,6 +44,116 @@ const THUONG_DIEM_DANH = [3000, 5000, 8000, 12000, 16000, 22000, 30000]; // coin
 const THUONG_COIN_MOI_MOI = 5000; // coin chào mừng cho người dùng mới — chỉ nhận 1 lần duy nhất khi /start lần đầu
 const THUONG_MOI_BAN_THANH_CONG = 10000; // coin thưởng cho người mời khi mời được 1 bạn mới tham gia thành công
 const TY_LE_HOA_HONG_GIOI_THIEU = [0.04, 0.02, 0.01]; // % hoa hồng nhiều tầng: cấp 1 (mời trực tiếp) 4%, cấp 2 2%, cấp 3 1% — trên số coin người được mời vừa kiếm được từ nhiệm vụ
+
+// ==================================================
+// ⛏️ ĐÀO COIN — bấm "Đào Coin" ở Trang chủ, chạy liên tục tối đa 4 giờ,
+// coin cộng dần vào ví theo thời gian thực (mỗi lần client poll trạng thái
+// sẽ được credit phần coin phát sinh kể từ lần poll trước). Tốc độ đào cơ
+// bản 5.000 coin/giờ, tăng 10%/cấp theo hệ thống cấp độ (tối đa cấp 20).
+// ==================================================
+const COIN_DAO_MOI_GIO = 5000; // coin/giờ ở cấp 1 (chưa cộng bonus)
+const THOI_GIAN_DAO_MS = 4 * 60 * 60 * 1000; // 1 phiên đào tối đa 4 giờ liên tục
+const CAP_DAO_TOI_DA = 20;
+const TANG_TOC_DO_MOI_CAP = 0.1; // +10% tốc độ đào cho mỗi cấp trên cấp 1
+const XP_DAO_MOI_CAP_KHOI_DIEM = 500; // cấp 1 cần 500 XP, mỗi cấp sau cộng thêm 500 XP
+const XP_MOI_1000_COIN_DAO = 5; // mỗi 1.000 coin đào được (đã cộng vào ví) => +5 XP
+const XP_MOI_LUOT_QUANG_CAO = 8; // mỗi lượt xem quảng cáo hoàn thành => +8 XP
+const XP_MOI_LUOT_VUOT_LINK = 15; // mỗi lượt vượt link hoàn thành => +15 XP
+
+// XP cần để lên tiếp 1 cấp, tính từ cấp hiện tại: cấp 1→2 cần 500, cấp 2→3
+// cần 1.000, cấp 3→4 cần 1.500, v.v. (mỗi cấp sau tăng thêm 500 XP).
+function xpCanChoCapTiepTheo(capHienTai) {
+  return XP_DAO_MOI_CAP_KHOI_DIEM * capHienTai;
+}
+
+// Tốc độ đào hiện tại (coin/giờ) theo cấp — cấp 1 = tốc độ gốc, mỗi cấp
+// trên cấp 1 cộng thêm 10%.
+function tocDoDaoMoiGio(nguoiDung) {
+  const cap = nguoiDung.capDao || 1;
+  return COIN_DAO_MOI_GIO * (1 + TANG_TOC_DO_MOI_CAP * (cap - 1));
+}
+
+// Cộng XP + tự động lên cấp (có thể lên nhiều cấp cùng lúc nếu dư XP).
+// Dừng cộng XP khi đã đạt cấp tối đa (CAP_DAO_TOI_DA).
+function congXpDaoVaLenCap(nguoiDung, soXpCong) {
+  if (!soXpCong || soXpCong <= 0) return;
+  if (!nguoiDung.capDao) nguoiDung.capDao = 1;
+  if (!nguoiDung.xpDao) nguoiDung.xpDao = 0;
+  if (nguoiDung.capDao >= CAP_DAO_TOI_DA) return; // đã max cấp, không cần XP nữa
+
+  nguoiDung.xpDao += soXpCong;
+  while (nguoiDung.capDao < CAP_DAO_TOI_DA) {
+    const canDe = xpCanChoCapTiepTheo(nguoiDung.capDao);
+    if (nguoiDung.xpDao < canDe) break;
+    nguoiDung.xpDao -= canDe;
+    nguoiDung.capDao += 1;
+  }
+  if (nguoiDung.capDao >= CAP_DAO_TOI_DA) nguoiDung.xpDao = 0; // đã max, không tích thêm dư
+}
+
+// Cộng coin đào được vào ví + quy đổi XP theo mốc mỗi 1.000 coin đào cộng
+// dồn (dùng tongCoinDaoTichLuy làm bộ đếm riêng, không lẫn với tongDaKiem
+// chung — vì tongDaKiem còn tính cả quảng cáo/link4m/điểm danh/hoa hồng).
+function congCoinDaoVaTinhXp(nguoiDung, soCoinMoi) {
+  if (!soCoinMoi || soCoinMoi <= 0) return;
+  const truoc = nguoiDung.tongCoinDaoTichLuy || 0;
+  const sau = truoc + soCoinMoi;
+  nguoiDung.tongCoinDaoTichLuy = sau;
+
+  const mocXpTruoc = Math.floor(truoc / 1000);
+  const mocXpSau = Math.floor(sau / 1000);
+  const soMocMoi = mocXpSau - mocXpTruoc;
+  if (soMocMoi > 0) congXpDaoVaLenCap(nguoiDung, soMocMoi * XP_MOI_1000_COIN_DAO);
+
+  nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinMoi;
+  congCoin(nguoiDung, soCoinMoi);
+}
+
+// Tính phần coin phát sinh từ lần credit gần nhất tới hiện tại (bị chặn ở
+// mốc kết thúc phiên 4 giờ), credit vào ví + XP + hoa hồng giới thiệu, rồi
+// cập nhật lại mốc lanCuoiCongLuc. Trả về true nếu phiên đã kết thúc.
+async function xuLyCreditDaoNeuCo(env, uid, nguoiDung) {
+  const dao = nguoiDung.dao;
+  if (!dao || !dao.dangDao) return false;
+
+  const bayGio = Date.now();
+  const moc = Math.min(bayGio, dao.ketThucLuc);
+  const msTroi = Math.max(0, moc - (dao.lanCuoiCongLuc || dao.batDauLuc));
+
+  if (msTroi > 0) {
+    const coinMoi = Math.floor((msTroi / (60 * 60 * 1000)) * tocDoDaoMoiGio(nguoiDung));
+    if (coinMoi > 0) {
+      congCoinDaoVaTinhXp(nguoiDung, coinMoi);
+      await congHoaHongGioiThieu(env, uid, coinMoi);
+    }
+    dao.lanCuoiCongLuc = moc;
+  }
+
+  const daKetThuc = bayGio >= dao.ketThucLuc;
+  if (daKetThuc) dao.dangDao = false;
+  return daKetThuc;
+}
+
+function thongTinDaoDeTra(nguoiDung) {
+  const cap = nguoiDung.capDao || 1;
+  const xp = nguoiDung.xpDao || 0;
+  const daMax = cap >= CAP_DAO_TOI_DA;
+  const dao = nguoiDung.dao || null;
+  const dangDao = !!(dao && dao.dangDao);
+
+  return {
+    coin: nguoiDung.coin || 0,
+    gem: nguoiDung.gem || 0,
+    cap_dao: cap,
+    xp_dao: xp,
+    xp_can_cap_tiep: daMax ? 0 : xpCanChoCapTiepTheo(cap),
+    da_max_cap: daMax,
+    toc_do_dao_moi_gio: tocDoDaoMoiGio(nguoiDung),
+    dang_dao: dangDao,
+    bat_dau_luc: dangDao ? dao.batDauLuc : null,
+    ket_thuc_luc: dangDao ? dao.ketThucLuc : null,
+  };
+}
 
 // ==================================================
 // 📋 QUẢN LÝ ADMIN — KV thay cho FILE_ADMIN (json)
@@ -541,6 +651,7 @@ async function xuLyXacNhanQuangCao(env, url) {
   const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, gem: 0, tongDaKiem: 0 };
   nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
   congCoin(nguoiDung, soCoinCong);
+  congXpDaoVaLenCap(nguoiDung, XP_MOI_LUOT_QUANG_CAO); // +8 XP đào/lượt xem quảng cáo
   await luuNguoiDung(env, uid, nguoiDung);
   await congHoaHongGioiThieu(env, uid, soCoinCong);
 
@@ -552,6 +663,8 @@ async function xuLyXacNhanQuangCao(env, url) {
     so_lan_qc_da_xem: soLanMoi,
     qc_gioi_han_ngay: QC_GIOI_HAN_NGAY,
     cho_toi_thieu_giay: QC_CHO_TOI_THIEU_MS / 1000,
+    cap_dao: nguoiDung.capDao || 1,
+    xp_dao: nguoiDung.xpDao || 0,
   });
 }
 
@@ -624,6 +737,50 @@ async function xuLyDiemDanh(env, url) {
     chuoi_hien_tai: chuoiMoi,
     thuong: THUONG_DIEM_DANH,
   });
+}
+
+// Bắt đầu 1 phiên đào coin mới (nút "Đào Coin" ở Trang chủ) — chỉ cho bắt
+// đầu khi hiện KHÔNG có phiên nào đang chạy. Phiên chạy liên tục tối đa
+// THOI_GIAN_DAO_MS (4 giờ) kể cả khi người dùng thoát app, coin được tính
+// bù (credit dồn) ở lần gọi /trang-thai-dao kế tiếp.
+async function xuLyBatDauDao(env, url) {
+  const uid = url.searchParams.get("uid");
+  if (!uid) return Response.json({ thanh_cong: false, loi: "thieu_uid" }, { status: 400 });
+
+  const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, gem: 0, tongDaKiem: 0 };
+
+  // Nếu đang có phiên chưa credit hết (vd vừa hết hạn nhưng chưa poll lần
+  // cuối) thì credit nốt trước, tránh mất coin của phiên cũ.
+  await xuLyCreditDaoNeuCo(env, uid, nguoiDung);
+
+  if (nguoiDung.dao && nguoiDung.dao.dangDao) {
+    await luuNguoiDung(env, uid, nguoiDung);
+    return Response.json({ thanh_cong: false, loi: "dang_dao_roi", ...thongTinDaoDeTra(nguoiDung) });
+  }
+
+  const bayGio = Date.now();
+  nguoiDung.dao = { dangDao: true, batDauLuc: bayGio, ketThucLuc: bayGio + THOI_GIAN_DAO_MS, lanCuoiCongLuc: bayGio };
+  await luuNguoiDung(env, uid, nguoiDung);
+
+  return Response.json({ thanh_cong: true, ...thongTinDaoDeTra(nguoiDung) });
+}
+
+// Trạng thái đào — gọi định kỳ (poll) để: (1) credit phần coin phát sinh kể
+// từ lần gọi trước, giúp số coin "cộng dần theo thời gian thực"; (2) trả về
+// cấp độ / XP / tốc độ đào / thời gian còn lại của phiên hiện tại (nếu có).
+async function xuLyTrangThaiDao(env, url) {
+  const uid = url.searchParams.get("uid");
+  if (!uid) return Response.json({ loi: "thieu_uid" }, { status: 400 });
+
+  const nguoiDung = await layNguoiDung(env, uid);
+  if (!nguoiDung) return Response.json(thongTinDaoDeTra({ coin: 0, gem: 0 }));
+
+  const daKetThuc = await xuLyCreditDaoNeuCo(env, uid, nguoiDung);
+  if (daKetThuc || (nguoiDung.dao && nguoiDung.dao.dangDao)) {
+    await luuNguoiDung(env, uid, nguoiDung);
+  }
+
+  return Response.json(thongTinDaoDeTra(nguoiDung));
 }
 
 // Reset mã — hủy nhiệm vụ đang chờ (CHƯA hoàn thành) để tạo lại link mới,
@@ -834,6 +991,7 @@ async function xuLyXacNhanNhiemVu(env, url) {
   const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, gem: 0, tongDaKiem: 0 };
   nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
   congCoin(nguoiDung, soCoinCong);
+  congXpDaoVaLenCap(nguoiDung, XP_MOI_LUOT_VUOT_LINK); // +15 XP đào/lượt vượt link
   await luuNguoiDung(env, uid, nguoiDung);
   await congHoaHongGioiThieu(env, uid, soCoinCong);
 
@@ -844,6 +1002,8 @@ async function xuLyXacNhanNhiemVu(env, url) {
     gem: nguoiDung.gem,
     so_lan_link4m_da_xong: soLanMoi,
     link4m_gioi_han_ngay: LINK4M_GIOI_HAN_NGAY,
+    cap_dao: nguoiDung.capDao || 1,
+    xp_dao: nguoiDung.xpDao || 0,
   });
 }
 
@@ -1428,6 +1588,10 @@ export default {
           return xuLyThongTinDiemDanh(env, url);
         case "/diem-danh":
           return xuLyDiemDanh(env, url);
+        case "/bat-dau-dao":
+          return xuLyBatDauDao(env, url);
+        case "/trang-thai-dao":
+          return xuLyTrangThaiDao(env, url);
         case "/bang-xep-hang":
           return xuLyBangXepHang(env, url);
         case "/thong-tin-vi":

@@ -1961,9 +1961,9 @@
       setupDiemDanhTab(tg);
       setupBangXepHangTab(tg);
 
-      // Cập nhật định kỳ mỗi 5 giây — số dư, bảng xếp hạng, ví
+      // Cập nhật định kỳ mỗi 3 giây — số dư, bảng xếp hạng, ví
       const uid = tg?.initDataUnsafe?.user?.id;
-      setInterval(() => capNhatDinhKy(uid), 10000);
+      setInterval(() => capNhatDinhKy(uid), 3000);
       document.addEventListener('visibilitychange', () => {
         if (!document.hidden) capNhatDinhKy(uid);
       });

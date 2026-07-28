@@ -275,12 +275,12 @@ async function xuLyStart(env, message) {
     chat_id: message.chat.id,
     photo: env.LINK_ANH,
     caption:
-      "👋 Chào bạn! Chào mừng đến với Tree Farm 🌾\n\n" +
-      "Trồng trọt, làm nhiệm vụ mỗi ngày và tích xu đổi thưởng.\n" +
+      "👋 Chào bạn! Chào mừng đến với Vua Cày Tiền 💸\n\n" +
+      "Chăm chỉ, làm nhiệm vụ mỗi ngày và tích xu đổi thưởng.\n" +
       "Mời bạn bè, leo bảng xếp hạng và rút kim cương khi đủ điều kiện.",
     reply_markup: {
       inline_keyboard: [
-        [{ text: "🌾 MỞ TRANG TRẠI NGAY", web_app: { url: env.LINK_MINIAPP } }],
+        [{ text: "💸 BẮT ĐẦU CÀY TIỀN NGAY", web_app: { url: env.LINK_MINIAPP } }],
         [{ text: "📢 Kênh thông báo", url: "https://t.me/treefarm_news" }],
         [{ text: "🌐 Nhóm trò chuyện", url: "https://t.me/treefarm_chat" }],
       ],

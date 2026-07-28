@@ -20,7 +20,12 @@ const RUT_TOI_DA_NGAY = 60; // gem / ngày
 const RUT_TOI_DA_TUAN = 200; // gem / tuần
 const TIEN_TO_LINK4M_SO_LAN_NGAY = "link4m-so-lan-ngay:"; // số lần hoàn thành nhiệm vụ link4m hôm nay
 const LINK4M_GIOI_HAN_NGAY = 2; // tăng từ 1 lên 2 lần/ngày
-const KEY_CACHE_BANG_XEP_HANG = "cache-bang-xep-hang"; // JSON { bang_xep_hang, cap_nhat_luc } — làm mới mỗi 15 phút qua Cron Trigger
+const KEY_CACHE_BANG_XEP_HANG = "cache-bang-xep-hang"; // JSON { kiem_xu, moi_ban, cap_nhat_luc } — làm mới mỗi 15 phút qua Cron Trigger
+const KEY_MUA_GIAI = "mua-giai-bxh-hien-tai"; // JSON { bat_dau, ket_thuc } — mùa giải BXH hiện tại, tự mở mùa mới khi hết hạn
+const MUA_GIAI_SO_NGAY = 14; // độ dài 1 mùa giải BXH (ngày)
+const TOP_NHAN_THUONG = 10; // chỉ Top 10 mỗi bảng xếp hạng mới nhận thưởng khi kết thúc mùa giải (admin trao thủ công, giống quy trình duyệt rút tiền)
+const PHAN_THUONG_KIEM_XU = [100000, 70000, 50000, 35000, 25000, 18000, 14000, 10000, 7000, 5000]; // coin thưởng hạng 1→10, BXH "Đua Top Kiếm Xu"
+const PHAN_THUONG_MOI_BAN = [15, 10, 7, 5, 4, 3, 2, 2, 1, 1]; // gem thưởng hạng 1→10, BXH "Đua Top Mời Bạn"
 const TIEN_TO_DIEM_DANH = "diem-danh:"; // diem-danh:{uid} — JSON { chuoi_hien_tai, ngay_cuoi }
 const THUONG_DIEM_DANH = [3000, 5000, 8000, 12000, 16000, 22000, 30000]; // coin thưởng theo ngày 1→7 trong chu kỳ điểm danh, lặp lại sau ngày 7
 const THUONG_COIN_MOI_MOI = 5000; // coin chào mừng cho người dùng mới — chỉ nhận 1 lần duy nhất khi /start lần đầu
@@ -257,14 +262,14 @@ async function xuLyStart(env, message) {
     chat_id: message.chat.id,
     photo: env.LINK_ANH,
     caption:
-      "👋 Chào bạn! Chào mừng đến với Vua Cày Tiền 💸\n\n" +
-      "Cày cuốc, làm nhiệm vụ mỗi ngày và tích xu đổi thưởng.\n" +
+      "👋 Chào bạn! Chào mừng đến với Tree Farm 🌾\n\n" +
+      "Trồng trọt, làm nhiệm vụ mỗi ngày và tích xu đổi thưởng.\n" +
       "Mời bạn bè, leo bảng xếp hạng và rút kim cương khi đủ điều kiện.",
     reply_markup: {
       inline_keyboard: [
-        [{ text: "💸 BẮT ĐẦU CÀY TIỀN", web_app: { url: env.LINK_MINIAPP } }],
-        [{ text: "📢 Kênh thông báo", url: "https://t.me/vuacaytien_news" }],
-        [{ text: "🌐 Nhóm trò chuyện", url: "https://t.me/vuacaytien_chat" }],
+        [{ text: "🌾 MỞ TRANG TRẠI NGAY", web_app: { url: env.LINK_MINIAPP } }],
+        [{ text: "📢 Kênh thông báo", url: "https://t.me/treefarm_news" }],
+        [{ text: "🌐 Nhóm trò chuyện", url: "https://t.me/treefarm_chat" }],
       ],
     },
   });
@@ -830,16 +835,19 @@ async function xuLyXacNhanNhiemVu(env, url) {
 }
 
 // ==================================================
-// 🏆 BẢNG XẾP HẠNG — sắp xếp theo TỔNG TIỀN ĐÃ KIẾM ĐƯỢC (cộng dồn),
-// KHÔNG phải số dư khả dụng hiện tại — rút tiền không làm tụt hạng.
+// 🏆 BẢNG XẾP HẠNG — 2 chế độ:
+//   • "kiem_xu"  Đua Top Kiếm Xu  — xếp theo TỔNG COIN ĐÃ KIẾM ĐƯỢC (cộng dồn,
+//                                    KHÔNG phải số dư hiện tại — rút/đổi không làm tụt hạng)
+//   • "moi_ban"  Đua Top Mời Bạn  — xếp theo SỐ LƯỢNG BẠN BÈ đã mời qua link ref_
+// Chỉ Top 10 mỗi bảng mới nhận phần thưởng khi kết thúc mùa giải.
 //
-// Để tránh quét toàn bộ KV (tốn CPU time) mỗi lần người dùng mở app,
-// bảng xếp hạng được TÍNH TRƯỚC và lưu cache, làm mới mỗi 15 phút bằng
-// Cron Trigger (xem "scheduled" ở cuối file + [triggers] trong wrangler.toml).
+// Để tránh quét toàn bộ KV (tốn CPU time) mỗi lần người dùng mở app, cả 2
+// bảng được TÍNH TRƯỚC và lưu chung 1 cache, làm mới mỗi 15 phút bằng Cron
+// Trigger (xem "scheduled" ở cuối file + [triggers] trong wrangler.toml).
 // Endpoint /bang-xep-hang chỉ đọc cache; nếu chưa có cache (lần đầu deploy)
 // thì tính trực tiếp 1 lần để không trả về rỗng.
 // ==================================================
-async function tinhBangXepHang(env) {
+async function tinhBangXepHangKiemXu(env) {
   const QUET_TOI_DA = 500; // giới hạn số user quét mỗi lần gọi, tránh vượt CPU time free plan
   const ketQua = [];
   let daQuet = 0;
@@ -858,35 +866,106 @@ async function tinhBangXepHang(env) {
     const tenHienThi = (nguoiDung.ten && nguoiDung.ten.trim()) || (nguoiDung.username ? `@${nguoiDung.username}` : "");
     if (!tenHienThi) continue;
 
-    ketQua.push({ ten: tenHienThi, coin: daKiem });
+    ketQua.push({ uid, ten: tenHienThi, gia_tri: daKiem });
   }
 
-  ketQua.sort((a, b) => b.coin - a.coin);
+  ketQua.sort((a, b) => b.gia_tri - a.gia_tri);
+  return ketQua.slice(0, 50);
+}
+
+async function tinhBangXepHangMoiBan(env) {
+  const QUET_TOI_DA = 500;
+  const ketQua = [];
+  let daQuet = 0;
+
+  for await (const uid of duyetTatCaNguoiDung(env)) {
+    if (daQuet >= QUET_TOI_DA) break;
+    daQuet += 1;
+
+    const raw = await env.USERS.get(TIEN_TO_BAN_BE + uid);
+    if (!raw) continue;
+    const soLuong = JSON.parse(raw).length;
+    if (soLuong <= 0) continue;
+
+    const nguoiDung = await layNguoiDung(env, uid);
+    const tenHienThi = (nguoiDung?.ten && nguoiDung.ten.trim()) || (nguoiDung?.username ? `@${nguoiDung.username}` : "");
+    if (!tenHienThi) continue;
+
+    ketQua.push({ uid, ten: tenHienThi, gia_tri: soLuong });
+  }
+
+  ketQua.sort((a, b) => b.gia_tri - a.gia_tri);
   return ketQua.slice(0, 50);
 }
 
 // Tính lại + ghi cache — được gọi bởi Cron Trigger mỗi 15 phút.
 async function lamMoiCacheBangXepHang(env) {
-  const bangXepHang = await tinhBangXepHang(env);
-  await env.USERS.put(
-    KEY_CACHE_BANG_XEP_HANG,
-    JSON.stringify({ bang_xep_hang: bangXepHang, cap_nhat_luc: Date.now() })
-  );
-  return bangXepHang;
+  const [kiemXu, moiBan] = await Promise.all([tinhBangXepHangKiemXu(env), tinhBangXepHangMoiBan(env)]);
+  const duLieu = { kiem_xu: kiemXu, moi_ban: moiBan, cap_nhat_luc: Date.now() };
+  await env.USERS.put(KEY_CACHE_BANG_XEP_HANG, JSON.stringify(duLieu));
+  return duLieu;
 }
 
-async function xuLyBangXepHang(env) {
-  const raw = await env.USERS.get(KEY_CACHE_BANG_XEP_HANG);
+// Mùa giải BXH — lưu mốc bắt đầu/kết thúc trong KV. Tự động mở mùa mới ngay
+// khi phát hiện mùa hiện tại đã hết hạn (đọc lazy, không cần cron riêng).
+// Lưu ý: điểm số 2 bảng vẫn tính lũy kế toàn thời gian (giống dữ liệu coin/
+// bạn bè sẵn có) — mùa giải ở đây đóng vai trò chốt mốc thời gian để admin
+// trao thưởng Top 10 định kỳ, tương tự quy trình duyệt rút tiền thủ công.
+async function layHoacTaoMuaGiai(env) {
+  const raw = await env.USERS.get(KEY_MUA_GIAI);
+  const bayGio = Date.now();
   if (raw) {
-    const cache = JSON.parse(raw);
-    return Response.json({ bang_xep_hang: cache.bang_xep_hang, cap_nhat_luc: cache.cap_nhat_luc });
+    const mg = JSON.parse(raw);
+    if (mg.ket_thuc > bayGio) return mg;
+  }
+  const moi = { bat_dau: bayGio, ket_thuc: bayGio + MUA_GIAI_SO_NGAY * 24 * 60 * 60 * 1000 };
+  await env.USERS.put(KEY_MUA_GIAI, JSON.stringify(moi));
+  return moi;
+}
+
+async function xuLyBangXepHang(env, url) {
+  const loai = url.searchParams.get("loai") === "moi-ban" ? "moi_ban" : "kiem_xu";
+  const uid = url.searchParams.get("uid");
+
+  const muaGiai = await layHoacTaoMuaGiai(env);
+
+  const raw = await env.USERS.get(KEY_CACHE_BANG_XEP_HANG);
+  const cache = raw ? JSON.parse(raw) : await lamMoiCacheBangXepHang(env);
+
+  const danhSach = cache[loai] || [];
+  const phanThuong = loai === "moi_ban" ? PHAN_THUONG_MOI_BAN : PHAN_THUONG_KIEM_XU;
+
+  let hangCuaToi = null;
+  let giaTriCuaToi = 0;
+  if (uid) {
+    const idx = danhSach.findIndex((nd) => String(nd.uid) === String(uid));
+    if (idx >= 0) {
+      hangCuaToi = idx + 1;
+      giaTriCuaToi = danhSach[idx].gia_tri;
+    } else if (loai === "kiem_xu") {
+      const nd = await layNguoiDung(env, uid);
+      giaTriCuaToi = nd ? (nd.tongDaKiem != null ? nd.tongDaKiem : nd.coin || 0) : 0;
+    } else {
+      const rawBanBe = await env.USERS.get(TIEN_TO_BAN_BE + uid);
+      giaTriCuaToi = rawBanBe ? JSON.parse(rawBanBe).length : 0;
+    }
   }
 
-  // Chưa có cache (ví dụ mới deploy, chưa tới lần chạy cron đầu tiên) —
-  // tính trực tiếp 1 lần và lưu luôn để lần sau có cache dùng ngay.
-  const capNhatLuc = Date.now();
-  const bangXepHang = await lamMoiCacheBangXepHang(env);
-  return Response.json({ bang_xep_hang: bangXepHang, cap_nhat_luc: capNhatLuc });
+  return Response.json({
+    bang_xep_hang: danhSach.map((nd, idx) => ({
+      hang: idx + 1,
+      uid: nd.uid,
+      ten: nd.ten,
+      gia_tri: nd.gia_tri,
+      phan_thuong: idx < TOP_NHAN_THUONG ? phanThuong[idx] : 0,
+    })),
+    hang_cua_toi: hangCuaToi,
+    gia_tri_cua_toi: giaTriCuaToi,
+    top_nhan_thuong: TOP_NHAN_THUONG,
+    don_vi: loai === "moi_ban" ? "gem" : "coin",
+    mua_giai: muaGiai,
+    cap_nhat_luc: cache.cap_nhat_luc,
+  });
 }
 
 // ==================================================
@@ -1265,7 +1344,7 @@ export default {
         case "/diem-danh":
           return xuLyDiemDanh(env, url);
         case "/bang-xep-hang":
-          return xuLyBangXepHang(env);
+          return xuLyBangXepHang(env, url);
         case "/thong-tin-vi":
           return xuLyThongTinVi(env, url);
         case "/doi-coin-gem":

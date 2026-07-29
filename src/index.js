@@ -1110,14 +1110,24 @@ async function lamMoiCacheBangXepHang(env, muaGiai) {
 async function layHoacTaoMuaGiai(env) {
   const raw = await env.USERS.get(KEY_MUA_GIAI);
   const bayGio = Date.now();
+  const doDaiToiDaHopLeMs = MUA_GIAI_SO_NGAY * 24 * 60 * 60 * 1000;
+
   if (raw) {
     const mg = JSON.parse(raw);
-    if (mg.ket_thuc > bayGio) return mg;
-    const moi = { so: (mg.so || 0) + 1, bat_dau: bayGio, ket_thuc: bayGio + MUA_GIAI_SO_NGAY * 24 * 60 * 60 * 1000 };
+    // Dữ liệu hợp lệ: có số mùa hợp lệ + còn hạn + KHÔNG dài hơn cấu hình
+    // MUA_GIAI_SO_NGAY hiện tại (tránh trường hợp mùa cũ được tạo từ lúc
+    // cấu hình còn dài hơn — vd 20-30 ngày — trước khi đổi về 7 ngày, mà
+    // ket_thuc cũ vẫn còn hạn nên bị giữ nguyên mãi không áp dụng số mới).
+    const conHan = mg.ket_thuc > bayGio;
+    const soHopLe = Number.isFinite(mg.so) && mg.so > 0;
+    const doDaiHopLe = mg.ket_thuc - (mg.bat_dau || bayGio) <= doDaiToiDaHopLeMs;
+    if (conHan && soHopLe && doDaiHopLe) return mg;
+
+    const moi = { so: soHopLe ? mg.so + (conHan ? 0 : 1) : 1, bat_dau: bayGio, ket_thuc: bayGio + doDaiToiDaHopLeMs };
     await env.USERS.put(KEY_MUA_GIAI, JSON.stringify(moi));
     return moi;
   }
-  const moi = { so: 1, bat_dau: bayGio, ket_thuc: bayGio + MUA_GIAI_SO_NGAY * 24 * 60 * 60 * 1000 };
+  const moi = { so: 1, bat_dau: bayGio, ket_thuc: bayGio + doDaiToiDaHopLeMs };
   await env.USERS.put(KEY_MUA_GIAI, JSON.stringify(moi));
   return moi;
 }

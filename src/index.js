@@ -39,9 +39,9 @@ const PHAN_THUONG_MOI_BAN = [
   { coin: 3000, can: 2 },
 ];
 const TIEN_TO_DIEM_DANH = "diem-danh:"; // diem-danh:{uid} — JSON { chuoi_hien_tai, ngay_cuoi }
-const THUONG_DIEM_DANH = [300, 500, 800, 1200, 1600, 2200, 3000]; // coin thưởng theo ngày 1→7 trong chu kỳ điểm danh, lặp lại sau ngày 7
-const THUONG_COIN_MOI_MOI = 500; // coin chào mừng cho người dùng mới — chỉ nhận 1 lần duy nhất khi /start lần đầu
-const THUONG_MOI_BAN_THANH_CONG = 1000; // coin thưởng cho người mời khi mời được 1 bạn mới tham gia thành công
+const THUONG_DIEM_DANH = [20, 40, 60, 90, 130, 160, 200]; // coin thưởng theo ngày 1→7 trong chu kỳ điểm danh, lặp lại sau ngày 7 (đã giảm ~15 lần so với bản gốc để kéo dài thời gian tích lũy tới mức rút tối thiểu)
+const THUONG_COIN_MOI_MOI = 50; // coin chào mừng cho người dùng mới — chỉ nhận 1 lần duy nhất khi /start lần đầu
+const THUONG_MOI_BAN_THANH_CONG = 80; // coin thưởng cho người mời khi mời được 1 bạn mới tham gia thành công
 const TY_LE_HOA_HONG_GIOI_THIEU = [0.04, 0.02, 0.01]; // % hoa hồng nhiều tầng: cấp 1 (mời trực tiếp) 4%, cấp 2 2%, cấp 3 1% — trên số coin người được mời vừa kiếm được từ nhiệm vụ
 
 // ==================================================
@@ -50,7 +50,7 @@ const TY_LE_HOA_HONG_GIOI_THIEU = [0.04, 0.02, 0.01]; // % hoa hồng nhiều t�
 // sẽ được credit phần coin phát sinh kể từ lần poll trước). Tốc độ đào cơ
 // bản 500 coin/giờ, tăng 10%/cấp theo hệ thống cấp độ (tối đa cấp 20).
 // ==================================================
-const COIN_DAO_MOI_GIO = 500; // coin/giờ ở cấp 1 (chưa cộng bonus)
+const COIN_DAO_MOI_GIO = 15; // coin/giờ ở cấp 1 (chưa cộng bonus) — đã giảm ~15 lần so với bản gốc để kéo dài thời gian tích lũy tới mức rút tối thiểu
 const THOI_GIAN_DAO_MS = 4 * 60 * 60 * 1000; // 1 phiên đào tối đa 4 giờ liên tục
 const CAP_DAO_TOI_DA = 20;
 const TANG_TOC_DO_MOI_CAP = 0.1; // +10% tốc độ đào cho mỗi cấp trên cấp 1
@@ -642,7 +642,7 @@ async function xuLyXacNhanQuangCao(env, url) {
   await env.USERS.put(key, String(soLanMoi));
   await env.USERS.put(keyLanCuoi, String(now));
 
-  const soCoinCong = Number(env.THUONG_COIN_QUANG_CAO || 500);
+  const soCoinCong = Number(env.THUONG_COIN_QUANG_CAO || 30); // đã giảm mặc định từ 500 xuống 30 (~15 lần) — nếu đã đặt biến môi trường THUONG_COIN_QUANG_CAO trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
   const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, tongDaKiem: 0 };
   nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
   congCoin(nguoiDung, soCoinCong);
@@ -980,7 +980,7 @@ async function xuLyXacNhanNhiemVu(env, url) {
   await xoaNhiemVuHienTai(env, uid); // dọn con trỏ, nhiệm vụ này xong rồi
 
   // Cộng thưởng coin
-  const soCoinCong = Number(env.THUONG_COIN_NHIEM_VU || 2500);
+  const soCoinCong = Number(env.THUONG_COIN_NHIEM_VU || 200); // đã giảm mặc định từ 2500 xuống 200 (~12,5 lần) — nếu đã đặt biến môi trường THUONG_COIN_NHIEM_VU trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
   const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, tongDaKiem: 0 };
   nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
   congCoin(nguoiDung, soCoinCong);

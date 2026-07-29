@@ -1050,25 +1050,30 @@ async function damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai, canBanBe) {
 }
 
 async function tinhBangXepHangKiemXu(env, soMuaHienTai) {
-  const QUET_TOI_DA = 200; // giới hạn số user quét mỗi lần gọi, tránh vượt giới hạn subrequest/CPU time
+  const QUET_TOI_DA = 150; // giới hạn số user quét mỗi lần gọi, tránh vượt giới hạn subrequest/CPU time
   const ketQua = [];
   let daQuet = 0;
 
-  for await (const uid of duyetTatCaNguoiDung(env)) {
-    if (daQuet >= QUET_TOI_DA) break;
-    daQuet += 1;
-    const nguoiDung = await layNguoiDung(env, uid);
-    if (!nguoiDung) continue;
+  try {
+    for await (const uid of duyetTatCaNguoiDung(env)) {
+      if (daQuet >= QUET_TOI_DA) break;
+      daQuet += 1;
+      const nguoiDung = await layNguoiDung(env, uid);
+      if (!nguoiDung) continue;
 
-    const coinHienTai = nguoiDung.tongDaKiem != null ? nguoiDung.tongDaKiem : nguoiDung.coin || 0;
-    const moc = await damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai, false); // không cần dữ liệu bạn bè ở bảng này
-    const daKiemTrongMua = Math.max(0, coinHienTai - moc.coin_goc);
-    if (daKiemTrongMua < MUC_TOI_THIEU_KIEM_XU) continue;
+      const coinHienTai = nguoiDung.tongDaKiem != null ? nguoiDung.tongDaKiem : nguoiDung.coin || 0;
+      const moc = await damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai, false); // không cần dữ liệu bạn bè ở bảng này
+      const daKiemTrongMua = Math.max(0, coinHienTai - moc.coin_goc);
+      if (daKiemTrongMua < MUC_TOI_THIEU_KIEM_XU) continue;
 
-    const tenHienThi = (nguoiDung.ten && nguoiDung.ten.trim()) || (nguoiDung.username ? `@${nguoiDung.username}` : "");
-    if (!tenHienThi) continue;
+      const tenHienThi = (nguoiDung.ten && nguoiDung.ten.trim()) || (nguoiDung.username ? `@${nguoiDung.username}` : "");
+      if (!tenHienThi) continue;
 
-    ketQua.push({ uid, ten: tenHienThi, gia_tri: daKiemTrongMua });
+      ketQua.push({ uid, ten: tenHienThi, gia_tri: daKiemTrongMua });
+    }
+  } catch (e) {
+    // Có thể do vượt giới hạn subrequest/KV giữa chừng — dừng lại và trả về
+    // những gì đã quét được thay vì làm hỏng toàn bộ bảng xếp hạng.
   }
 
   ketQua.sort((a, b) => b.gia_tri - a.gia_tri);
@@ -1076,26 +1081,31 @@ async function tinhBangXepHangKiemXu(env, soMuaHienTai) {
 }
 
 async function tinhBangXepHangMoiBan(env, soMuaHienTai) {
-  const QUET_TOI_DA = 200; // thấp hơn bảng kiem_xu vì bảng này còn quét thêm danh sách bạn bè của từng user
+  const QUET_TOI_DA = 80; // thấp hơn hẳn bảng kiem_xu vì bảng này còn quét thêm danh sách bạn bè của từng user (tốn nhiều lượt gọi KV hơn nhiều)
   const ketQua = [];
   let daQuet = 0;
 
-  for await (const uid of duyetTatCaNguoiDung(env)) {
-    if (daQuet >= QUET_TOI_DA) break;
-    daQuet += 1;
+  try {
+    for await (const uid of duyetTatCaNguoiDung(env)) {
+      if (daQuet >= QUET_TOI_DA) break;
+      daQuet += 1;
 
-    const nguoiDung = await layNguoiDung(env, uid);
-    if (!nguoiDung) continue;
+      const nguoiDung = await layNguoiDung(env, uid);
+      if (!nguoiDung) continue;
 
-    const banBeHienTai = await demBanBeHopLeChoBxh(env, uid);
-    const moc = await damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai, true);
-    const moiTrongMua = Math.max(0, banBeHienTai - moc.ban_be_goc);
-    if (moiTrongMua <= 0) continue;
+      const banBeHienTai = await demBanBeHopLeChoBxh(env, uid);
+      const moc = await damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai, true);
+      const moiTrongMua = Math.max(0, banBeHienTai - moc.ban_be_goc);
+      if (moiTrongMua <= 0) continue;
 
-    const tenHienThi = (nguoiDung.ten && nguoiDung.ten.trim()) || (nguoiDung.username ? `@${nguoiDung.username}` : "");
-    if (!tenHienThi) continue;
+      const tenHienThi = (nguoiDung.ten && nguoiDung.ten.trim()) || (nguoiDung.username ? `@${nguoiDung.username}` : "");
+      if (!tenHienThi) continue;
 
-    ketQua.push({ uid, ten: tenHienThi, gia_tri: moiTrongMua });
+      ketQua.push({ uid, ten: tenHienThi, gia_tri: moiTrongMua });
+    }
+  } catch (e) {
+    // Có thể do vượt giới hạn subrequest/KV giữa chừng — dừng lại và trả về
+    // những gì đã quét được thay vì làm hỏng toàn bộ bảng xếp hạng.
   }
 
   ketQua.sort((a, b) => b.gia_tri - a.gia_tri);
@@ -1164,65 +1174,101 @@ function tinhPhanThuong(loai, hang, giaTri) {
   return { coin: PHAN_THUONG_KIEM_XU[hang - 1], dieu_kien_toi_thieu: null, dat_dieu_kien: true };
 }
 
-async function xuLyBangXepHang(env, url) {
+async function xuLyBangXepHang(env, url, ctx) {
   const loai = url.searchParams.get("loai") === "moi-ban" ? "moi_ban" : "kiem_xu";
   const uid = url.searchParams.get("uid");
 
-  const muaGiai = await layHoacTaoMuaGiai(env);
+  try {
+    const muaGiai = await layHoacTaoMuaGiai(env);
 
-  const raw = await env.USERS.get(KEY_CACHE_BANG_XEP_HANG);
-  let cache = raw ? JSON.parse(raw) : null;
-  // Cache thuộc mùa cũ (chưa kịp cron làm mới) — tính lại ngay để điểm không bị lẫn mùa.
-  if (!cache || cache.so_mua !== muaGiai.so) {
-    cache = await lamMoiCacheBangXepHang(env, muaGiai);
-  }
+    const raw = await env.USERS.get(KEY_CACHE_BANG_XEP_HANG);
+    let cache = raw ? JSON.parse(raw) : null;
 
-  const danhSach = cache[loai] || [];
+    if (!cache) {
+      // Chưa từng có cache (lần đầu deploy) — bắt buộc tính ngay 1 lần để
+      // không trả về rỗng mãi (giới hạn quét đã được hạ thấp ở 2 hàm tính
+      // để tránh vượt subrequest ngay trong request đầu tiên này).
+      cache = await lamMoiCacheBangXepHang(env, muaGiai);
+    } else if (cache.so_mua !== muaGiai.so) {
+      // Cache thuộc mùa cũ — trả cache cũ ngay cho nhanh (không chặn user
+      // chờ tính lại), rồi âm thầm làm mới ở nền qua waitUntil. Cache cũ
+      // vẫn hiển thị được (chỉ hơi lệch số mùa 1 nhịp, sẽ tự đúng lại sau).
+      if (ctx && ctx.waitUntil) {
+        ctx.waitUntil(lamMoiCacheBangXepHang(env, muaGiai).catch(() => {}));
+      } else {
+        cache = await lamMoiCacheBangXepHang(env, muaGiai);
+      }
+    }
 
-  let hangCuaToi = null;
-  let giaTriCuaToi = 0;
-  if (uid) {
-    const idx = danhSach.findIndex((nd) => String(nd.uid) === String(uid));
-    if (idx >= 0) {
-      hangCuaToi = idx + 1;
-      giaTriCuaToi = danhSach[idx].gia_tri;
-    } else {
-      const nd = await layNguoiDung(env, uid);
-      if (nd) {
-        const moc = await damBaoMocMuaGiai(env, uid, nd, muaGiai.so, loai === "moi_ban");
-        if (loai === "kiem_xu") {
-          const coinHienTai = nd.tongDaKiem != null ? nd.tongDaKiem : nd.coin || 0;
-          giaTriCuaToi = Math.max(0, coinHienTai - moc.coin_goc);
-        } else {
-          const banBeHienTai = await demBanBeHopLeChoBxh(env, uid);
-          giaTriCuaToi = Math.max(0, banBeHienTai - moc.ban_be_goc);
+    const danhSach = cache[loai] || [];
+
+    let hangCuaToi = null;
+    let giaTriCuaToi = 0;
+    if (uid) {
+      const idx = danhSach.findIndex((nd) => String(nd.uid) === String(uid));
+      if (idx >= 0) {
+        hangCuaToi = idx + 1;
+        giaTriCuaToi = danhSach[idx].gia_tri;
+      } else {
+        try {
+          const nd = await layNguoiDung(env, uid);
+          if (nd) {
+            const moc = await damBaoMocMuaGiai(env, uid, nd, muaGiai.so, loai === "moi_ban");
+            if (loai === "kiem_xu") {
+              const coinHienTai = nd.tongDaKiem != null ? nd.tongDaKiem : nd.coin || 0;
+              giaTriCuaToi = Math.max(0, coinHienTai - moc.coin_goc);
+            } else {
+              const banBeHienTai = await demBanBeHopLeChoBxh(env, uid);
+              giaTriCuaToi = Math.max(0, banBeHienTai - moc.ban_be_goc);
+            }
+          }
+        } catch (e) {
+          // Không tính được hạng riêng của user (vd hết subrequest) — bỏ
+          // qua, vẫn trả về được bảng xếp hạng chung bên dưới.
         }
       }
     }
-  }
 
-  return Response.json({
-    mua_giai: muaGiai,
-    loai,
-    don_vi_gia_tri: loai === "moi_ban" ? "luot_moi" : "xu",
-    muc_toi_thieu_bxh: loai === "kiem_xu" ? MUC_TOI_THIEU_KIEM_XU : null,
-    top_nhan_thuong: TOP_NHAN_THUONG,
-    bang_thuong: Array.from({ length: TOP_NHAN_THUONG }, (_, i) =>
-      loai === "moi_ban"
-        ? { hang: i + 1, coin: PHAN_THUONG_MOI_BAN[i].coin, dieu_kien_toi_thieu: PHAN_THUONG_MOI_BAN[i].can }
-        : { hang: i + 1, coin: PHAN_THUONG_KIEM_XU[i], dieu_kien_toi_thieu: null }
-    ),
-    bang_xep_hang: danhSach.map((nd, idx) => ({
-      hang: idx + 1,
-      uid: nd.uid,
-      ten: nd.ten,
-      gia_tri: nd.gia_tri,
-      phan_thuong: tinhPhanThuong(loai, idx + 1, nd.gia_tri),
-    })),
-    hang_cua_toi: hangCuaToi,
-    gia_tri_cua_toi: giaTriCuaToi,
-    cap_nhat_luc: cache.cap_nhat_luc,
-  });
+    return Response.json({
+      mua_giai: muaGiai,
+      loai,
+      don_vi_gia_tri: loai === "moi_ban" ? "luot_moi" : "xu",
+      muc_toi_thieu_bxh: loai === "kiem_xu" ? MUC_TOI_THIEU_KIEM_XU : null,
+      top_nhan_thuong: TOP_NHAN_THUONG,
+      bang_thuong: Array.from({ length: TOP_NHAN_THUONG }, (_, i) =>
+        loai === "moi_ban"
+          ? { hang: i + 1, coin: PHAN_THUONG_MOI_BAN[i].coin, dieu_kien_toi_thieu: PHAN_THUONG_MOI_BAN[i].can }
+          : { hang: i + 1, coin: PHAN_THUONG_KIEM_XU[i], dieu_kien_toi_thieu: null }
+      ),
+      bang_xep_hang: danhSach.map((nd, idx) => ({
+        hang: idx + 1,
+        uid: nd.uid,
+        ten: nd.ten,
+        gia_tri: nd.gia_tri,
+        phan_thuong: tinhPhanThuong(loai, idx + 1, nd.gia_tri),
+      })),
+      hang_cua_toi: hangCuaToi,
+      gia_tri_cua_toi: giaTriCuaToi,
+      cap_nhat_luc: cache.cap_nhat_luc,
+    });
+  } catch (e) {
+    // An toàn tuyệt đối: bất kể lỗi gì xảy ra (vượt subrequest, KV timeout,
+    // v.v.), KHÔNG để lỗi 500 lộ ra frontend — trả về 200 với dữ liệu rỗng
+    // để giao diện vẫn hiển thị bình thường (thay vì "Không tải được...").
+    return Response.json({
+      mua_giai: { so: 0, bat_dau: Date.now(), ket_thuc: Date.now() },
+      loai,
+      don_vi_gia_tri: loai === "moi_ban" ? "luot_moi" : "xu",
+      muc_toi_thieu_bxh: loai === "kiem_xu" ? MUC_TOI_THIEU_KIEM_XU : null,
+      top_nhan_thuong: TOP_NHAN_THUONG,
+      bang_thuong: [],
+      bang_xep_hang: [],
+      hang_cua_toi: null,
+      gia_tri_cua_toi: 0,
+      cap_nhat_luc: Date.now(),
+      loi: "tam_thoi_khong_tai_duoc",
+    });
+  }
 }
 
 // ==================================================
@@ -1235,12 +1281,17 @@ async function xuLyBangXepHang(env, url) {
 // 👥 BẠN BÈ — ghi nhận lượt mời qua link ref_, tra cứu cho tab Bạn bè
 // ==================================================
 const CAP_DAO_TOI_THIEU_TINH_BXH_MOI_BAN = 2; // người được mời phải đạt cấp đào (capDao) ≥ 2 mới được tính 1 lượt mời cho BXH "Đua Top Mời Bạn" — chặn tạo tài khoản ảo chỉ để farm điểm
+const GIOI_HAN_BAN_BE_QUET_BXH = 40; // chỉ kiểm tra tối đa 40 bạn GẦN NHẤT/người khi tính BXH — nếu không giới hạn, 1 người mời được vài trăm bạn sẽ khiến việc tính BXH tốn hàng trăm lượt gọi KV riêng cho 1 user, dễ vượt giới hạn subrequest của Worker và làm cả bảng xếp hạng lỗi
 
 // Đếm số bạn đã mời ĐẠT ĐIỀU KIỆN (cấp đào ≥ CAP_DAO_TOI_THIEU_TINH_BXH_MOI_BAN) —
 // dùng riêng cho tính điểm BXH Mời Bạn, khác với số lượng hiển thị thô ở tab Bạn bè.
+// LƯU Ý: chỉ quét tối đa GIOI_HAN_BAN_BE_QUET_BXH bạn gần nhất (danh sách đã
+// sắp mới nhất trước) — với người mời rất nhiều bạn, số liệu BXH có thể hơi
+// thấp hơn thực tế nhưng đổi lại tránh sập cả bảng xếp hạng vì quá tải KV.
 async function demBanBeHopLeChoBxh(env, uid) {
   const raw = await env.USERS.get(TIEN_TO_BAN_BE + uid);
-  const danhSach = raw ? JSON.parse(raw) : [];
+  const danhSachDay = raw ? JSON.parse(raw) : [];
+  const danhSach = danhSachDay.slice(0, GIOI_HAN_BAN_BE_QUET_BXH);
   let dem = 0;
   for (const nb of danhSach) {
     if (!nb.uid) continue; // bản ghi cũ trước khi lưu uid — không thể kiểm tra cấp, bỏ qua
@@ -1590,7 +1641,7 @@ export default {
         case "/trang-thai-dao":
           return xuLyTrangThaiDao(env, url);
         case "/bang-xep-hang":
-          return xuLyBangXepHang(env, url);
+          return xuLyBangXepHang(env, url, ctx);
         case "/thong-tin-vi":
           return xuLyThongTinVi(env, url);
         case "/thong-tin-ban-be":

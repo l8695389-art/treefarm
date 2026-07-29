@@ -53,6 +53,23 @@ const TY_LE_HOA_HONG_GIOI_THIEU = [0.04, 0.02, 0.01]; // % hoa hồng nhiều t�
 // ==================================================
 const COIN_DAO_MOI_GIO = 150; // coin/giờ ở cấp 1 (chưa cộng bonus)
 const THOI_GIAN_DAO_MS = 4 * 60 * 60 * 1000; // 1 phiên đào tối đa 4 giờ liên tục
+// "Người chơi gánh hộ 1 phần": client tự nội suy hiển thị coin tăng mượt mỗi
+// giây (xem index.html — daoUocTinhTimer), nên server KHÔNG cần chốt sổ
+// (ghi KV thật + cộng hoa hồng giới thiệu) mỗi lần client poll nữa — chỉ cần
+// chốt tối đa 1 lần / KHOANG_CACH_TOI_THIEU_GHI_DAO_MS cho mỗi user, bất kể
+// client gọi /trang-thai-dao dồn dập cỡ nào (poll nhanh, mở nhiều tab, bug,
+// hay cố ý spam). Nhờ vậy tổng số write KHÔNG tăng tuyến tính theo tần suất
+// poll hay theo số user tăng thêm — mỗi user tự nhiên bị chặn ở 1 trần cố
+// định, càng nhiều user online cùng lúc thì mỗi user vẫn chỉ tốn đúng từng
+// đó write, sever "dễ thở" hơn nhiều so với ghi mỗi poll.
+//
+// 600s (10 phút) được chọn để CHỊU ĐƯỢC ~20+ USER ĐỒNG THỜI ngay cả trên
+// Cloudflare Workers FREE PLAN (ngân sách cứng 1.000 write/ngày — không co
+// giãn). Công thức chọn giá trị này: N user × giờ hoạt động TB/ngày × 3600
+// / ngân sách write dành cho đào ≈ khoảng cách tối thiểu (giây). Nếu nâng
+// lên Workers Paid plan (~33.000 write/ngày), có thể giảm xuống 90-120s để
+// số dư hiển thị đồng bộ nhanh hơn mà vẫn thoải mái gánh 100+ user.
+const KHOANG_CACH_TOI_THIEU_GHI_DAO_MS = 600 * 1000;
 const CAP_DAO_TOI_DA = 20;
 const TANG_TOC_DO_MOI_CAP = 0.1; // +10% tốc độ đào cho mỗi cấp trên cấp 1
 const XP_DAO_MOI_CAP_KHOI_DIEM = 500; // cấp 1 cần 500 XP, mỗi cấp sau cộng thêm 500 XP
@@ -112,13 +129,25 @@ function congCoinDaoVaTinhXp(nguoiDung, soCoinMoi) {
 // Tính phần coin phát sinh từ lần credit gần nhất tới hiện tại (bị chặn ở
 // mốc kết thúc phiên 4 giờ), credit vào ví + XP + hoa hồng giới thiệu, rồi
 // cập nhật lại mốc lanCuoiCongLuc. Trả về true nếu phiên đã kết thúc.
-async function xuLyCreditDaoNeuCo(env, uid, nguoiDung) {
+// batBuoc=true dùng khi BẮT BUỘC phải chốt sổ ngay (vd sắp ghi đè phiên đào
+// bằng phiên mới ở xuLyBatDauDao) — nếu không chốt ngay, phần coin phát sinh
+// từ lần chốt gần nhất tới giờ sẽ bị MẤT vĩnh viễn khi object dao cũ bị thay.
+// Khi gọi thường xuyên qua poll (batBuoc=false, mặc định), hàm chỉ thực sự
+// ghi KV khi đã đủ KHOANG_CACH_TOI_THIEU_GHI_DAO_MS kể từ lần chốt trước,
+// hoặc phiên đã kết thúc (buộc phải chốt để dừng đúng lúc). Trả về
+// { daKetThuc, daGhi } để caller biết có cần luuNguoiDung() hay không —
+// đa số lần poll sẽ trả daGhi=false, tức KHÔNG tốn write KV nào cả.
+async function xuLyCreditDaoNeuCo(env, uid, nguoiDung, batBuoc = false) {
   const dao = nguoiDung.dao;
-  if (!dao || !dao.dangDao) return false;
+  if (!dao || !dao.dangDao) return { daKetThuc: false, daGhi: false };
 
   const bayGio = Date.now();
   const moc = Math.min(bayGio, dao.ketThucLuc);
+  const daKetThuc = bayGio >= dao.ketThucLuc;
   const msTroi = Math.max(0, moc - (dao.lanCuoiCongLuc || dao.batDauLuc));
+
+  const duDieuKienChotSo = batBuoc || daKetThuc || msTroi >= KHOANG_CACH_TOI_THIEU_GHI_DAO_MS;
+  if (!duDieuKienChotSo) return { daKetThuc: false, daGhi: false };
 
   if (msTroi > 0) {
     const coinMoi = Math.floor((msTroi / (60 * 60 * 1000)) * tocDoDaoMoiGio(nguoiDung));
@@ -129,9 +158,8 @@ async function xuLyCreditDaoNeuCo(env, uid, nguoiDung) {
     dao.lanCuoiCongLuc = moc;
   }
 
-  const daKetThuc = bayGio >= dao.ketThucLuc;
   if (daKetThuc) dao.dangDao = false;
-  return daKetThuc;
+  return { daKetThuc, daGhi: true };
 }
 
 function thongTinDaoDeTra(nguoiDung) {
@@ -791,8 +819,10 @@ async function xuLyBatDauDao(env, url) {
   const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, tongDaKiem: 0 };
 
   // Nếu đang có phiên chưa credit hết (vd vừa hết hạn nhưng chưa poll lần
-  // cuối) thì credit nốt trước, tránh mất coin của phiên cũ.
-  await xuLyCreditDaoNeuCo(env, uid, nguoiDung);
+  // cuối) thì credit nốt trước, tránh mất coin của phiên cũ. batBuoc=true vì
+  // object `dao` sắp bị ghi đè bằng phiên mới ngay bên dưới — không thể để
+  // dành sang lần chốt định kỳ tiếp theo như lúc poll bình thường được.
+  await xuLyCreditDaoNeuCo(env, uid, nguoiDung, true);
 
   if (nguoiDung.dao && nguoiDung.dao.dangDao) {
     await luuNguoiDung(env, uid, nguoiDung);
@@ -816,8 +846,12 @@ async function xuLyTrangThaiDao(env, url) {
   const nguoiDung = await layNguoiDung(env, uid);
   if (!nguoiDung) return Response.json(thongTinDaoDeTra({ coin: 0 }));
 
-  const daKetThuc = await xuLyCreditDaoNeuCo(env, uid, nguoiDung);
-  if (daKetThuc || (nguoiDung.dao && nguoiDung.dao.dangDao)) {
+  // Đa số lượt gọi (poll mỗi 20-30s từ client) sẽ rơi vào trường hợp
+  // daGhi=false — tức KHÔNG tốn write KV nào, vì chưa đủ
+  // KHOANG_CACH_TOI_THIEU_GHI_DAO_MS kể từ lần chốt sổ trước. Chỉ khi đủ
+  // khoảng cách (hoặc phiên vừa kết thúc) mới thực sự ghi.
+  const { daGhi } = await xuLyCreditDaoNeuCo(env, uid, nguoiDung);
+  if (daGhi) {
     await luuNguoiDung(env, uid, nguoiDung);
   }
 

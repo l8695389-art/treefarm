@@ -1216,7 +1216,7 @@ async function damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai, canBanBe) {
 }
 
 async function tinhBangXepHangKiemXu(env, soMuaHienTai) {
-  const QUET_TOI_DA = 100; // giảm từ 150 → 100 để giảm tải KV do Cron chạy định kỳ, tránh vượt giới hạn ghi/đọc hàng ngày
+  const QUET_TOI_DA = 50; // giảm từ 100 → 50 — cron 15 phút/lần × quét lớn từng gần chạm trần 100k đọc KV/ngày dù CHƯA có user thật nào gọi API; xem ghi chú ở lamMoiCacheBangXepHang
   const ketQua = [];
   let daQuet = 0;
 
@@ -1247,7 +1247,7 @@ async function tinhBangXepHangKiemXu(env, soMuaHienTai) {
 }
 
 async function tinhBangXepHangMoiBan(env, soMuaHienTai) {
-  const QUET_TOI_DA = 40; // giảm mạnh từ 80 → 40 vì bảng này tốn nhiều lượt gọi KV nhất (mỗi user còn kéo theo tối đa GIOI_HAN_BAN_BE_QUET_BXH lượt đọc bạn bè) — đây là nguyên nhân chính khiến Cron 15 phút/lần vượt giới hạn ghi/đọc KV hàng ngày của Cloudflare
+  const QUET_TOI_DA = 20; // giảm tiếp từ 40 → 20 vì bảng này tốn nhiều lượt gọi KV nhất (mỗi user còn kéo theo tối đa GIOI_HAN_BAN_BE_QUET_BXH lượt đọc bạn bè) — đây là nguyên nhân chính khiến Cron 15 phút/lần vượt giới hạn ghi/đọc KV hàng ngày của Cloudflare
   const ketQua = [];
   let daQuet = 0;
 
@@ -1447,7 +1447,7 @@ async function xuLyBangXepHang(env, url, ctx) {
 // 👥 BẠN BÈ — ghi nhận lượt mời qua link ref_, tra cứu cho tab Bạn bè
 // ==================================================
 const CAP_DAO_TOI_THIEU_TINH_BXH_MOI_BAN = 2; // người được mời phải đạt cấp đào (capDao) ≥ 2 mới được tính 1 lượt mời cho BXH "Đua Top Mời Bạn" — chặn tạo tài khoản ảo chỉ để farm điểm
-const GIOI_HAN_BAN_BE_QUET_BXH = 20; // giảm từ 40 → 20 bạn GẦN NHẤT/người khi tính BXH — nếu không giới hạn, 1 người mời được vài trăm bạn sẽ khiến việc tính BXH tốn hàng trăm lượt gọi KV riêng cho 1 user, dễ vượt giới hạn subrequest CŨNG NHƯ giới hạn ghi/đọc KV hàng ngày của Cloudflare
+const GIOI_HAN_BAN_BE_QUET_BXH = 10; // giảm tiếp từ 20 → 10 bạn GẦN NHẤT/người khi tính BXH — nếu không giới hạn, 1 người mời được vài trăm bạn sẽ khiến việc tính BXH tốn hàng trăm lượt gọi KV riêng cho 1 user, dễ vượt giới hạn subrequest CŨNG NHƯ giới hạn ghi/đọc KV hàng ngày của Cloudflare
 
 // Đếm số bạn đã mời ĐẠT ĐIỀU KIỆN (cấp đào ≥ CAP_DAO_TOI_THIEU_TINH_BXH_MOI_BAN) —
 // dùng riêng cho tính điểm BXH Mời Bạn, khác với số lượng hiển thị thô ở tab Bạn bè.
@@ -1837,7 +1837,10 @@ export default {
     return env.ASSETS.fetch(request);
   },
 
-  // Cron Trigger — làm mới cache bảng xếp hạng mỗi 15 phút (xem wrangler.toml: [triggers] crons)
+  // Cron Trigger — làm mới cache bảng xếp hạng (xem wrangler.toml: [triggers] crons).
+  // QUAN TRỌNG: nên đổi lịch cron trong wrangler.toml từ "*/15 * * * *" (15 phút)
+  // sang "*/30 * * * *" hoặc "0 * * * *" (30-60 phút) — bản thân cron này là nguồn
+  // ngốn lượt đọc KV lớn nhất trong toàn bộ app, không phụ thuộc số user thật.
   async scheduled(event, env, ctx) {
     ctx.waitUntil(lamMoiCacheBangXepHang(env));
   },

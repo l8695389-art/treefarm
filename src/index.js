@@ -1024,21 +1024,33 @@ const MUC_TOI_THIEU_KIEM_XU = 5000; // xu tối thiểu kiếm được TRONG M�
 
 // Đảm bảo user có mốc mùa giải khớp với mùa hiện tại — nếu chưa có hoặc
 // mùa đã đổi thì chụp lại (coin, số bạn bè) hiện tại làm mốc 0 của mùa mới.
-async function damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai) {
-  const moc = nguoiDung.mocMuaGiai;
-  if (moc && moc.so_mua === soMuaHienTai) return moc;
+// canBanBe: chỉ quét danh sách bạn bè (tốn nhiều lượt gọi KV — 1 lượt/bạn)
+// khi thực sự cần cho BXH "moi_ban". Khi tính BXH "kiem_xu" thì bỏ qua,
+// tránh vượt giới hạn subrequest của Worker khi quét nhiều user cùng lúc.
+async function damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai, canBanBe) {
+  let moc = nguoiDung.mocMuaGiai;
+  let doiThay = false;
 
-  const coinHienTai = nguoiDung.tongDaKiem != null ? nguoiDung.tongDaKiem : nguoiDung.coin || 0;
-  const banBeHienTai = await demBanBeHopLeChoBxh(env, uid);
+  if (!moc || moc.so_mua !== soMuaHienTai) {
+    const coinHienTai = nguoiDung.tongDaKiem != null ? nguoiDung.tongDaKiem : nguoiDung.coin || 0;
+    moc = { so_mua: soMuaHienTai, coin_goc: coinHienTai, ban_be_goc: null };
+    doiThay = true;
+  }
 
-  const mocMoi = { so_mua: soMuaHienTai, coin_goc: coinHienTai, ban_be_goc: banBeHienTai };
-  nguoiDung.mocMuaGiai = mocMoi;
-  await luuNguoiDung(env, uid, nguoiDung);
-  return mocMoi;
+  if (canBanBe && moc.ban_be_goc == null) {
+    moc.ban_be_goc = await demBanBeHopLeChoBxh(env, uid);
+    doiThay = true;
+  }
+
+  if (doiThay) {
+    nguoiDung.mocMuaGiai = moc;
+    await luuNguoiDung(env, uid, nguoiDung);
+  }
+  return moc;
 }
 
 async function tinhBangXepHangKiemXu(env, soMuaHienTai) {
-  const QUET_TOI_DA = 500; // giới hạn số user quét mỗi lần gọi, tránh vượt CPU time free plan
+  const QUET_TOI_DA = 200; // giới hạn số user quét mỗi lần gọi, tránh vượt giới hạn subrequest/CPU time
   const ketQua = [];
   let daQuet = 0;
 
@@ -1049,7 +1061,7 @@ async function tinhBangXepHangKiemXu(env, soMuaHienTai) {
     if (!nguoiDung) continue;
 
     const coinHienTai = nguoiDung.tongDaKiem != null ? nguoiDung.tongDaKiem : nguoiDung.coin || 0;
-    const moc = await damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai);
+    const moc = await damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai, false); // không cần dữ liệu bạn bè ở bảng này
     const daKiemTrongMua = Math.max(0, coinHienTai - moc.coin_goc);
     if (daKiemTrongMua < MUC_TOI_THIEU_KIEM_XU) continue;
 
@@ -1064,7 +1076,7 @@ async function tinhBangXepHangKiemXu(env, soMuaHienTai) {
 }
 
 async function tinhBangXepHangMoiBan(env, soMuaHienTai) {
-  const QUET_TOI_DA = 500;
+  const QUET_TOI_DA = 200; // thấp hơn bảng kiem_xu vì bảng này còn quét thêm danh sách bạn bè của từng user
   const ketQua = [];
   let daQuet = 0;
 
@@ -1076,7 +1088,7 @@ async function tinhBangXepHangMoiBan(env, soMuaHienTai) {
     if (!nguoiDung) continue;
 
     const banBeHienTai = await demBanBeHopLeChoBxh(env, uid);
-    const moc = await damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai);
+    const moc = await damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai, true);
     const moiTrongMua = Math.max(0, banBeHienTai - moc.ban_be_goc);
     if (moiTrongMua <= 0) continue;
 
@@ -1093,10 +1105,10 @@ async function tinhBangXepHangMoiBan(env, soMuaHienTai) {
 // Tính lại + ghi cache — được gọi bởi Cron Trigger mỗi 15 phút.
 async function lamMoiCacheBangXepHang(env, muaGiai) {
   const mg = muaGiai || (await layHoacTaoMuaGiai(env));
-  const [kiemXu, moiBan] = await Promise.all([
-    tinhBangXepHangKiemXu(env, mg.so),
-    tinhBangXepHangMoiBan(env, mg.so),
-  ]);
+  // Chạy tuần tự (không Promise.all) để tránh dồn quá nhiều lượt gọi KV
+  // đồng thời trong 1 request, dễ vượt giới hạn subrequest của Worker.
+  const kiemXu = await tinhBangXepHangKiemXu(env, mg.so);
+  const moiBan = await tinhBangXepHangMoiBan(env, mg.so);
   const duLieu = { so_mua: mg.so, kiem_xu: kiemXu, moi_ban: moiBan, cap_nhat_luc: Date.now() };
   await env.USERS.put(KEY_CACHE_BANG_XEP_HANG, JSON.stringify(duLieu));
   return duLieu;
@@ -1177,7 +1189,7 @@ async function xuLyBangXepHang(env, url) {
     } else {
       const nd = await layNguoiDung(env, uid);
       if (nd) {
-        const moc = await damBaoMocMuaGiai(env, uid, nd, muaGiai.so);
+        const moc = await damBaoMocMuaGiai(env, uid, nd, muaGiai.so, loai === "moi_ban");
         if (loai === "kiem_xu") {
           const coinHienTai = nd.tongDaKiem != null ? nd.tongDaKiem : nd.coin || 0;
           giaTriCuaToi = Math.max(0, coinHienTai - moc.coin_goc);

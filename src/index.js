@@ -644,7 +644,7 @@ async function xuLyXacNhanQuangCao(env, url) {
   await env.USERS.put(key, String(soLanMoi));
   await env.USERS.put(keyLanCuoi, String(now));
 
-  const soCoinCong = Number(env.THUONG_COIN_QUANG_CAO || 500); // nếu đã đặt biến môi trường THUONG_COIN_QUANG_CAO trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
+  const soCoinCong = Number(env.THUONG_COIN_QUANG_CAO || 100); // nếu đã đặt biến môi trường THUONG_COIN_QUANG_CAO trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
   const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, tongDaKiem: 0 };
   nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
   congCoin(nguoiDung, soCoinCong);
@@ -1050,7 +1050,7 @@ async function damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai, canBanBe) {
 }
 
 async function tinhBangXepHangKiemXu(env, soMuaHienTai) {
-  const QUET_TOI_DA = 150; // giới hạn số user quét mỗi lần gọi, tránh vượt giới hạn subrequest/CPU time
+  const QUET_TOI_DA = 100; // giảm từ 150 → 100 để giảm tải KV do Cron chạy định kỳ, tránh vượt giới hạn ghi/đọc hàng ngày
   const ketQua = [];
   let daQuet = 0;
 
@@ -1081,7 +1081,7 @@ async function tinhBangXepHangKiemXu(env, soMuaHienTai) {
 }
 
 async function tinhBangXepHangMoiBan(env, soMuaHienTai) {
-  const QUET_TOI_DA = 80; // thấp hơn hẳn bảng kiem_xu vì bảng này còn quét thêm danh sách bạn bè của từng user (tốn nhiều lượt gọi KV hơn nhiều)
+  const QUET_TOI_DA = 40; // giảm mạnh từ 80 → 40 vì bảng này tốn nhiều lượt gọi KV nhất (mỗi user còn kéo theo tối đa GIOI_HAN_BAN_BE_QUET_BXH lượt đọc bạn bè) — đây là nguyên nhân chính khiến Cron 15 phút/lần vượt giới hạn ghi/đọc KV hàng ngày của Cloudflare
   const ketQua = [];
   let daQuet = 0;
 
@@ -1281,7 +1281,7 @@ async function xuLyBangXepHang(env, url, ctx) {
 // 👥 BẠN BÈ — ghi nhận lượt mời qua link ref_, tra cứu cho tab Bạn bè
 // ==================================================
 const CAP_DAO_TOI_THIEU_TINH_BXH_MOI_BAN = 2; // người được mời phải đạt cấp đào (capDao) ≥ 2 mới được tính 1 lượt mời cho BXH "Đua Top Mời Bạn" — chặn tạo tài khoản ảo chỉ để farm điểm
-const GIOI_HAN_BAN_BE_QUET_BXH = 40; // chỉ kiểm tra tối đa 40 bạn GẦN NHẤT/người khi tính BXH — nếu không giới hạn, 1 người mời được vài trăm bạn sẽ khiến việc tính BXH tốn hàng trăm lượt gọi KV riêng cho 1 user, dễ vượt giới hạn subrequest của Worker và làm cả bảng xếp hạng lỗi
+const GIOI_HAN_BAN_BE_QUET_BXH = 20; // giảm từ 40 → 20 bạn GẦN NHẤT/người khi tính BXH — nếu không giới hạn, 1 người mời được vài trăm bạn sẽ khiến việc tính BXH tốn hàng trăm lượt gọi KV riêng cho 1 user, dễ vượt giới hạn subrequest CŨNG NHƯ giới hạn ghi/đọc KV hàng ngày của Cloudflare
 
 // Đếm số bạn đã mời ĐẠT ĐIỀU KIỆN (cấp đào ≥ CAP_DAO_TOI_THIEU_TINH_BXH_MOI_BAN) —
 // dùng riêng cho tính điểm BXH Mời Bạn, khác với số lượng hiển thị thô ở tab Bạn bè.

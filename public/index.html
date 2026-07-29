@@ -573,7 +573,7 @@
         <!-- Khối 1: Quảng cáo Monetag -->
         <div class="card highlight">
           <div class="task-title">🎬 Xem quảng cáo</div>
-          <div class="task-desc">Xem quảng cáo, nhận ngay +500 coin sau mỗi lần xem. Tối đa 20 lượt/ngày, cách nhau ít nhất 30 giây/lượt.</div>
+          <div class="task-desc">Xem quảng cáo, nhận ngay +100 coin sau mỗi lần xem. Tối đa 20 lượt/ngày, cách nhau ít nhất 30 giây/lượt.</div>
           <button id="btn-xem-qc" class="primary-btn" type="button">
             <span class="spinner"></span>
             <span class="btn-label">Xem quảng cáo</span>
@@ -2029,9 +2029,20 @@
       setupBangXepHangTab(tg);
       setupDaoTab(tg);
 
-      // Cập nhật định kỳ mỗi 3 giây — số dư, bảng xếp hạng, ví
+      // Cập nhật định kỳ mỗi 5–7 giây (ngẫu nhiên mỗi vòng) — số dư, bảng xếp
+      // hạng, ví. Dùng setTimeout tự lặp thay vì setInterval cố định để: (1)
+      // vòng sau luôn cách vòng trước ĐỦ 5-7s dù request trước có chậm hay
+      // không (setInterval không đảm bảo điều này); (2) rải đều thời điểm
+      // gọi giữa nhiều user thay vì tất cả cùng bấm nhịp, giúp giảm tải KV.
       const uid = tg?.initDataUnsafe?.user?.id;
-      setInterval(() => capNhatDinhKy(uid), 3000);
+      function lapCapNhatDinhKy() {
+        const doTreGiay = 5000 + Math.random() * 2000; // ngẫu nhiên 5000–7000ms
+        setTimeout(async () => {
+          await capNhatDinhKy(uid);
+          lapCapNhatDinhKy();
+        }, doTreGiay);
+      }
+      lapCapNhatDinhKy();
       document.addEventListener('visibilitychange', () => {
         if (!document.hidden) capNhatDinhKy(uid);
       });

@@ -1046,7 +1046,7 @@
     // ────────────────────────────────────────────────────────────
     const BXH_PHU_DE = {
       'kiem-xu': 'Xếp theo xu kiếm được trong mùa',
-      'moi-ban': 'Xếp theo số bạn mời được trong mùa',
+      'moi-ban': 'Xếp theo số bạn mời (đạt cấp đào ≥2) trong mùa',
     };
     let bxhLoaiHienTai = 'kiem-xu';
     let bxhDemNguocTimer = null;
@@ -1152,7 +1152,7 @@
 
       const note = document.getElementById('bxh-reward-note');
       note.textContent = bxhLoaiHienTai === 'moi-ban'
-        ? 'Mời không đạt mốc tối thiểu sẽ giảm 50% thưởng. Thưởng tự cộng vào ví khi hết mùa.'
+        ? 'Người được mời phải đạt cấp đào ≥2 mới tính 1 lượt mời. Mời không đạt mốc tối thiểu sẽ giảm 50% thưởng. Thưởng tự cộng vào ví khi hết mùa.'
         : 'Hết mùa thưởng xu tự cộng vào ví.';
     }
 

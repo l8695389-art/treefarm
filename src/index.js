@@ -373,6 +373,7 @@ async function xuLyStart(env, message) {
 
   if (laNguoiDungMoi && refUid) {
     await ghiNhanBanBeMoi(env, refUid, {
+      uid,
       ten: `${message.from.first_name} ${message.from.last_name || ""}`.trim() || "Người dùng",
       thamGiaLuc: Date.now(),
     });
@@ -1028,8 +1029,7 @@ async function damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai) {
   if (moc && moc.so_mua === soMuaHienTai) return moc;
 
   const coinHienTai = nguoiDung.tongDaKiem != null ? nguoiDung.tongDaKiem : nguoiDung.coin || 0;
-  const rawBanBe = await env.USERS.get(TIEN_TO_BAN_BE + uid);
-  const banBeHienTai = rawBanBe ? JSON.parse(rawBanBe).length : 0;
+  const banBeHienTai = await demBanBeHopLeChoBxh(env, uid);
 
   const mocMoi = { so_mua: soMuaHienTai, coin_goc: coinHienTai, ban_be_goc: banBeHienTai };
   nguoiDung.mocMuaGiai = mocMoi;
@@ -1075,8 +1075,7 @@ async function tinhBangXepHangMoiBan(env, soMuaHienTai) {
     const nguoiDung = await layNguoiDung(env, uid);
     if (!nguoiDung) continue;
 
-    const rawBanBe = await env.USERS.get(TIEN_TO_BAN_BE + uid);
-    const banBeHienTai = rawBanBe ? JSON.parse(rawBanBe).length : 0;
+    const banBeHienTai = await demBanBeHopLeChoBxh(env, uid);
     const moc = await damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai);
     const moiTrongMua = Math.max(0, banBeHienTai - moc.ban_be_goc);
     if (moiTrongMua <= 0) continue;
@@ -1173,8 +1172,7 @@ async function xuLyBangXepHang(env, url) {
           const coinHienTai = nd.tongDaKiem != null ? nd.tongDaKiem : nd.coin || 0;
           giaTriCuaToi = Math.max(0, coinHienTai - moc.coin_goc);
         } else {
-          const rawBanBe = await env.USERS.get(TIEN_TO_BAN_BE + uid);
-          const banBeHienTai = rawBanBe ? JSON.parse(rawBanBe).length : 0;
+          const banBeHienTai = await demBanBeHopLeChoBxh(env, uid);
           giaTriCuaToi = Math.max(0, banBeHienTai - moc.ban_be_goc);
         }
       }
@@ -1214,6 +1212,22 @@ async function xuLyBangXepHang(env, url) {
 // ==================================================
 // 👥 BẠN BÈ — ghi nhận lượt mời qua link ref_, tra cứu cho tab Bạn bè
 // ==================================================
+const CAP_DAO_TOI_THIEU_TINH_BXH_MOI_BAN = 2; // người được mời phải đạt cấp đào (capDao) ≥ 2 mới được tính 1 lượt mời cho BXH "Đua Top Mời Bạn" — chặn tạo tài khoản ảo chỉ để farm điểm
+
+// Đếm số bạn đã mời ĐẠT ĐIỀU KIỆN (cấp đào ≥ CAP_DAO_TOI_THIEU_TINH_BXH_MOI_BAN) —
+// dùng riêng cho tính điểm BXH Mời Bạn, khác với số lượng hiển thị thô ở tab Bạn bè.
+async function demBanBeHopLeChoBxh(env, uid) {
+  const raw = await env.USERS.get(TIEN_TO_BAN_BE + uid);
+  const danhSach = raw ? JSON.parse(raw) : [];
+  let dem = 0;
+  for (const nb of danhSach) {
+    if (!nb.uid) continue; // bản ghi cũ trước khi lưu uid — không thể kiểm tra cấp, bỏ qua
+    const nguoiBanMoi = await layNguoiDung(env, nb.uid);
+    if (nguoiBanMoi && (nguoiBanMoi.capDao || 1) >= CAP_DAO_TOI_THIEU_TINH_BXH_MOI_BAN) dem += 1;
+  }
+  return dem;
+}
+
 async function ghiNhanBanBeMoi(env, refUid, banMoi) {
   const key = TIEN_TO_BAN_BE + refUid;
   const raw = await env.USERS.get(key);

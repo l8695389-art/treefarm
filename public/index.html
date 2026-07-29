@@ -2054,7 +2054,7 @@
       // nên không cần hỏi server dồn dập để giữ cảm giác real-time nữa.)
       const uid = tg?.initDataUnsafe?.user?.id;
       function lapCapNhatDinhKy() {
-        const doTreGiay = 20000 + Math.random() * 10000; // ngẫu nhiên 20000–30000ms
+        const doTreGiay = 45000 + Math.random() * 15000; // ngẫu nhiên 45000–60000ms — giãn ra từ 20-30s để chịu được nhiều user online cùng lúc hơn trên free plan (100k đọc KV/ngày)
         setTimeout(async () => {
           await capNhatDinhKy(uid);
           lapCapNhatDinhKy();

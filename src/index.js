@@ -221,6 +221,7 @@ async function congHoaHongGioiThieu(env, uid, soCoinGoc) {
     if (hoaHong > 0) {
       nguoiCapTren.coin = (nguoiCapTren.coin || 0) + hoaHong;
       nguoiCapTren.tongDaKiem = (nguoiCapTren.tongDaKiem || 0) + hoaHong;
+      nguoiCapTren.coinTuBanBe = (nguoiCapTren.coinTuBanBe || 0) + hoaHong; // cộng dồn riêng "coin kiếm được từ bạn bè", hiển thị ở tab Bạn bè
       await luuNguoiDung(env, uidCapTren, nguoiCapTren);
     }
     uidHienTai = uidCapTren;
@@ -1221,13 +1222,14 @@ async function ghiNhanBanBeMoi(env, refUid, banMoi) {
   await env.USERS.put(key, JSON.stringify(danhSach.slice(0, 200))); // giới hạn 200 bản ghi gần nhất
 }
 
-// +10.000 coin cho người mời khi mời được 1 người bạn mới tham gia thành công
+// +80 coin cho người mời khi mời được 1 người bạn mới tham gia thành công
 // (chỉ tính 1 lần/người được mời, do chỉ gọi khi laNguoiDungMoi === true)
 async function congThuongMoiBanThanhCong(env, refUid) {
   const nguoiGioiThieu = await layNguoiDung(env, refUid);
   if (!nguoiGioiThieu) return;
   nguoiGioiThieu.coin = (nguoiGioiThieu.coin || 0) + THUONG_MOI_BAN_THANH_CONG;
   nguoiGioiThieu.tongDaKiem = (nguoiGioiThieu.tongDaKiem || 0) + THUONG_MOI_BAN_THANH_CONG;
+  nguoiGioiThieu.coinTuBanBe = (nguoiGioiThieu.coinTuBanBe || 0) + THUONG_MOI_BAN_THANH_CONG; // cộng dồn riêng "coin kiếm được từ bạn bè", hiển thị ở tab Bạn bè
   await luuNguoiDung(env, refUid, nguoiGioiThieu);
 }
 
@@ -1237,9 +1239,11 @@ async function xuLyThongTinBanBe(env, url) {
 
   const raw = await env.USERS.get(TIEN_TO_BAN_BE + uid);
   const danhSach = raw ? JSON.parse(raw) : [];
+  const nguoiDung = await layNguoiDung(env, uid);
 
   return Response.json({
     so_luong: danhSach.length,
+    coin_tu_ban_be: nguoiDung ? nguoiDung.coinTuBanBe || 0 : 0, // tổng coin kiếm được từ bạn bè (thưởng mời thành công + hoa hồng nhiều tầng)
     danh_sach: danhSach.map((nb) => ({ ten: nb.ten, tham_gia_luc: nb.thamGiaLuc })),
   });
 }

@@ -1,6 +1,7 @@
 import { telegramApi, cho } from "./telegram.js";
 
 const KEY_DANH_SACH_ADMIN = "danh_sach_admin";
+const KEY_BAO_TRI = "che-do-bao-tri"; // giá trị "1" = đang bảo trì (chặn toàn bộ miniapp + API), khác "1" = hoạt động bình thường
 const TIEN_TO_USER = "user:";
 const TIEN_TO_QC_SO_LAN_NGAY = "qc-so-lan-ngay:";
 const QC_GIOI_HAN_NGAY = 20;
@@ -174,6 +175,22 @@ async function laAdmin(env, uid) {
 }
 
 // ==================================================
+// 🛠️ CHẾ ĐỘ BẢO TRÌ — admin bật/tắt qua lệnh Telegram /baotri, không cần
+// deploy lại. Khi bật, toàn bộ miniapp + API (trừ webhook Telegram và
+// trang quản lý rút tiền) sẽ trả về màn hình "Đang bảo trì" thay vì hoạt
+// động bình thường — hữu ích khi cần tạm dừng app (vd hết quota KV, đang
+// vá lỗi gấp) mà không muốn user thấy lỗi tràn lan.
+// ==================================================
+async function dangBaoTri(env) {
+  const gt = await env.ADMINS.get(KEY_BAO_TRI);
+  return gt === "1";
+}
+
+async function datCheDoBaoTri(env, bat) {
+  await env.ADMINS.put(KEY_BAO_TRI, bat ? "1" : "0");
+}
+
+// ==================================================
 // 👤 DỮ LIỆU NGƯỜI DÙNG — KV thay cho FILE_NGUOI_DUNG (json)
 // ==================================================
 async function layNguoiDung(env, uid) {
@@ -337,6 +354,33 @@ async function xuLyDsAdmin(env, message) {
   return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text });
 }
 
+// /baotri bat | /baotri tat | /baotri (xem trạng thái hiện tại)
+async function xuLyBaoTri(env, message) {
+  if (!(await laAdmin(env, message.from.id))) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "❌ Bạn không có quyền!" });
+  }
+
+  const hanhDong = (message.text.trim().split(/\s+/)[1] || "").toLowerCase();
+
+  if (hanhDong === "bat" || hanhDong === "on") {
+    await datCheDoBaoTri(env, true);
+    return telegramApi(env, "sendMessage", {
+      chat_id: message.chat.id,
+      text: "🛠️ Đã BẬT chế độ bảo trì.\nToàn bộ user sẽ thấy màn hình \"Đang bảo trì\" khi mở app.\nDùng /baotri tat để tắt khi xong.",
+    });
+  }
+  if (hanhDong === "tat" || hanhDong === "off") {
+    await datCheDoBaoTri(env, false);
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "✅ Đã TẮT chế độ bảo trì. App hoạt động bình thường trở lại." });
+  }
+
+  const dangBat = await dangBaoTri(env);
+  return telegramApi(env, "sendMessage", {
+    chat_id: message.chat.id,
+    text: `ℹ️ Chế độ bảo trì hiện đang: ${dangBat ? "🛠️ BẬT" : "✅ TẮT"}\n\nDùng: /baotri bat  hoặc  /baotri tat`,
+  });
+}
+
 // ==================================================
 // 🚪 /start
 // ==================================================
@@ -449,6 +493,8 @@ async function xuLyUpdate(env, update) {
         return xuLyXoaAdmin(env, message);
       case "/dsadmin":
         return xuLyDsAdmin(env, message);
+      case "/baotri":
+        return xuLyBaoTri(env, message);
       case "/gui":
         return xuLyGuiThongBao(env, message);
       default:
@@ -798,6 +844,92 @@ async function xuLyResetNhiemVu(env, url) {
 
   await xoaNhiemVuHienTai(env, uid);
   return Response.json({ thanh_cong: true });
+}
+
+// Màn hình "Đang bảo trì" — trả về khi chế độ bảo trì đang BẬT, dùng chung
+// bảng màu tối với miniapp chính để nhất quán trải nghiệm.
+function trangBaoTri() {
+  return new Response(
+    `<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Đang bảo trì</title>
+<style>
+  :root {
+    --tg-blue: #229ED9;
+    --tg-dark: #0A0E1A;
+    --tg-surface: #0F1629;
+    --tg-border: rgba(34, 158, 217, 0.18);
+    --tg-text: #E8EDF5;
+    --tg-muted: #5A7A99;
+    --tg-glow: rgba(34, 158, 217, 0.35);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; min-height: 100%;
+    background: var(--tg-dark);
+    font-family: -apple-system, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+    color: var(--tg-text);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .card {
+    width: 100%; max-width: 380px;
+    background: var(--tg-surface);
+    border: 1px solid var(--tg-border);
+    border-radius: 24px;
+    padding: 40px 30px;
+    text-align: center;
+    box-shadow: 0 0 40px rgba(34, 158, 217, 0.08);
+  }
+  .icon-wrap {
+    width: 76px; height: 76px; border-radius: 50%;
+    background: radial-gradient(circle at 40% 38%, rgba(245,185,66,0.18), transparent 70%);
+    border: 1.5px solid rgba(245,185,66,0.3);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 34px;
+    margin: 0 auto 22px;
+    animation: lac 2.4s ease-in-out infinite;
+  }
+  @keyframes lac {
+    0%, 100% { transform: rotate(-6deg); }
+    50% { transform: rotate(6deg); }
+  }
+  h1 { font-size: 21px; font-weight: 700; margin-bottom: 12px; letter-spacing: -0.01em; }
+  p { color: var(--tg-muted); font-size: 14px; line-height: 1.7; margin-bottom: 22px; }
+  .dots span {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--tg-blue); margin: 0 3px;
+    animation: bounce 1.2s ease-in-out infinite; opacity: 0.4;
+  }
+  .dots span:nth-child(2) { animation-delay: 0.2s; }
+  .dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce {
+    0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+    40% { transform: translateY(-6px); opacity: 1; }
+  }
+  .badge {
+    display: inline-flex; align-items: center; gap: 7px; margin-top: 20px;
+    padding: 9px 18px; border-radius: 40px;
+    background: rgba(34,158,217,0.08); border: 1px solid var(--tg-border);
+    font-size: 12.5px; color: var(--tg-blue); font-weight: 600;
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon-wrap">🛠️</div>
+    <h1>Đang bảo trì</h1>
+    <p>Vua Cày Tiền đang được nâng cấp để phục vụ bạn tốt hơn.<br/>Vui lòng quay lại sau ít phút nhé!</p>
+    <div class="dots"><span></span><span></span><span></span></div>
+    <div class="badge">💰 Coin và dữ liệu của bạn vẫn an toàn</div>
+  </div>
+</body>
+</html>`,
+    { headers: { "Content-Type": "text/html; charset=utf-8" } }
+  );
 }
 
 function trangHtmlMa({ icon, tieuDe, ma, moTa, ghiChu }) {
@@ -1613,6 +1745,18 @@ export default {
     // Web admin duyệt rút tiền — POST, xác thực bằng header X-Admin-Secret
     if (request.method === "POST" && url.pathname === "/admin/rut-tien/xu-ly") {
       return xuLyXuLyRutTienAdmin(env, request);
+    }
+
+    // 🛠️ Chế độ bảo trì — nếu đang BẬT (bật/tắt qua lệnh Telegram /baotri,
+    // xem xuLyBaoTri), chặn TOÀN BỘ request còn lại (cả trang miniapp lẫn
+    // mọi API), CHỈ trừ trang quản lý rút tiền (để admin vẫn duyệt được)
+    // và /suc-khoe (để hệ thống giám sát uptime không báo động nhầm).
+    if (
+      url.pathname !== "/admin/rut-tien/danh-sach" &&
+      url.pathname !== "/suc-khoe" &&
+      (await dangBaoTri(env))
+    ) {
+      return trangBaoTri();
     }
 
     if (request.method === "GET") {

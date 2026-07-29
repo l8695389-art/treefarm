@@ -8,11 +8,11 @@ binding = "ASSETS"
 
 [[kv_namespaces]]
 binding = "ADMINS"
-id = "64b15fa4516246ee88938ade841666b8"
+id = "2a64bba3ee4c4f6f9e39c180aef8f430"
 
 [[kv_namespaces]]
 binding = "USERS"
-id = "2dd6c260cd6543c086663b1ea0ca45f3"
+id = "91b472dddf924a89910d82f4a719c930"
 
 # Lịch sử Durable Object IpRegistry — đã tạo ở v1 (khi còn chống trùng IP),
 # giờ xóa hẳn ở v2. Cloudflare bắt buộc phải khai báo tường minh bước xóa

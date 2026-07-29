@@ -990,33 +990,31 @@
     // xuống nền (document.hidden) để đỡ tốn pin/mạng, chạy lại ngay khi
     // quay lại app.
     // ────────────────────────────────────────────────────────────
+    // ĐÃ TỐI ƯU: trước đây mỗi vòng poll gọi /thong-tin-vi RIÊNG để lấy coin,
+    // rồi lại gọi thêm API của tab đang mở (API đó cũng đã trả về coin rồi
+    // qua hienThiCoin() bên trong từng hàm __lamMoi...) → gọi trùng 2 API
+    // cho cùng 1 việc. Giờ chỉ gọi đúng 1 API của tab đang mở, giảm ngay
+    // ~50% số lượt đọc KV mỗi vòng poll cho mỗi user online.
     async function capNhatDinhKy(uid) {
       if (!uid || document.hidden) return;
-
-      try {
-        const tt = await layThongTinVi(uid);
-        if (tt) { hienThiCoin(tt.coin); }
-      } catch (err) {
-        // lỗi mạng tạm thời — bỏ qua, vòng lặp 5s sau sẽ tự thử lại
-      }
 
       const tabDangMo = document.querySelector('.tab-panel.active');
       if (!tabDangMo) return;
 
-      if (tabDangMo.id === 'tab-bang-xep-hang' && window.__lamMoiBXH) {
-        window.__lamMoiBXH();
-      }
-      if (tabDangMo.id === 'tab-vi' && window.__lamMoiVi) {
-        window.__lamMoiVi();
-      }
-      if (tabDangMo.id === 'tab-ban-be' && window.__lamMoiBanBe) {
-        window.__lamMoiBanBe();
-      }
-      if (tabDangMo.id === 'tab-nhiem-vu' && window.__lamMoiDiemDanh) {
-        window.__lamMoiDiemDanh();
-      }
-      if (tabDangMo.id === 'tab-trang-chu' && window.__lamMoiDao) {
-        window.__lamMoiDao();
+      try {
+        if (tabDangMo.id === 'tab-bang-xep-hang' && window.__lamMoiBXH) {
+          await window.__lamMoiBXH();
+        } else if (tabDangMo.id === 'tab-vi' && window.__lamMoiVi) {
+          await window.__lamMoiVi();
+        } else if (tabDangMo.id === 'tab-ban-be' && window.__lamMoiBanBe) {
+          await window.__lamMoiBanBe();
+        } else if (tabDangMo.id === 'tab-nhiem-vu' && window.__lamMoiDiemDanh) {
+          await window.__lamMoiDiemDanh();
+        } else if (tabDangMo.id === 'tab-trang-chu' && window.__lamMoiDao) {
+          await window.__lamMoiDao();
+        }
+      } catch (err) {
+        // lỗi mạng tạm thời — bỏ qua, vòng lặp sau sẽ tự thử lại
       }
     }
 
@@ -1905,6 +1903,7 @@
     // thời gian thực, cấp độ 1-20 tăng tốc độ đào theo XP tích lũy).
     // ────────────────────────────────────────────────────────────
     let daoCountdownTimer = null;
+    let daoUocTinhTimer = null; // nội suy coin đào mỗi giây phía client — không gọi server
 
     function renderDao(tt) {
       const capTxt = document.getElementById('dao-cap-txt');
@@ -1930,6 +1929,7 @@
       }
 
       clearInterval(daoCountdownTimer);
+      clearInterval(daoUocTinhTimer);
 
       if (tt.dang_dao) {
         btn.disabled = true;
@@ -1944,6 +1944,7 @@
           if (conLai <= 0) {
             countdownEl.textContent = 'Đang hoàn tất phiên đào...';
             clearInterval(daoCountdownTimer);
+            clearInterval(daoUocTinhTimer);
             if (window.__lamMoiDao) window.__lamMoiDao();
             return;
           }
@@ -1951,6 +1952,20 @@
         };
         capNhatCountdown();
         daoCountdownTimer = setInterval(capNhatCountdown, 1000);
+
+        // Ước tính coin tăng dần MỖI GIÂY chỉ bằng phép tính cục bộ (tốc độ
+        // đào server đã cấp sẵn), không gọi thêm bất kỳ request nào. Số coin
+        // THẬT vẫn do server chốt ở lần đồng bộ kế tiếp (xem xuLyCreditDaoNeuCo
+        // trong index.js) — nên không thể gian lận qua bước ước tính này,
+        // đây chỉ là hiệu ứng hiển thị mượt hơn giữa các lần đồng bộ thật.
+        const coinGocUocTinh = tt.coin;
+        const tocDoMoiGiay = tt.toc_do_dao_moi_gio / 3600;
+        const mocThoiGianGoc = Date.now();
+        daoUocTinhTimer = setInterval(() => {
+          const giayTroi = (Date.now() - mocThoiGianGoc) / 1000;
+          const coinUocTinh = Math.floor(coinGocUocTinh + giayTroi * tocDoMoiGiay);
+          hienThiCoin(coinUocTinh);
+        }, 1000);
       } else {
         btn.disabled = false;
         btn.classList.remove('dang-dao');
@@ -2029,14 +2044,17 @@
       setupBangXepHangTab(tg);
       setupDaoTab(tg);
 
-      // Cập nhật định kỳ mỗi 5–7 giây (ngẫu nhiên mỗi vòng) — số dư, bảng xếp
+      // Cập nhật định kỳ mỗi 20–30 giây (ngẫu nhiên mỗi vòng) — số dư, bảng xếp
       // hạng, ví. Dùng setTimeout tự lặp thay vì setInterval cố định để: (1)
-      // vòng sau luôn cách vòng trước ĐỦ 5-7s dù request trước có chậm hay
+      // vòng sau luôn cách vòng trước ĐỦ 20-30s dù request trước có chậm hay
       // không (setInterval không đảm bảo điều này); (2) rải đều thời điểm
       // gọi giữa nhiều user thay vì tất cả cùng bấm nhịp, giúp giảm tải KV.
+      // (Khoảng poll được giãn ra so với trước vì phần "coin tăng mượt mỗi
+      // giây" giờ do client tự nội suy — xem daoUocTinhTimer trong renderDao —
+      // nên không cần hỏi server dồn dập để giữ cảm giác real-time nữa.)
       const uid = tg?.initDataUnsafe?.user?.id;
       function lapCapNhatDinhKy() {
-        const doTreGiay = 5000 + Math.random() * 2000; // ngẫu nhiên 5000–7000ms
+        const doTreGiay = 20000 + Math.random() * 10000; // ngẫu nhiên 20000–30000ms
         setTimeout(async () => {
           await capNhatDinhKy(uid);
           lapCapNhatDinhKy();

@@ -23,20 +23,20 @@ const KEY_CACHE_BANG_XEP_HANG = "cache-bang-xep-hang"; // JSON { kiem_xu, moi_ba
 const KEY_MUA_GIAI = "mua-giai-bxh-hien-tai"; // JSON { bat_dau, ket_thuc } — mùa giải BXH hiện tại, tự mở mùa mới khi hết hạn
 const MUA_GIAI_SO_NGAY = 7; // độ dài 1 mùa giải BXH (ngày)
 const TOP_NHAN_THUONG = 10; // chỉ Top 10 mỗi bảng xếp hạng mới nhận thưởng khi kết thúc mùa giải (admin trao thủ công, giống quy trình duyệt rút tiền)
-const PHAN_THUONG_KIEM_XU = [100000, 60000, 40000, 20000, 20000, 10000, 10000, 10000, 10000, 10000]; // coin thưởng hạng 1→10, BXH "Đua Top Xu"
+const PHAN_THUONG_KIEM_XU = [10000, 5000, 2500, 2000, 2000, 2000, 2000, 2000, 2000, 2000]; // coin thưởng hạng 1→10, BXH "Đua Top Xu"
 const PHAN_THUONG_MOI_BAN = [
-  // coin thưởng hạng 1→10, BXH "Đua Top Mời Bạn" — mỗi bậc có mốc số bạn tối thiểu (can) riêng;
-  // đạt hạng nhưng chưa đủ mốc thì chỉ nhận 50% thưởng (xem tinhPhanThuong()).
-  { coin: 1550000, can: 10 },
-  { coin: 1030000, can: 5 },
-  { coin: 520000, can: 5 },
-  { coin: 255000, can: 2 },
-  { coin: 255000, can: 2 },
-  { coin: 255000, can: 2 },
-  { coin: 255000, can: 2 },
-  { coin: 255000, can: 2 },
-  { coin: 255000, can: 2 },
-  { coin: 255000, can: 2 },
+  // coin thưởng hạng 1→10, BXH "Đua Top Mời Bạn" — bằng 1,5 lần thưởng "Đua Top Xu" cùng hạng.
+  // Mỗi bậc có mốc số bạn tối thiểu (can) riêng; đạt hạng nhưng chưa đủ mốc thì chỉ nhận 50% thưởng (xem tinhPhanThuong()).
+  { coin: 15000, can: 10 },
+  { coin: 7500, can: 5 },
+  { coin: 3750, can: 5 },
+  { coin: 3000, can: 2 },
+  { coin: 3000, can: 2 },
+  { coin: 3000, can: 2 },
+  { coin: 3000, can: 2 },
+  { coin: 3000, can: 2 },
+  { coin: 3000, can: 2 },
+  { coin: 3000, can: 2 },
 ];
 const TIEN_TO_DIEM_DANH = "diem-danh:"; // diem-danh:{uid} — JSON { chuoi_hien_tai, ngay_cuoi }
 const THUONG_DIEM_DANH = [300, 500, 800, 1200, 1600, 2200, 3000]; // coin thưởng theo ngày 1→7 trong chu kỳ điểm danh, lặp lại sau ngày 7

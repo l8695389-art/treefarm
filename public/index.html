@@ -626,6 +626,12 @@
           <div class="balance-sub">người bạn</div>
         </div>
 
+        <div class="card highlight" style="text-align:center;padding:20px;">
+          <div class="card-label">🪙 Coin đã kiếm được từ bạn bè</div>
+          <div class="dao-status-coin" id="ban-be-coin-kiem-duoc" style="font-size:26px;">0</div>
+          <div class="balance-sub">Gồm thưởng mời thành công + hoa hồng nhiều tầng</div>
+        </div>
+
         <div class="card">
           <div class="card-label">🔗 Link mời bạn bè</div>
           <div class="card-value mono" id="ban-be-link" style="margin-bottom:14px;">—</div>
@@ -1673,6 +1679,7 @@
         const tt = await layThongTinBanBe(uid);
         if (!tt) return;
         document.getElementById('ban-be-so-luong').textContent = tt.so_luong || 0;
+        document.getElementById('ban-be-coin-kiem-duoc').textContent = (tt.coin_tu_ban_be || 0).toLocaleString('vi-VN');
         renderDanhSachBanBe(tt.danh_sach);
       }
       window.__lamMoiBanBe = lamMoiBanBe;

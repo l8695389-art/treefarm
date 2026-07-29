@@ -27,7 +27,7 @@ deleted_classes = ["IpRegistry"]
 
 # Cron Trigger — làm mới cache bảng xếp hạng mỗi 15 phút
 [triggers]
-crons = ["*/60 * * * *"]
+crons = ["0 */1 * * *"]
 
 [vars]
 CHU_SO_HUU = "7055595466"

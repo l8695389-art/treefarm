@@ -50,7 +50,7 @@ const TY_LE_HOA_HONG_GIOI_THIEU = [0.04, 0.02, 0.01]; // % hoa hồng nhiều t�
 // sẽ được credit phần coin phát sinh kể từ lần poll trước). Tốc độ đào cơ
 // bản 500 coin/giờ, tăng 10%/cấp theo hệ thống cấp độ (tối đa cấp 20).
 // ==================================================
-const COIN_DAO_MOI_GIO = 15; // coin/giờ ở cấp 1 (chưa cộng bonus) — đã giảm ~15 lần so với bản gốc để kéo dài thời gian tích lũy tới mức rút tối thiểu
+const COIN_DAO_MOI_GIO = 150; // coin/giờ ở cấp 1 (chưa cộng bonus)
 const THOI_GIAN_DAO_MS = 4 * 60 * 60 * 1000; // 1 phiên đào tối đa 4 giờ liên tục
 const CAP_DAO_TOI_DA = 20;
 const TANG_TOC_DO_MOI_CAP = 0.1; // +10% tốc độ đào cho mỗi cấp trên cấp 1

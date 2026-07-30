@@ -25,7 +25,7 @@ id = "91b472dddf924a89910d82f4a719c930"
 [[d1_databases]]
 binding = "DB"
 database_name = "vuacaytien-db"
-database_id = "DAN_DATABASE_ID_O_DAY_SAU_KHI_CHAY_WRANGLER_D1_CREATE"
+database_id = "80c9a3a0-6620-47c5-bf75-7e41ca582e14"
 
 # Lịch sử Durable Object IpRegistry — đã tạo ở v1 (khi còn chống trùng IP),
 # giờ xóa hẳn ở v2. Cloudflare bắt buộc phải khai báo tường minh bước xóa

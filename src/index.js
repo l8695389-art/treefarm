@@ -327,10 +327,14 @@ async function ghiLogVaThongBao(env, message, noiDungThem = "") {
 
   await telegramApi(env, "sendMessage", { chat_id: env.NHOM_LOG, text: logText });
   if (!message.text) {
-    await telegramApi(env, "forwardMessage", {
-      chat_id: env.NHOM_LOG,
-      from_chat_id: message.chat.id,
-      message_id: message.message_id,
+    try {
+    await telegramApi(env, "sendMessage", { chat_id: env.NHOM_LOG, text: logText });
+    if (!message.text) {
+      await telegramApi(env, "forwardMessage", { chat_id: env.NHOM_LOG, from_chat_id: message.chat.id, message_id: message.message_id });
+    }
+  } catch (e) {
+    console.error("Lỗi gửi log vào NHOM_LOG:", e);
+                                            }
     });
   }
 }

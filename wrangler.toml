@@ -10,9 +10,22 @@ binding = "ASSETS"
 binding = "ADMINS"
 id = "2a64bba3ee4c4f6f9e39c180aef8f430"
 
+# USERS giờ chỉ còn giữ tai-khoan-nhan:{uid} — mọi thứ khác (user:*, ban-be:*,
+# giao-dich-rut:*, nhiemvu:*, diem-danh:*, các counter *-so-lan-ngay:*,
+# mua-giai-bxh-hien-tai) đã chuyển sang D1 (binding DB bên dưới).
 [[kv_namespaces]]
 binding = "USERS"
 id = "91b472dddf924a89910d82f4a719c930"
+
+# D1 — thay KV cho dữ liệu ghi nhiều (user, giao dịch rút, nhiệm vụ, điểm
+# danh, counters ngày, mùa giải BXH). Tạo DB trước khi deploy:
+#   npx wrangler d1 create vuacaytien-db
+#   npx wrangler d1 execute vuacaytien-db --file=./schema.sql --remote
+# rồi dán database_id do lệnh create trả về vào đây.
+[[d1_databases]]
+binding = "DB"
+database_name = "vuacaytien-db"
+database_id = "DAN_DATABASE_ID_O_DAY_SAU_KHI_CHAY_WRANGLER_D1_CREATE"
 
 # Lịch sử Durable Object IpRegistry — đã tạo ở v1 (khi còn chống trùng IP),
 # giờ xóa hẳn ở v2. Cloudflare bắt buộc phải khai báo tường minh bước xóa
@@ -25,7 +38,9 @@ new_sqlite_classes = ["IpRegistry"]
 tag = "v2"
 deleted_classes = ["IpRegistry"]
 
-# Cron Trigger — làm mới cache bảng xếp hạng mỗi 15 phút
+# Cron Trigger — làm mới cache bảng xếp hạng mỗi giờ (đã hạ từ 15 phút xuống
+# 1 giờ trước đó — đây vẫn là nguồn ngốn đọc KV/D1 lớn nhất, không phụ thuộc
+# số user thật).
 [triggers]
 crons = ["0 */1 * * *"]
 
@@ -34,7 +49,7 @@ CHU_SO_HUU = "7055595466"
 NHOM_LOG = "@nhomlogbot"
 LINK_MINIAPP = "https://c.vuacaytienx.workers.dev/"
 LINK_ANH = "https://i.ibb.co/G30BjPLs/file-000000000740820bae9353d842911d28.png"
-# THUONG_COIN_QUANG_CAO (mặc định 5000) và THUONG_COIN_NHIEM_VU (mặc định 25000)
+# THUONG_COIN_QUANG_CAO (mặc định 350) và THUONG_COIN_NHIEM_VU (mặc định 2000)
 # có thể khai báo ở đây nếu muốn ghi đè mặc định trong code.
 
 # Secrets — set qua Dashboard: Settings > Variables and secrets

@@ -189,7 +189,14 @@ async function layDanhSachAdmin(env) {
   const raw = await env.ADMINS.get(KEY_DANH_SACH_ADMIN);
   if (raw) return JSON.parse(raw);
   const macDinh = [env.CHU_SO_HUU];
-  await env.ADMINS.put(KEY_DANH_SACH_ADMIN, JSON.stringify(macDinh));
+  // Không để việc ghi KV thất bại (vd hết quota put()/ngày) làm crash toàn
+  // bộ xử lý tin nhắn — nếu ghi lỗi, vẫn trả về danh sách mặc định để bot
+  // tiếp tục hoạt động, chỉ là lần sau sẽ thử ghi lại.
+  try {
+    await env.ADMINS.put(KEY_DANH_SACH_ADMIN, JSON.stringify(macDinh));
+  } catch (e) {
+    console.error("Không ghi được danh_sach_admin vào KV:", e);
+  }
   return macDinh;
 }
 
@@ -1286,7 +1293,11 @@ async function lamMoiCacheBangXepHang(env, muaGiai) {
   const kiemXu = await tinhBangXepHangKiemXu(env, mg.so);
   const moiBan = await tinhBangXepHangMoiBan(env, mg.so);
   const duLieu = { so_mua: mg.so, kiem_xu: kiemXu, moi_ban: moiBan, cap_nhat_luc: Date.now() };
-  await env.USERS.put(KEY_CACHE_BANG_XEP_HANG, JSON.stringify(duLieu));
+  try {
+    await env.USERS.put(KEY_CACHE_BANG_XEP_HANG, JSON.stringify(duLieu));
+  } catch (e) {
+    console.error("Không ghi được cache-bang-xep-hang vào KV (có thể hết quota put()/ngày):", e);
+  }
   return duLieu;
 }
 

@@ -334,8 +334,6 @@ async function ghiLogVaThongBao(env, message, noiDungThem = "") {
     }
   } catch (e) {
     console.error("Lỗi gửi log vào NHOM_LOG:", e);
-                                            }
-    });
   }
 }
 

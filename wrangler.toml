@@ -38,11 +38,13 @@ new_sqlite_classes = ["IpRegistry"]
 tag = "v2"
 deleted_classes = ["IpRegistry"]
 
-# Cron Trigger — làm mới cache bảng xếp hạng mỗi giờ (đã hạ từ 15 phút xuống
-# 1 giờ trước đó — đây vẫn là nguồn ngốn đọc KV/D1 lớn nhất, không phụ thuộc
-# số user thật).
+# Cron Trigger:
+#   "0 */1 * * *" — làm mới cache bảng xếp hạng mỗi giờ (đã hạ từ 15 phút
+#                   xuống 1 giờ trước đó — nguồn ngốn đọc KV/D1 lớn nhất)
+#   "0 14 * * *"  — 14:00 UTC = 21:00 giờ Việt Nam mỗi ngày, tự động tạo
+#                   1 gift code mới (300-500 coin/lượt, tối đa 50 lượt)
 [triggers]
-crons = ["0 */1 * * *"]
+crons = ["0 */1 * * *", "0 14 * * *"]
 
 [vars]
 CHU_SO_HUU = "7055595466"

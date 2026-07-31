@@ -195,7 +195,7 @@ function xayDungTinGifcode(giftcode) {
 // sẽ được credit phần coin phát sinh kể từ lần poll trước). Tốc độ đào cơ
 // bản 500 coin/giờ, tăng 10%/cấp theo hệ thống cấp độ (tối đa cấp 20).
 // ==================================================
-const COIN_DAO_MOI_GIO = 1500; // coin/giờ ở cấp 1 (chưa cộng bonus)
+const COIN_DAO_MOI_GIO = 300; // coin/giờ ở cấp 1 (chưa cộng bonus)
 const THOI_GIAN_DAO_MS = 4 * 60 * 60 * 1000; // 1 phiên đào tối đa 4 giờ liên tục
 // "Người chơi gánh hộ 1 phần": client tự nội suy hiển thị coin tăng mượt mỗi
 // giây (xem index.html — daoUocTinhTimer), nên server KHÔNG cần chốt sổ
@@ -625,33 +625,48 @@ async function xuLyTaoGifcode(env, message) {
 
   await telegramApi(env, "sendMessage", {
     chat_id: message.chat.id,
-    text: `✅ Đã tạo gift code!\n\n🎁 Mã: \`${ma}\`\n🪙 Thưởng: ${dongThuong}\n👥 Số lượt tối đa: ${soLuong.toLocaleString("vi-VN")}\n\n⏳ Đang gửi thông báo tới toàn bộ user...`,
+    text: `✅ Đã tạo gift code!\n\n🎁 Mã: \`${ma}\`\n🪙 Thưởng: ${dongThuong}\n👥 Số lượt tối đa: ${soLuong.toLocaleString("vi-VN")}\n\n📣 Đang gửi thông báo tới kênh & nhóm...`,
     parse_mode: "Markdown",
   });
 
-  // Tự động broadcast thông báo mã mới tới toàn bộ user — không cần dùng
-  // thêm lệnh /gui thủ công nữa. Cùng cơ chế duyệt toàn bộ user + delay
-  // 50ms/tin để né rate-limit Telegram như xuLyGuiThongBao.
+  // Chỉ gửi thông báo vào KÊNH THÔNG BÁO + NHÓM TRÒ CHUYỆN (cấu hình qua
+  // biến môi trường KENH_THONG_BAO / NHOM_CHAT trên Worker) — KHÔNG gửi
+  // riêng (DM) cho từng user như trước nữa. Vì đây là nhóm/kênh (không
+  // phải chat riêng với bot), nút web_app KHÔNG dùng được ở đây (Telegram
+  // chỉ cho phép web_app trong chat riêng 1-1 với bot) nên dùng nút "url"
+  // trỏ về chat riêng với bot, từ đó user tự bấm nút mở miniapp ở /start.
   const tinNhan = xayDungTinGifcode(giftcodeMoi);
-  let thanhCong = 0;
-  let thatBai = 0;
-  for await (const uid of duyetTatCaNguoiDung(env)) {
-    const ketQua = await telegramApi(env, "sendMessage", {
-      chat_id: Number(uid),
-      text: tinNhan,
-      parse_mode: "Markdown", // cho phép mã hiển thị dạng monospace, bấm vào là copy luôn — không cần gõ tay
-      reply_markup: {
-        inline_keyboard: [[{ text: "🎁 Nhập ngay", web_app: { url: env.LINK_MINIAPP } }]],
-      },
+  const linkBot = env.LINK_BOT || "https://t.me/vuacaytien_bot";
+
+  const diaChiGui = [];
+  if (env.KENH_THONG_BAO) diaChiGui.push({ ten: "📢 Kênh thông báo", chatId: env.KENH_THONG_BAO });
+  if (env.NHOM_CHAT) diaChiGui.push({ ten: "🌐 Nhóm trò chuyện", chatId: env.NHOM_CHAT });
+
+  if (diaChiGui.length === 0) {
+    return telegramApi(env, "sendMessage", {
+      chat_id: message.chat.id,
+      text:
+        "⚠️ Mã đã tạo thành công nhưng CHƯA gửi được thông báo — chưa cấu hình biến môi trường " +
+        "KENH_THONG_BAO / NHOM_CHAT trên Worker (Dashboard > Settings > Variables and secrets). " +
+        "Nhớ thêm bot làm admin của kênh/nhóm đó trước khi gửi.",
     });
-    if (ketQua.ok) thanhCong += 1;
-    else thatBai += 1;
-    await cho(50); // né rate-limit Telegram, giống xuLyGuiThongBao
+  }
+
+  const ketQuaGui = [];
+  for (const dich of diaChiGui) {
+    const kq = await telegramApi(env, "sendMessage", {
+      chat_id: dich.chatId,
+      text: tinNhan,
+      parse_mode: "Markdown",
+      reply_markup: { inline_keyboard: [[{ text: "🎁 Nhập ngay", url: linkBot }]] },
+    });
+    ketQuaGui.push(`${kq.ok ? "✅" : "❌"} ${dich.ten}`);
   }
 
   return telegramApi(env, "sendMessage", {
     chat_id: message.chat.id,
-    text: `✅ Đã gửi xong thông báo Gift Code "${ma}"!\nThành công: ${thanhCong}\nThất bại: ${thatBai}`,
+    text: `📣 Kết quả gửi thông báo Gift Code \`${ma}\`:\n${ketQuaGui.join("\n")}`,
+    parse_mode: "Markdown",
   });
 }
 
@@ -981,7 +996,7 @@ async function xuLyXacNhanQuangCao(env, url) {
   await env.USERS.put(key, String(soLanMoi));
   await env.USERS.put(keyLanCuoi, String(now));
 
-  const soCoinCong = Number(env.THUONG_COIN_QUANG_CAO || 4500); // nếu đã đặt biến môi trường THUONG_COIN_QUANG_CAO trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
+  const soCoinCong = Number(env.THUONG_COIN_QUANG_CAO || 700); // nếu đã đặt biến môi trường THUONG_COIN_QUANG_CAO trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
   const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, tongDaKiem: 0 };
   nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
   congCoin(nguoiDung, soCoinCong);
@@ -1412,7 +1427,7 @@ async function xuLyXacNhanNhiemVu(env, url) {
   await xoaNhiemVuHienTai(env, uid); // dọn con trỏ, nhiệm vụ này xong rồi
 
   // Cộng thưởng coin
-  const soCoinCong = Number(env.THUONG_COIN_NHIEM_VU || 15000); // nếu đã đặt biến môi trường THUONG_COIN_NHIEM_VU trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
+  const soCoinCong = Number(env.THUONG_COIN_NHIEM_VU || 2500); // nếu đã đặt biến môi trường THUONG_COIN_NHIEM_VU trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
   const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, tongDaKiem: 0 };
   nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
   congCoin(nguoiDung, soCoinCong);

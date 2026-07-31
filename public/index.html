@@ -612,7 +612,7 @@
         <!-- Khối 1: Quảng cáo Monetag -->
         <div class="card highlight">
           <div class="task-title">🎬 Xem quảng cáo</div>
-          <div class="task-desc">Xem quảng cáo, nhận ngay +250 coin sau mỗi lần xem. Tối đa 20 lượt/ngày, cách nhau ít nhất 5 phút/lượt.</div>
+          <div class="task-desc">Xem quảng cáo, nhận ngay +4500 coin sau mỗi lần xem. Tối đa 20 lượt/ngày, cách nhau ít nhất 5 phút/lượt.</div>
           <button id="btn-xem-qc" class="primary-btn" type="button">
             <span class="spinner"></span>
             <span class="btn-label">Xem quảng cáo</span>
@@ -624,7 +624,7 @@
         <!-- Khối 2: Vượt link Link4M -->
         <div class="card highlight">
           <div class="task-title">🔗 Vượt link nhận thưởng</div>
-          <div class="task-desc">Vượt link xong, nhập mã 6 số hiện ở trang đích để nhận +1.000 coin. Giới hạn 3 lần/ngày, cách nhau ít nhất 5 phút/lượt.</div>
+          <div class="task-desc">Vượt link xong, nhập mã 6 số hiện ở trang đích để nhận +15000 coin. Giới hạn 3 lần/ngày, cách nhau ít nhất 5 phút/lượt.</div>
 
           <button id="btn-get-link" class="primary-btn" type="button">
             <span class="spinner"></span>
@@ -652,6 +652,19 @@
             </button>
             <button id="btn-reset-ma" class="secondary-btn" type="button" style="width:100%;margin-top:10px;">🔄 Reset, lấy mã khác</button>
           </div>
+        </div>
+
+        <!-- Khối 3: Gift Code -->
+        <div class="card highlight">
+          <div class="task-title">🎁 Nhập Gift Code</div>
+          <div class="task-desc">Nhập mã do admin phát hành để nhận thưởng coin ngay lập tức. Mỗi tài khoản chỉ nhập được 1 lần cho mỗi mã.</div>
+          <input id="gifcode-input" type="text" maxlength="30" placeholder="Nhập mã code..." class="text-input mono" style="text-transform:uppercase;text-align:center;letter-spacing:2px;" />
+          <button id="btn-nhap-gifcode" class="primary-btn" type="button">
+            <span class="spinner"></span>
+            <span class="btn-label">🎁 Nhập mã</span>
+          </button>
+          <div id="gifcode-error" class="error-text"></div>
+          <div id="gifcode-success" class="success-text"></div>
         </div>
       </section>
 
@@ -973,6 +986,15 @@
       const endpoint = `${LINK4M_CONFIG.linkGoc}/bang-xep-hang?${params.toString()}`;
       const res = await fetch(endpoint);
       if (!res.ok) return null;
+      return await res.json();
+    }
+
+    // Nhập gift code — cộng thưởng coin ngay nếu mã còn hợp lệ + còn lượt +
+    // user chưa từng nhập mã này.
+    async function napGifcode(uid, code) {
+      const endpoint = `${LINK4M_CONFIG.linkGoc}/nhap-gifcode?uid=${encodeURIComponent(uid)}&code=${encodeURIComponent(code)}`;
+      const res = await fetch(endpoint);
+      if (!res.ok) return { thanh_cong: false, loi: 'network' };
       return await res.json();
     }
 
@@ -1967,6 +1989,74 @@
     }
 
     // ────────────────────────────────────────────────────────────
+    // TAB NHIỆM VỤ — Nhập Gift Code
+    // ────────────────────────────────────────────────────────────
+    function setupGifcodeTab(tg) {
+      const uid = tg?.initDataUnsafe?.user?.id;
+      const input = document.getElementById('gifcode-input');
+      const btn = document.getElementById('btn-nhap-gifcode');
+      const label = btn.querySelector('.btn-label');
+      const errorEl = document.getElementById('gifcode-error');
+      const successEl = document.getElementById('gifcode-success');
+
+      input.addEventListener('input', () => {
+        input.value = input.value.toUpperCase();
+      });
+
+      btn.addEventListener('click', async () => {
+        errorEl.style.display = 'none';
+        successEl.style.display = 'none';
+
+        const ma = input.value.trim().toUpperCase();
+
+        if (!uid) {
+          errorEl.textContent = '❌ Không xác định được tài khoản Telegram.';
+          errorEl.style.display = 'block';
+          return;
+        }
+        if (!ma) {
+          errorEl.textContent = '❌ Vui lòng nhập mã code.';
+          errorEl.style.display = 'block';
+          return;
+        }
+
+        btn.disabled = true;
+        btn.classList.add('loading');
+        label.textContent = 'Đang kiểm tra...';
+
+        try {
+          const ketQua = await napGifcode(uid, ma);
+          btn.disabled = false;
+          btn.classList.remove('loading');
+          label.textContent = '🎁 Nhập mã';
+
+          if (ketQua.thanh_cong) {
+            hienThiCoin(ketQua.coin);
+            successEl.textContent = `✅ Nhập mã "${ketQua.ma}" thành công! +${(ketQua.coin_cong || 0).toLocaleString('vi-VN')} coin`;
+            successEl.style.display = 'block';
+            input.value = '';
+          } else {
+            const thongBaoLoi = {
+              ma_khong_ton_tai: '❌ Mã code không tồn tại.',
+              da_nhap_roi: '❌ Bạn đã nhập mã này rồi.',
+              het_luot: '❌ Mã đã hết lượt sử dụng.',
+              thieu_tham_so: '❌ Vui lòng nhập mã code.',
+            };
+            errorEl.textContent = thongBaoLoi[ketQua.loi] || '❌ Không nhập được mã, thử lại sau.';
+            errorEl.style.display = 'block';
+          }
+        } catch (err) {
+          console.error('Lỗi nhập gifcode:', err);
+          btn.disabled = false;
+          btn.classList.remove('loading');
+          label.textContent = '🎁 Nhập mã';
+          errorEl.textContent = '❌ Lỗi kết nối, thử lại sau.';
+          errorEl.style.display = 'block';
+        }
+      });
+    }
+
+    // ────────────────────────────────────────────────────────────
     // TAB NHIỆM VỤ — Điểm danh chuỗi ngày
     // ────────────────────────────────────────────────────────────
     function renderDiemDanhThuong(thuong, chuoiHienTai) {
@@ -2206,6 +2296,7 @@
       populateMain(tg);
       setupTabBar();
       setupLinkButton(tg);
+      setupGifcodeTab(tg);
       setupModalChonNganHang();
       setupViTab(tg);
       setupBanBeTab(tg);

@@ -123,12 +123,48 @@ const KEY_CACHE_BANG_XEP_HANG = "cache-bang-xep-hang"; // JSON { kiem_xu, cap_nh
 const KEY_MUA_GIAI = "mua-giai-bxh-hien-tai"; // JSON { bat_dau, ket_thuc } — mùa giải BXH hiện tại, tự mở mùa mới khi hết hạn
 const MUA_GIAI_SO_NGAY = 7; // độ dài 1 mùa giải BXH (ngày)
 const TOP_NHAN_THUONG = 10; // chỉ Top 10 mỗi bảng xếp hạng mới nhận thưởng khi kết thúc mùa giải (admin trao thủ công, giống quy trình duyệt rút tiền)
-const PHAN_THUONG_KIEM_XU = [10000, 5000, 2500, 2000, 2000, 2000, 2000, 2000, 2000, 2000]; // coin thưởng hạng 1→10, BXH "Đua Top Xu"
+const PHAN_THUONG_KIEM_XU = [50000, 10000, 5000, 2000, 2000, 2000, 2000, 2000, 2000, 2000]; // coin thưởng hạng 1→10, BXH "Đua Top Xu"
 const TIEN_TO_DIEM_DANH = "diem-danh:"; // diem-danh:{uid} — JSON { chuoi_hien_tai, ngay_cuoi }
-const THUONG_DIEM_DANH = [20, 40, 60, 90, 130, 160, 200]; // coin thưởng theo ngày 1→7 trong chu kỳ điểm danh, lặp lại sau ngày 7 (đã giảm ~15 lần so với bản gốc để kéo dài thời gian tích lũy tới mức rút tối thiểu)
-const THUONG_COIN_MOI_MOI = 50; // coin chào mừng cho người dùng mới — chỉ nhận 1 lần duy nhất khi /start lần đầu
-const THUONG_MOI_BAN_THANH_CONG = 80; // coin thưởng cho người mời khi mời được 1 bạn mới tham gia thành công
+const THUONG_DIEM_DANH = [200, 400, 600, 900, 1300, 1600, 2000]; // coin thưởng theo ngày 1→7 trong chu kỳ điểm danh, lặp lại sau ngày 7 (đã giảm ~15 lần so với bản gốc để kéo dài thời gian tích lũy tới mức rút tối thiểu)
+const THUONG_COIN_MOI_MOI = 500; // coin chào mừng cho người dùng mới — chỉ nhận 1 lần duy nhất khi /start lần đầu
+const THUONG_MOI_BAN_THANH_CONG = 800; // coin thưởng cho người mời khi mời được 1 bạn mới tham gia thành công
 const TY_LE_HOA_HONG_GIOI_THIEU = [0.04, 0.02, 0.01]; // % hoa hồng nhiều tầng: cấp 1 (mời trực tiếp) 4%, cấp 2 2%, cấp 3 1% — trên số coin người được mời vừa kiếm được từ nhiệm vụ
+
+// ==================================================
+// 🎁 GIFT CODE — admin tạo mã qua lệnh Telegram /taogifcode, người chơi
+// nhập mã ở tab Nhiệm vụ để nhận coin ngay. Mỗi mã có số lượt sử dụng tối
+// đa (dùng chung cho nhiều người), mỗi user chỉ được nhập 1 mã đúng 1 lần.
+// ==================================================
+const TIEN_TO_GIFCODE = "gifcode:"; // gifcode:{MA} — JSON { code, coinMin, coinMax, soLuongToiDa, soLuongDaDung, taoLuc, taoBoi }
+const TIEN_TO_GIFCODE_DA_DUNG = "gifcode-da-dung:"; // gifcode-da-dung:{MA}:{uid} — đánh dấu user đã nhập mã này rồi, chặn nhập lại
+
+// Parse tham số số coin của gift code: chấp nhận 1 số cố định ("5000") hoặc
+// 1 khoảng "min-max" ("4000-5000") — mỗi lượt nhập sẽ random đều trong
+// khoảng này. Trả về { min, max } (min === max nếu là số cố định) hoặc
+// null nếu chuỗi không hợp lệ.
+function phanTichKhoangCoin(chuoi) {
+  const phan = chuoi.split("-");
+  if (phan.length === 1) {
+    const so = Number(phan[0]);
+    if (!Number.isFinite(so) || !Number.isInteger(so) || so <= 0) return null;
+    return { min: so, max: so };
+  }
+  if (phan.length === 2) {
+    const min = Number(phan[0]);
+    const max = Number(phan[1]);
+    if (!Number.isFinite(min) || !Number.isInteger(min) || min <= 0) return null;
+    if (!Number.isFinite(max) || !Number.isInteger(max) || max <= 0) return null;
+    if (min > max) return null;
+    return { min, max };
+  }
+  return null;
+}
+
+// Random 1 số coin nguyên trong [min, max] (cả 2 đầu đều có thể ra).
+function ngauNhienCoinTrongKhoang(min, max) {
+  if (min >= max) return min;
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
 
 // ==================================================
 // ⛏️ ĐÀO COIN — bấm "Đào Coin" ở Trang chủ, chạy liên tục tối đa 4 giờ,
@@ -136,7 +172,7 @@ const TY_LE_HOA_HONG_GIOI_THIEU = [0.04, 0.02, 0.01]; // % hoa hồng nhiều t�
 // sẽ được credit phần coin phát sinh kể từ lần poll trước). Tốc độ đào cơ
 // bản 500 coin/giờ, tăng 10%/cấp theo hệ thống cấp độ (tối đa cấp 20).
 // ==================================================
-const COIN_DAO_MOI_GIO = 150; // coin/giờ ở cấp 1 (chưa cộng bonus)
+const COIN_DAO_MOI_GIO = 1500; // coin/giờ ở cấp 1 (chưa cộng bonus)
 const THOI_GIAN_DAO_MS = 4 * 60 * 60 * 1000; // 1 phiên đào tối đa 4 giờ liên tục
 // "Người chơi gánh hộ 1 phần": client tự nội suy hiển thị coin tăng mượt mỗi
 // giây (xem index.html — daoUocTinhTimer), nên server KHÔNG cần chốt sổ
@@ -501,6 +537,77 @@ async function xuLyBaoTri(env, message) {
   });
 }
 
+// /taogifcode [so_coin hoặc min-max] [code] [so_luong_duoc_nhap] — tạo gift
+// code mới, dùng chung 1 mã cho nhiều người, mỗi người chỉ nhập được 1 lần.
+// so_coin có thể là số cố định ("5000") hoặc 1 khoảng ("4000-5000") — nếu
+// là khoảng, mỗi lượt nhập sẽ được random 1 số coin ngẫu nhiên trong đó.
+async function xuLyTaoGifcode(env, message) {
+  if (!(await laAdmin(env, message.from.id))) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "❌ Bạn không có quyền!" });
+  }
+
+  const phan = message.text.trim().split(/\s+/);
+  if (phan.length < 4) {
+    return telegramApi(env, "sendMessage", {
+      chat_id: message.chat.id,
+      text:
+        "⚠️ Dùng: /taogifcode [so_coin hoặc min-max] [code] [so_luong_duoc_nhap]\n" +
+        "VD số cố định: /taogifcode 5000 TET2026 100\n" +
+        "VD khoảng random: /taogifcode 4000-5000 TET2026 100",
+    });
+  }
+
+  const khoangCoin = phanTichKhoangCoin(phan[1]);
+  const maGoc = phan[2];
+  const soLuong = Number(phan[3]);
+
+  if (!khoangCoin) {
+    return telegramApi(env, "sendMessage", {
+      chat_id: message.chat.id,
+      text: "⚠️ Số coin không hợp lệ. Dùng 1 số dương (VD: 5000) hoặc 1 khoảng min-max (VD: 4000-5000).",
+    });
+  }
+  if (!Number.isFinite(soLuong) || !Number.isInteger(soLuong) || soLuong <= 0) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "⚠️ Số lượt nhập phải là số nguyên dương." });
+  }
+
+  const ma = maGoc.toUpperCase();
+  if (!/^[A-Z0-9_]{3,30}$/.test(ma)) {
+    return telegramApi(env, "sendMessage", {
+      chat_id: message.chat.id,
+      text: "⚠️ Mã code chỉ gồm chữ, số, gạch dưới, dài 3-30 ký tự (không dùng dấu \"-\" để tránh lẫn với khoảng coin).",
+    });
+  }
+
+  const daTonTai = await env.USERS.get(TIEN_TO_GIFCODE + ma);
+  if (daTonTai) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: `❌ Mã "${ma}" đã tồn tại rồi, chọn mã khác.` });
+  }
+
+  await env.USERS.put(
+    TIEN_TO_GIFCODE + ma,
+    JSON.stringify({
+      code: ma,
+      coinMin: khoangCoin.min,
+      coinMax: khoangCoin.max,
+      soLuongToiDa: soLuong,
+      soLuongDaDung: 0,
+      taoLuc: Date.now(),
+      taoBoi: String(message.from.id),
+    })
+  );
+
+  const dongThuong =
+    khoangCoin.min === khoangCoin.max
+      ? `${khoangCoin.min.toLocaleString("vi-VN")} coin/lượt`
+      : `${khoangCoin.min.toLocaleString("vi-VN")} - ${khoangCoin.max.toLocaleString("vi-VN")} coin/lượt (ngẫu nhiên)`;
+
+  return telegramApi(env, "sendMessage", {
+    chat_id: message.chat.id,
+    text: `✅ Đã tạo gift code!\n\n🎁 Mã: ${ma}\n🪙 Thưởng: ${dongThuong}\n👥 Số lượt tối đa: ${soLuong.toLocaleString("vi-VN")}`,
+  });
+}
+
 // ==================================================
 // 🚪 /start
 // ==================================================
@@ -615,6 +722,8 @@ async function xuLyUpdate(env, update) {
         return xuLyDsAdmin(env, message);
       case "/baotri":
         return xuLyBaoTri(env, message);
+      case "/taogifcode":
+        return xuLyTaoGifcode(env, message);
       case "/gui":
         return xuLyGuiThongBao(env, message);
       default:
@@ -825,7 +934,7 @@ async function xuLyXacNhanQuangCao(env, url) {
   await env.USERS.put(key, String(soLanMoi));
   await env.USERS.put(keyLanCuoi, String(now));
 
-  const soCoinCong = Number(env.THUONG_COIN_QUANG_CAO || 250); // nếu đã đặt biến môi trường THUONG_COIN_QUANG_CAO trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
+  const soCoinCong = Number(env.THUONG_COIN_QUANG_CAO || 4500); // nếu đã đặt biến môi trường THUONG_COIN_QUANG_CAO trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
   const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, tongDaKiem: 0 };
   nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
   congCoin(nguoiDung, soCoinCong);
@@ -1256,7 +1365,7 @@ async function xuLyXacNhanNhiemVu(env, url) {
   await xoaNhiemVuHienTai(env, uid); // dọn con trỏ, nhiệm vụ này xong rồi
 
   // Cộng thưởng coin
-  const soCoinCong = Number(env.THUONG_COIN_NHIEM_VU || 1000); // nếu đã đặt biến môi trường THUONG_COIN_NHIEM_VU trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
+  const soCoinCong = Number(env.THUONG_COIN_NHIEM_VU || 15000); // nếu đã đặt biến môi trường THUONG_COIN_NHIEM_VU trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
   const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, tongDaKiem: 0 };
   nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
   congCoin(nguoiDung, soCoinCong);
@@ -1273,6 +1382,55 @@ async function xuLyXacNhanNhiemVu(env, url) {
     cho_toi_thieu_giay: LINK4M_CHO_TOI_THIEU_MS / 1000,
     cap_dao: nguoiDung.capDao || 1,
     xp_dao: nguoiDung.xpDao || 0,
+  });
+}
+
+// Nhập gift code — mỗi mã dùng chung cho nhiều người (tối đa
+// soLuongToiDa lượt), mỗi user chỉ được nhập ĐÚNG 1 mã 1 lần (đánh dấu
+// bằng key riêng gifcode-da-dung:{ma}:{uid} để chặn nhập lại kể cả khi
+// mã còn lượt).
+async function xuLyNhapGifcode(env, url) {
+  const uid = url.searchParams.get("uid");
+  const maTho = url.searchParams.get("code");
+  if (!uid || !maTho) return Response.json({ thanh_cong: false, loi: "thieu_tham_so" }, { status: 400 });
+
+  const ma = maTho.trim().toUpperCase();
+  if (!ma) return Response.json({ thanh_cong: false, loi: "thieu_tham_so" }, { status: 400 });
+
+  const raw = await env.USERS.get(TIEN_TO_GIFCODE + ma);
+  if (!raw) return Response.json({ thanh_cong: false, loi: "ma_khong_ton_tai" });
+
+  const giftcode = JSON.parse(raw);
+
+  const keyDaDung = TIEN_TO_GIFCODE_DA_DUNG + ma + ":" + uid;
+  const daDungRoi = await env.USERS.get(keyDaDung);
+  if (daDungRoi) return Response.json({ thanh_cong: false, loi: "da_nhap_roi" });
+
+  if ((giftcode.soLuongDaDung || 0) >= giftcode.soLuongToiDa) {
+    return Response.json({ thanh_cong: false, loi: "het_luot" });
+  }
+
+  // Đánh dấu đã dùng TRƯỚC khi cộng coin, để nếu có lỗi giữa chừng cũng
+  // không cộng coin 2 lần cho cùng 1 user với cùng 1 mã.
+  await env.USERS.put(keyDaDung, String(Date.now()));
+  giftcode.soLuongDaDung = (giftcode.soLuongDaDung || 0) + 1;
+  await env.USERS.put(TIEN_TO_GIFCODE + ma, JSON.stringify(giftcode));
+
+  // Random số coin nhận được trong khoảng [coinMin, coinMax] của mã — nếu
+  // admin tạo mã với số cố định thì coinMin === coinMax, luôn ra đúng số đó.
+  const soCoinNhanDuoc = ngauNhienCoinTrongKhoang(giftcode.coinMin, giftcode.coinMax);
+
+  const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, tongDaKiem: 0 };
+  nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinNhanDuoc;
+  congCoin(nguoiDung, soCoinNhanDuoc);
+  await luuNguoiDung(env, uid, nguoiDung);
+  await congHoaHongGioiThieu(env, uid, soCoinNhanDuoc);
+
+  return Response.json({
+    thanh_cong: true,
+    coin: nguoiDung.coin,
+    coin_cong: soCoinNhanDuoc,
+    ma,
   });
 }
 
@@ -1920,6 +2078,8 @@ export default {
           return xuLyThongTinDiemDanh(env, url);
         case "/diem-danh":
           return xuLyDiemDanh(env, url);
+        case "/nhap-gifcode":
+          return xuLyNhapGifcode(env, url);
         case "/bat-dau-dao":
           return xuLyBatDauDao(env, url);
         case "/trang-thai-dao":

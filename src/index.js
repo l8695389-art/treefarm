@@ -108,6 +108,8 @@ const TIEN_TO_GIAO_DICH_RUT = "giao-dich-rut:"; // giao-dich-rut:{uid}:{id} — 
 const TIEN_TO_CHO_DUYET_RUT = "cho-duyet-rut:"; // cho-duyet-rut:{uid}:{id} — index riêng các giao dịch CHƯA xử lý, để web admin quét nhanh không phải duyệt toàn bộ lịch sử
 const TIEN_TO_RUT_NGAY = "rut-gem-ngay:"; // giữ tiền tố cũ để không lẫn dữ liệu hạn mức trước khi gộp gem vào coin
 const TIEN_TO_RUT_TUAN = "rut-gem-tuan:"; // tương tự — tiền tố nội bộ, không hiển thị ra ngoài
+const TIEN_TO_SO_LAN_RUT_NGAY = "so-lan-rut-ngay:"; // đếm SỐ LƯỢT gửi yêu cầu rút trong ngày — tách riêng khỏi hạn mức coin/ngày
+const SO_LAN_RUT_TOI_DA_NGAY = 1; // mỗi ngày chỉ được gửi 1 yêu cầu rút tiền, bất kể số coin
 const COIN_QUY_DOI_DONG_MAU_SO = 10; // 10 coin = 1đ khi rút — coin giờ là đơn vị duy nhất, rút thẳng không cần đổi qua gem nữa
 const PHI_RUT_TIEN_PHAN_TRAM = 0.10; // phí dịch vụ 10% mỗi lần rút — trừ trực tiếp vào số tiền quy đổi, KHÔNG đổi số coin bị trừ khỏi ví
 const RUT_TOI_THIEU = 20000; // coin (~2.000đ)
@@ -1542,6 +1544,7 @@ async function xuLyThongTinVi(env, url) {
   const tuanNay = dauTuanVN();
   const daRutNgay = Number((await env.USERS.get(TIEN_TO_RUT_NGAY + uid + ":" + homNay)) || 0);
   const daRutTuan = Number((await env.USERS.get(TIEN_TO_RUT_TUAN + uid + ":" + tuanNay)) || 0);
+  const soLanDaRutHomNay = Number((await env.USERS.get(TIEN_TO_SO_LAN_RUT_NGAY + uid + ":" + homNay)) || 0);
 
   const lichSu = await layLichSuRutTien(env, uid);
 
@@ -1554,6 +1557,8 @@ async function xuLyThongTinVi(env, url) {
     so_ngay_con_lai_de_doi: soNgayConLaiDeDoi,
     con_lai_ngay: Math.max(0, RUT_TOI_DA_NGAY - daRutNgay),
     con_lai_tuan: Math.max(0, RUT_TOI_DA_TUAN - daRutTuan),
+    so_lan_rut_toi_da_ngay: SO_LAN_RUT_TOI_DA_NGAY,
+    da_rut_hom_nay: soLanDaRutHomNay >= SO_LAN_RUT_TOI_DA_NGAY, // true = đã dùng hết lượt rút trong ngày, ẩn/khóa nút rút ở frontend
     lich_su_rut: lichSu,
   });
 }
@@ -1614,9 +1619,16 @@ async function xuLyYeuCauRutTien(env, url) {
   const tuanNay = dauTuanVN();
   const keyNgay = TIEN_TO_RUT_NGAY + uid + ":" + homNay;
   const keyTuan = TIEN_TO_RUT_TUAN + uid + ":" + tuanNay;
+  const keySoLanNgay = TIEN_TO_SO_LAN_RUT_NGAY + uid + ":" + homNay;
   const daRutNgay = Number((await env.USERS.get(keyNgay)) || 0);
   const daRutTuan = Number((await env.USERS.get(keyTuan)) || 0);
+  const soLanDaRut = Number((await env.USERS.get(keySoLanNgay)) || 0);
 
+  // Chỉ cho gửi tối đa SO_LAN_RUT_TOI_DA_NGAY (1) yêu cầu rút / ngày —
+  // kiểm tra riêng, độc lập với hạn mức coin/ngày ở dưới.
+  if (soLanDaRut >= SO_LAN_RUT_TOI_DA_NGAY) {
+    return Response.json({ thanh_cong: false, loi: "da_vuot_so_lan_rut_hom_nay" });
+  }
   if (daRutNgay + soCoin > RUT_TOI_DA_NGAY) {
     return Response.json({ thanh_cong: false, loi: "vuot_han_muc_ngay" });
   }
@@ -1637,6 +1649,7 @@ async function xuLyYeuCauRutTien(env, url) {
   }
   await env.USERS.put(keyNgay, String(daRutNgay + soCoin));
   await env.USERS.put(keyTuan, String(daRutTuan + soCoin));
+  await env.USERS.put(keySoLanNgay, String(soLanDaRut + 1));
 
   // Tạo bản ghi giao dịch — trạng thái "cho_duyet" cho tới khi admin xử lý
   // trên trang web quản lý rút tiền. Từ chối thì hoàn tiền cho user.
@@ -1654,6 +1667,7 @@ async function xuLyYeuCauRutTien(env, url) {
     taoLuc: Date.now(),
     keyNgay,
     keyTuan,
+    keySoLanNgay,
   };
   await env.USERS.put(TIEN_TO_GIAO_DICH_RUT + uid + ":" + idGiaoDich, JSON.stringify(giaoDich));
   // Index riêng cho các giao dịch đang chờ — trang web admin đọc từ đây,
@@ -1769,6 +1783,10 @@ async function xuLyXuLyRutTienAdmin(env, request) {
     if (giaoDich.keyTuan) {
       const daRutTuan = Number((await env.USERS.get(giaoDich.keyTuan)) || 0);
       await env.USERS.put(giaoDich.keyTuan, String(Math.max(0, daRutTuan - giaoDich.soCoin)));
+    }
+    if (giaoDich.keySoLanNgay) {
+      const soLanDaRut = Number((await env.USERS.get(giaoDich.keySoLanNgay)) || 0);
+      await env.USERS.put(giaoDich.keySoLanNgay, String(Math.max(0, soLanDaRut - 1)));
     }
 
     textThongBaoUser =

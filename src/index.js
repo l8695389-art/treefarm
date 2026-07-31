@@ -138,6 +138,14 @@ const TY_LE_HOA_HONG_GIOI_THIEU = [0.04, 0.02, 0.01]; // % hoa hồng nhiều t�
 const TIEN_TO_GIFCODE = "gifcode:"; // gifcode:{MA} — JSON { code, coinMin, coinMax, soLuongToiDa, soLuongDaDung, taoLuc, taoBoi }
 const TIEN_TO_GIFCODE_DA_DUNG = "gifcode-da-dung:"; // gifcode-da-dung:{MA}:{uid} — đánh dấu user đã nhập mã này rồi, chặn nhập lại
 
+// Gift code TỰ ĐỘNG mỗi ngày — Cron Trigger chạy lúc 21:00 giờ Việt Nam
+// (14:00 UTC, xem [triggers] trong wrangler.toml) tự sinh 1 mã mới, random
+// 300-500 coin/lượt, tối đa 50 lượt nhập, rồi thông báo vào kênh + nhóm
+// giống hệt khi admin gõ lệnh /taogifcode thủ công.
+const GIFCODE_TU_DONG_COIN_MIN = 300;
+const GIFCODE_TU_DONG_COIN_MAX = 500;
+const GIFCODE_TU_DONG_SO_LUONG = 50;
+
 // Parse tham số số coin của gift code: chấp nhận 1 số cố định ("5000") hoặc
 // 1 khoảng "min-max" ("4000-5000") — mỗi lượt nhập sẽ random đều trong
 // khoảng này. Trả về { min, max } (min === max nếu là số cố định) hoặc
@@ -187,6 +195,49 @@ function xayDungTinGifcode(giftcode) {
     "⚠️ Mỗi tài khoản chỉ nhập được 1 lần, hết lượt là hết — nhanh tay kẻo lỡ!\n\n" +
     "💸 Cày coin, đổi thưởng ngay hôm nay tại Vua Cày Tiền 💸"
   );
+}
+
+// Tự động sinh 1 gift code mới mỗi ngày (gọi từ Cron Trigger lúc 21:00 giờ
+// VN). Mã đặt tên theo ngày (NGAYYYYMMDD) nên idempotent — nếu cron lỡ
+// chạy 2 lần trong cùng 1 ngày (vd retry) thì lần sau sẽ thấy mã đã tồn
+// tại và bỏ qua, không tạo trùng / không thông báo lại lần 2.
+async function taoGifcodeTuDong(env) {
+  const homNay = ngayVnHomNay(); // "YYYY-MM-DD"
+  const ma = "NGAY" + homNay.replace(/-/g, "");
+
+  const daTonTai = await env.USERS.get(TIEN_TO_GIFCODE + ma);
+  if (daTonTai) return; // đã tạo cho hôm nay rồi
+
+  const giftcodeMoi = {
+    code: ma,
+    coinMin: GIFCODE_TU_DONG_COIN_MIN,
+    coinMax: GIFCODE_TU_DONG_COIN_MAX,
+    soLuongToiDa: GIFCODE_TU_DONG_SO_LUONG,
+    soLuongDaDung: 0,
+    taoLuc: Date.now(),
+    taoBoi: "he-thong-tu-dong",
+  };
+  await env.USERS.put(TIEN_TO_GIFCODE + ma, JSON.stringify(giftcodeMoi));
+
+  const tinNhan = xayDungTinGifcode(giftcodeMoi);
+  const linkBot = env.LINK_BOT || "https://t.me/vuacaytien_bot";
+
+  const diaChiGui = [];
+  if (env.KENH_THONG_BAO) diaChiGui.push(env.KENH_THONG_BAO);
+  if (env.NHOM_CHAT) diaChiGui.push(env.NHOM_CHAT);
+
+  for (const chatId of diaChiGui) {
+    try {
+      await telegramApi(env, "sendMessage", {
+        chat_id: chatId,
+        text: tinNhan,
+        parse_mode: "Markdown",
+        reply_markup: { inline_keyboard: [[{ text: "🎁 Nhập ngay", url: linkBot }]] },
+      });
+    } catch (e) {
+      console.error("Lỗi gửi thông báo gifcode tự động:", e);
+    }
+  }
 }
 
 // ==================================================
@@ -469,13 +520,8 @@ async function ghiLogVaThongBao(env, message, noiDungThem = "") {
     `👤 ID: ${uid} | Tên: ${ten} | ${uname}\n` +
     `${noiDungTinNhan(message)} ${noiDungThem}`;
 
-  const danhSachAdmin = await layDanhSachAdmin(env);
-  await Promise.allSettled(
-    danhSachAdmin.map((adminId) =>
-      telegramApi(env, "sendMessage", { chat_id: Number(adminId), text: logText })
-    )
-  );
-
+  // Không còn gửi riêng (DM) cho từng admin nữa — log chỉ tập trung vào
+  // NHOM_LOG để tránh spam tin nhắn riêng cho admin.
   try {
     await telegramApi(env, "sendMessage", { chat_id: env.NHOM_LOG, text: logText });
     if (!message.text) {
@@ -2165,12 +2211,17 @@ export default {
     return env.ASSETS.fetch(request);
   },
 
-  // Cron Trigger — làm mới cache bảng xếp hạng (xem wrangler.toml: [triggers] crons).
-  // QUAN TRỌNG: nên đổi lịch cron trong wrangler.toml từ "*/15 * * * *" (15 phút)
-  // sang "*/30 * * * *" hoặc "0 * * * *" (30-60 phút) — bản thân cron này là nguồn
-  // ngốn lượt đọc KV lớn nhất trong toàn bộ app, không phụ thuộc số user thật.
+  // Cron Trigger — 2 lịch chạy khai báo ở wrangler.toml ([triggers] crons):
+  //   "0 */1 * * *" (mỗi giờ)   → làm mới cache bảng xếp hạng
+  //   "0 14 * * *"  (14:00 UTC = 21:00 giờ VN mỗi ngày) → tự tạo gift code
+  //                                300-500 coin, 50 lượt nhập
+  // Phân biệt bằng event.cron để mỗi lịch chỉ chạy đúng việc của nó.
   async scheduled(event, envGoc, ctx) {
     const env = boQuaD1(envGoc);
-    ctx.waitUntil(lamMoiCacheBangXepHang(env));
+    if (event.cron === "0 14 * * *") {
+      ctx.waitUntil(taoGifcodeTuDong(env));
+    } else {
+      ctx.waitUntil(lamMoiCacheBangXepHang(env));
+    }
   },
 };

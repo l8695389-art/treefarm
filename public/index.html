@@ -328,19 +328,6 @@
     .bxh-title { font-size: 19px; font-weight: 800; color: var(--tg-text); letter-spacing: -0.01em; }
     .bxh-subtitle { font-size: 12px; font-weight: 600; color: var(--tg-muted); margin-top: 2px; }
 
-    .bxh-switch {
-      display: flex; gap: 6px; padding: 4px; border-radius: 14px;
-      background: var(--tg-surface); border: 1px solid var(--tg-border);
-    }
-    .bxh-switch-btn {
-      flex: 1; padding: 11px 8px; border: none; border-radius: 10px; cursor: pointer;
-      background: transparent; color: var(--tg-muted); font-family: inherit;
-      font-size: 12.5px; font-weight: 700; letter-spacing: -0.01em;
-      transition: background 0.18s ease, color 0.18s ease;
-    }
-    .bxh-switch-btn.active { background: linear-gradient(135deg, var(--tg-blue), #1A6FA0); color: #fff; box-shadow: 0 6px 16px -6px var(--tg-glow); }
-    .bxh-switch-btn:active { opacity: 0.85; }
-
     .bxh-card { background: var(--tg-surface); border: 1px solid var(--tg-border); border-radius: 16px; padding: 18px; }
     .bxh-season-card { text-align: center; }
     .bxh-season-label { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tg-muted); }
@@ -452,6 +439,58 @@
     .giaodich-badge.cho_duyet { background: rgba(245,185,66,0.16); color: var(--gold); }
     .giaodich-badge.hoan_thanh { background: rgba(61,220,122,0.14); color: #3DDC7A; }
     .giaodich-badge.tu_choi { background: rgba(255,77,109,0.14); color: var(--danger); }
+
+    /* ── Nút chọn ngân hàng / ví (thay cho ô nhập tay) ── */
+    .bank-picker-btn {
+      display: flex; align-items: center; gap: 10px;
+      text-align: left; cursor: pointer; font-family: inherit; font-size: 14px;
+    }
+    .bank-picker-btn:active { opacity: 0.85; }
+    .bank-picker-icon { font-size: 16px; flex-shrink: 0; }
+    .bank-picker-label { flex: 1; min-width: 0; color: var(--tg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bank-picker-label.da-chon { color: var(--tg-text); font-weight: 600; }
+    .bank-picker-caret { color: var(--tg-muted); flex-shrink: 0; }
+
+    /* ── Modal chọn ngân hàng — bottom sheet ── */
+    .bank-modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.55);
+      align-items: flex-end; justify-content: center;
+    }
+    .bank-modal-overlay.open { display: flex; }
+    .bank-modal-sheet {
+      width: 100%; max-width: 460px; max-height: 78vh;
+      background: var(--tg-surface); border: 1px solid var(--tg-border);
+      border-radius: 20px 20px 0 0; display: flex; flex-direction: column;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .bank-modal-header {
+      flex-shrink: 0; display: flex; align-items: center; justify-content: space-between;
+      padding: 18px 18px 14px; font-size: 15px; font-weight: 700; color: var(--tg-text);
+      border-bottom: 1px solid var(--tg-border);
+    }
+    .bank-modal-close {
+      width: 30px; height: 30px; border-radius: 50%; border: none; cursor: pointer;
+      background: rgba(90,122,153,0.16); color: var(--tg-muted); font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .bank-modal-list { overflow-y: auto; padding: 8px 10px 16px; }
+    .bank-modal-group-label {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--tg-muted); padding: 12px 10px 6px;
+    }
+    .bank-modal-item {
+      display: flex; align-items: center; gap: 12px; width: 100%;
+      padding: 12px 10px; border: none; background: none; cursor: pointer;
+      font-family: inherit; font-size: 14.5px; font-weight: 600; color: var(--tg-text);
+      border-radius: 12px; text-align: left; transition: background 0.15s ease;
+    }
+    .bank-modal-item:active { background: rgba(34,158,217,0.1); }
+    .bank-modal-item .bank-modal-item-icon {
+      width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 16px;
+      background: rgba(34,158,217,0.1);
+    }
   </style>
 </head>
 <body>
@@ -573,7 +612,7 @@
         <!-- Khối 1: Quảng cáo Monetag -->
         <div class="card highlight">
           <div class="task-title">🎬 Xem quảng cáo</div>
-          <div class="task-desc">Xem quảng cáo, nhận ngay +350 coin sau mỗi lần xem. Tối đa 20 lượt/ngày, cách nhau ít nhất 30 giây/lượt.</div>
+          <div class="task-desc">Xem quảng cáo, nhận ngay +250 coin sau mỗi lần xem. Tối đa 20 lượt/ngày, cách nhau ít nhất 5 phút/lượt.</div>
           <button id="btn-xem-qc" class="primary-btn" type="button">
             <span class="spinner"></span>
             <span class="btn-label">Xem quảng cáo</span>
@@ -585,7 +624,7 @@
         <!-- Khối 2: Vượt link Link4M -->
         <div class="card highlight">
           <div class="task-title">🔗 Vượt link nhận thưởng</div>
-          <div class="task-desc">Vượt link xong, nhập mã 6 số hiện ở trang đích để nhận +2.000 coin. Giới hạn 2 lần/ngày.</div>
+          <div class="task-desc">Vượt link xong, nhập mã 6 số hiện ở trang đích để nhận +1.000 coin. Giới hạn 3 lần/ngày, cách nhau ít nhất 5 phút/lượt.</div>
 
           <button id="btn-get-link" class="primary-btn" type="button">
             <span class="spinner"></span>
@@ -679,6 +718,7 @@
             <li>Rút tối thiểu <strong>20.000 coin</strong> (~2.000đ)</li>
             <li>Tối đa <strong>180.000 coin/ngày</strong> (~18.000đ)</li>
             <li>Tối đa <strong>500.000 coin/tuần</strong> (~50.000đ)</li>
+            <li>Phí giao dịch: <strong>10% mỗi lần rút</strong> (trừ vào số tiền quy đổi, không đổi số coin bị trừ khỏi ví)</li>
             <li>Thời gian duyệt: <strong>1–3 ngày làm việc</strong></li>
           </ul>
         </div>
@@ -696,7 +736,14 @@
         <div id="rut-tien-form" class="card highlight" style="display:none;">
           <div class="card-label">Thông tin nhận tiền</div>
           <div id="doi-tk-hint" class="status-text" style="display:none;margin-bottom:10px;"></div>
-          <input id="input-ngan-hang" type="text" class="text-input" placeholder="Tên ngân hàng / Momo / ZaloPay" />
+
+          <button type="button" id="btn-chon-ngan-hang" class="text-input bank-picker-btn">
+            <span id="chon-ngan-hang-icon" class="bank-picker-icon">🏦</span>
+            <span id="chon-ngan-hang-label" class="bank-picker-label">Chọn ngân hàng / ví điện tử</span>
+            <span class="bank-picker-caret">▾</span>
+          </button>
+          <input type="hidden" id="input-ngan-hang" value="" />
+
           <input id="input-so-tk" type="text" inputmode="numeric" class="text-input" placeholder="Số tài khoản / Số điện thoại" />
           <input id="input-ten-nhan" type="text" class="text-input" placeholder="Tên người nhận" />
           <input id="input-so-tien" type="number" inputmode="numeric" class="text-input" placeholder="Số coin muốn rút (tối thiểu 20.000)" style="margin-bottom:14px;" />
@@ -716,16 +763,22 @@
         </div>
       </section>
 
+      <!-- MODAL: chọn ngân hàng / ví điện tử nhận tiền -->
+      <div id="modal-chon-ngan-hang" class="bank-modal-overlay">
+        <div class="bank-modal-sheet">
+          <div class="bank-modal-header">
+            <span>Chọn ngân hàng / ví điện tử</span>
+            <button type="button" id="btn-dong-chon-ngan-hang" class="bank-modal-close" aria-label="Đóng">✕</button>
+          </div>
+          <div id="bank-modal-list" class="bank-modal-list"></div>
+        </div>
+      </div>
+
       <!-- TAB 6: BXH -->
       <section id="tab-bang-xep-hang" class="tab-panel">
         <div class="bxh-header">
           <div class="bxh-title">Đua top mùa giải</div>
           <div class="bxh-subtitle" id="bxh-phu-de">Xếp theo xu kiếm được trong mùa</div>
-        </div>
-
-        <div class="bxh-switch" id="bxh-mode-switch">
-          <button class="bxh-switch-btn active" data-loai="kiem-xu" type="button">Đua Top Xu</button>
-          <button class="bxh-switch-btn" data-loai="moi-ban" type="button">Đua Top Mời Bạn</button>
         </div>
 
         <div class="bxh-card bxh-season-card">
@@ -1042,16 +1095,13 @@
     // MÙA GIẢI hiện tại, chỉ Top 10 nhận thưởng, hiển thị hạng của người
     // chơi + đếm ngược mùa giải.
     // ────────────────────────────────────────────────────────────
-    const BXH_PHU_DE = {
-      'kiem-xu': 'Xếp theo xu kiếm được trong mùa',
-      'moi-ban': 'Xếp theo số bạn mời (đạt cấp đào ≥2) trong mùa',
-    };
-    let bxhLoaiHienTai = 'kiem-xu';
+    const BXH_LOAI = 'kiem-xu';
+    const BXH_PHU_DE = 'Xếp theo xu kiếm được trong mùa';
     let bxhDemNguocTimer = null;
 
-    function dinhDangGiaTriBXH(giaTri, donVi) {
+    function dinhDangGiaTriBXH(giaTri) {
       const so = (giaTri || 0).toLocaleString('vi-VN');
-      return donVi === 'luot_moi' ? `${so} lượt mời` : `${so} xu`;
+      return `${so} xu`;
     }
 
     function dinhDangThuong(thuong) {
@@ -1079,7 +1129,7 @@
     }
 
     function renderHeaderMuaGiai(data) {
-      document.getElementById('bxh-phu-de').textContent = BXH_PHU_DE[bxhLoaiHienTai];
+      document.getElementById('bxh-phu-de').textContent = BXH_PHU_DE;
       document.getElementById('bxh-mua-giai-so').textContent = `Mùa giải #${data.mua_giai.so}`;
       batDauDemNguocMuaGiai(data.mua_giai.ket_thuc);
 
@@ -1096,7 +1146,7 @@
       const trongTop10 = data.hang_cua_toi && data.hang_cua_toi <= (data.top_nhan_thuong || 10);
 
       badge.textContent = data.hang_cua_toi ? `#${data.hang_cua_toi}` : '—';
-      gia.textContent = `${dinhDangGiaTriBXH(data.gia_tri_cua_toi, data.don_vi_gia_tri)} trong mùa này`;
+      gia.textContent = `${dinhDangGiaTriBXH(data.gia_tri_cua_toi)} trong mùa này`;
 
       hint.classList.toggle('top10', !!trongTop10);
       if (trongTop10) {
@@ -1131,12 +1181,6 @@
         hangEl.className = 'bxh-reward-hang';
         hangEl.textContent = `Hạng ${bac.hang}`;
         info.appendChild(hangEl);
-        if (bac.dieu_kien_toi_thieu) {
-          const dk = document.createElement('div');
-          dk.className = 'bxh-reward-dieu-kien';
-          dk.textContent = `Cần ≥${bac.dieu_kien_toi_thieu} ref`;
-          info.appendChild(dk);
-        }
 
         const pill = document.createElement('div');
         pill.className = 'bxh-pill';
@@ -1149,9 +1193,7 @@
       });
 
       const note = document.getElementById('bxh-reward-note');
-      note.textContent = bxhLoaiHienTai === 'moi-ban'
-        ? 'Người được mời phải đạt cấp đào ≥2 mới tính 1 lượt mời. Mời không đạt mốc tối thiểu sẽ giảm 50% thưởng. Thưởng tự cộng vào ví khi hết mùa.'
-        : 'Hết mùa thưởng xu tự cộng vào ví.';
+      note.textContent = 'Hết mùa thưởng xu tự cộng vào ví.';
     }
 
     function renderDanhSachBXH(data, uidHienTai) {
@@ -1182,7 +1224,7 @@
 
         const amount = document.createElement('div');
         amount.className = 'rank-amount';
-        amount.textContent = dinhDangGiaTriBXH(nguoiDung.gia_tri, data.don_vi_gia_tri);
+        amount.textContent = dinhDangGiaTriBXH(nguoiDung.gia_tri);
         values.appendChild(amount);
 
         if (nguoiDung.phan_thuong && nguoiDung.phan_thuong.coin > 0) {
@@ -1201,7 +1243,7 @@
 
     async function taiBangXepHang(uid) {
       const container = document.getElementById('rank-list');
-      const data = await layBangXepHang(bxhLoaiHienTai, uid);
+      const data = await layBangXepHang(BXH_LOAI, uid);
       if (!data) {
         container.innerHTML = '<div class="rank-loading">Không tải được bảng xếp hạng, thử lại sau.</div>';
         return;
@@ -1214,19 +1256,6 @@
 
     function setupBangXepHangTab(tg) {
       const uid = tg?.initDataUnsafe?.user?.id;
-      const btns = document.querySelectorAll('#bxh-mode-switch .bxh-switch-btn');
-
-      btns.forEach((btn) => {
-        btn.addEventListener('click', () => {
-          if (btn.dataset.loai === bxhLoaiHienTai) return;
-          btns.forEach((b) => b.classList.remove('active'));
-          btn.classList.add('active');
-          bxhLoaiHienTai = btn.dataset.loai;
-          document.getElementById('rank-list').innerHTML = '<div class="rank-loading">Đang tải...</div>';
-          taiBangXepHang(uid);
-        });
-      });
-
       window.__lamMoiBXH = () => taiBangXepHang(uid);
       taiBangXepHang(uid);
     }
@@ -1274,7 +1303,7 @@
       const qcSuccessEl = document.getElementById('qc-success');
 
       let qcHetLuotHomNay = false;
-      let qcDemNguoc = null; // interval id của bộ đếm ngược 30s
+      let qcDemNguoc = null; // interval id của bộ đếm ngược 5 phút
 
       function batDauDemNguocQc(giayConLai, gioiHanCho) {
         clearInterval(qcDemNguoc);
@@ -1374,6 +1403,26 @@
       const labelXacNhan = btnXacNhanMa.querySelector('.btn-label');
       const btnResetMa = document.getElementById('btn-reset-ma');
 
+      let link4mDemNguoc = null; // interval id của bộ đếm ngược 5 phút giữa 2 lần vượt link
+
+      function batDauDemNguocLink4m(giayConLai) {
+        clearInterval(link4mDemNguoc);
+        let conLai = Math.ceil(giayConLai);
+        const capNhat = () => {
+          if (conLai <= 0) {
+            clearInterval(link4mDemNguoc);
+            btn.disabled = false;
+            label.textContent = 'Nhận link rút gọn';
+            return;
+          }
+          btn.disabled = true;
+          label.textContent = `Chờ ${conLai}s để vượt tiếp...`;
+          conLai -= 1;
+        };
+        capNhat();
+        link4mDemNguoc = setInterval(capNhat, 1000);
+      }
+
       function anTatCaThongBao() {
         errorEl.style.display = 'none';
         statusEl.style.display = 'none';
@@ -1438,6 +1487,11 @@
 
         if (tt.link4m_gioi_han_ngay !== undefined) {
           capNhatUiLink4m(tt.so_lan_link4m_da_xong, tt.link4m_gioi_han_ngay);
+          if (tt.link4m_lan_cuoi) {
+            const daTroiGiay = (Date.now() - tt.link4m_lan_cuoi) / 1000;
+            const conLaiGiay = (tt.link4m_cho_toi_thieu_giay || 300) - daTroiGiay;
+            if (conLaiGiay > 0) batDauDemNguocLink4m(conLaiGiay);
+          }
         }
 
         if (tt.trang_thai === 'da_hoan_thanh') {
@@ -1469,6 +1523,11 @@
               const tt = await layTrangThaiHienTai(uid);
               if (tt) { hienThiCoin(tt.coin); }
               return khoaHomNay();
+            }
+            if (data.loi === 'cho_qua_nhanh') {
+              batLoi(`❌ Vui lòng chờ thêm ${data.cho_con_lai_giay}s rồi vượt tiếp.`);
+              batDauDemNguocLink4m(data.cho_con_lai_giay);
+              return;
             }
             return batLoi('❌ Không tạo được link, thử lại sau nhé.');
           }
@@ -1520,6 +1579,7 @@
                 khoaHomNay();
               } else {
                 moLaiChoLuotTiepTheo(soLanXong, gioiHan);
+                batDauDemNguocLink4m(ketQua.cho_toi_thieu_giay || 300);
               }
             }, 1400);
           } else {
@@ -1685,6 +1745,111 @@
       lamMoiBanBe();
     }
 
+    // ────────────────────────────────────────────────────────────
+    // CHỌN NGÂN HÀNG / VÍ ĐIỆN TỬ — thay ô nhập tay bằng bottom-sheet
+    // liệt kê các ngân hàng phổ biến tại Việt Nam + Momo + ZaloPay.
+    // ────────────────────────────────────────────────────────────
+    const DANH_SACH_VI_DIEN_TU = [
+      { ten: 'Momo', icon: '💗' },
+      { ten: 'ZaloPay', icon: '💙' },
+    ];
+    const DANH_SACH_NGAN_HANG = [
+      { ten: 'Vietcombank', icon: '🏦' },
+      { ten: 'Techcombank', icon: '🏦' },
+      { ten: 'BIDV', icon: '🏦' },
+      { ten: 'VietinBank', icon: '🏦' },
+      { ten: 'Agribank', icon: '🏦' },
+      { ten: 'MB Bank', icon: '🏦' },
+      { ten: 'ACB', icon: '🏦' },
+      { ten: 'Sacombank', icon: '🏦' },
+      { ten: 'VPBank', icon: '🏦' },
+      { ten: 'TPBank', icon: '🏦' },
+      { ten: 'HDBank', icon: '🏦' },
+      { ten: 'SHB', icon: '🏦' },
+      { ten: 'VIB', icon: '🏦' },
+      { ten: 'Eximbank', icon: '🏦' },
+      { ten: 'SCB', icon: '🏦' },
+      { ten: 'OCB', icon: '🏦' },
+      { ten: 'MSB', icon: '🏦' },
+      { ten: 'SeABank', icon: '🏦' },
+      { ten: 'DongA Bank', icon: '🏦' },
+      { ten: 'PVcomBank', icon: '🏦' },
+      { ten: 'Bac A Bank', icon: '🏦' },
+      { ten: 'LienVietPostBank', icon: '🏦' },
+      { ten: 'Nam A Bank', icon: '🏦' },
+      { ten: 'ABBank', icon: '🏦' },
+      { ten: 'Saigonbank', icon: '🏦' },
+    ];
+
+    function setupModalChonNganHang() {
+      const overlay = document.getElementById('modal-chon-ngan-hang');
+      const btnMo = document.getElementById('btn-chon-ngan-hang');
+      const btnDong = document.getElementById('btn-dong-chon-ngan-hang');
+      const listEl = document.getElementById('bank-modal-list');
+      const labelEl = document.getElementById('chon-ngan-hang-label');
+      const iconEl = document.getElementById('chon-ngan-hang-icon');
+      const hiddenInput = document.getElementById('input-ngan-hang');
+
+      function themNhom(tieuDe, danhSach) {
+        const nhomLabel = document.createElement('div');
+        nhomLabel.className = 'bank-modal-group-label';
+        nhomLabel.textContent = tieuDe;
+        listEl.appendChild(nhomLabel);
+
+        danhSach.forEach((muc) => {
+          const item = document.createElement('button');
+          item.type = 'button';
+          item.className = 'bank-modal-item';
+
+          const icon = document.createElement('span');
+          icon.className = 'bank-modal-item-icon';
+          icon.textContent = muc.icon;
+
+          const ten = document.createElement('span');
+          ten.textContent = muc.ten;
+
+          item.appendChild(icon);
+          item.appendChild(ten);
+          item.addEventListener('click', () => chonMuc(muc));
+          listEl.appendChild(item);
+        });
+      }
+
+      function chonMuc(muc) {
+        hiddenInput.value = muc.ten;
+        labelEl.textContent = muc.ten;
+        labelEl.classList.add('da-chon');
+        iconEl.textContent = muc.icon;
+        dongModal();
+      }
+
+      function moModal() {
+        overlay.classList.add('open');
+      }
+      function dongModal() {
+        overlay.classList.remove('open');
+      }
+
+      themNhom('Ví điện tử', DANH_SACH_VI_DIEN_TU);
+      themNhom('Ngân hàng', DANH_SACH_NGAN_HANG);
+
+      btnMo.addEventListener('click', moModal);
+      btnDong.addEventListener('click', dongModal);
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) dongModal();
+      });
+
+      // Cho phép setupViTab() đồng bộ lại label khi khôi phục tài khoản đã lưu
+      window.__datNganHangDaChon = (ten) => {
+        if (!ten) return;
+        hiddenInput.value = ten;
+        labelEl.textContent = ten;
+        labelEl.classList.add('da-chon');
+        const timThay = [...DANH_SACH_VI_DIEN_TU, ...DANH_SACH_NGAN_HANG].find((m) => m.ten === ten);
+        iconEl.textContent = timThay ? timThay.icon : '🏦';
+      };
+    }
+
     function setupViTab(tg) {
       const uid = tg?.initDataUnsafe?.user?.id;
       const btnRut = document.getElementById('btn-rut-tien');
@@ -1709,10 +1874,11 @@
         document.getElementById('vi-con-lai-ngay').textContent = `${tt.con_lai_ngay.toLocaleString('vi-VN')} coin`;
         document.getElementById('vi-con-lai-tuan').textContent = `${tt.con_lai_tuan.toLocaleString('vi-VN')} coin`;
 
-        // Cho phép đổi sang tài khoản khác — không khóa cứng ô nhập nữa,
+        // Cho phép đổi sang tài khoản khác — không khóa cứng ô chọn nữa,
         // chỉ báo còn bao nhiêu ngày nữa mới được đổi nếu chưa đủ 20 ngày.
         if (tt.tai_khoan && !inputNganHang.value && !inputSoTk.value) {
           inputNganHang.value = tt.tai_khoan.nganHang;
+          if (window.__datNganHangDaChon) window.__datNganHangDaChon(tt.tai_khoan.nganHang);
           inputSoTk.value = tt.tai_khoan.soTk;
         }
         if (tt.tai_khoan) {
@@ -1767,7 +1933,9 @@
           labelXacNhan.textContent = 'Xác nhận rút coin';
 
           if (ketQua.thanh_cong) {
-            successEl.textContent = '✅ Đã gửi yêu cầu rút coin! Xử lý trong 1–3 ngày làm việc. Xem trạng thái ở bảng bên dưới.';
+            const soTienNhan = (ketQua.so_tien_thuc_nhan || 0).toLocaleString('vi-VN');
+            const soPhi = (ketQua.phi || 0).toLocaleString('vi-VN');
+            successEl.textContent = `✅ Đã gửi yêu cầu rút coin! Sau khi trừ phí 10% (${soPhi} coin), bạn sẽ nhận ~${soTienNhan}đ. Xử lý trong 1–3 ngày làm việc.`;
             successEl.style.display = 'block';
             form.style.display = 'none';
             inputTenNhan.value = '';
@@ -2038,6 +2206,7 @@
       populateMain(tg);
       setupTabBar();
       setupLinkButton(tg);
+      setupModalChonNganHang();
       setupViTab(tg);
       setupBanBeTab(tg);
       setupDiemDanhTab(tg);

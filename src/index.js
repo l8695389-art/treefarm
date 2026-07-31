@@ -110,11 +110,11 @@ const TIEN_TO_RUT_NGAY = "rut-gem-ngay:"; // giữ tiền tố cũ để không 
 const TIEN_TO_RUT_TUAN = "rut-gem-tuan:"; // tương tự — tiền tố nội bộ, không hiển thị ra ngoài
 const TIEN_TO_SO_LAN_RUT_NGAY = "so-lan-rut-ngay:"; // đếm SỐ LƯỢT gửi yêu cầu rút trong ngày — tách riêng khỏi hạn mức coin/ngày
 const SO_LAN_RUT_TOI_DA_NGAY = 1; // mỗi ngày chỉ được gửi 1 yêu cầu rút tiền, bất kể số coin
-const COIN_QUY_DOI_DONG_MAU_SO = 10; // 10 coin = 1đ khi rút — coin giờ là đơn vị duy nhất, rút thẳng không cần đổi qua gem nữa
+const COIN_QUY_DOI_DONG_MAU_SO = 100; // 100 coin = 1đ khi rút — coin giờ là đơn vị duy nhất, rút thẳng không cần đổi qua gem nữa
 const PHI_RUT_TIEN_PHAN_TRAM = 0.10; // phí dịch vụ 10% mỗi lần rút — trừ trực tiếp vào số tiền quy đổi, KHÔNG đổi số coin bị trừ khỏi ví
-const RUT_TOI_THIEU = 20000; // coin (~2.000đ)
-const RUT_TOI_DA_NGAY = 180000; // coin / ngày (~18.000đ)
-const RUT_TOI_DA_TUAN = 500000; // coin / tuần (~50.000đ)
+const RUT_TOI_THIEU = 200000; // coin (~2.000đ)
+const RUT_TOI_DA_NGAY = 1800000; // coin / ngày (~18.000đ)
+const RUT_TOI_DA_TUAN = 5000000; // coin / tuần (~50.000đ)
 const TIEN_TO_LINK4M_SO_LAN_NGAY = "link4m-so-lan-ngay:"; // số lần hoàn thành nhiệm vụ link4m hôm nay
 const LINK4M_GIOI_HAN_NGAY = 3; // tăng từ 2 lên 3 lần/ngày
 const TIEN_TO_LINK4M_LAN_CUOI = "link4m-lan-cuoi:"; // mốc thời gian hoàn thành nhiệm vụ link4m gần nhất — chặn vượt liên tục

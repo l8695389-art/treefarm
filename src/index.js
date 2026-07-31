@@ -166,6 +166,29 @@ function ngauNhienCoinTrongKhoang(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+// Dựng nội dung tin nhắn thông báo Gift Code mới — dùng chung cho broadcast
+// tự động ngay sau khi admin tạo mã bằng /taogifcode.
+function xayDungTinGifcode(giftcode) {
+  const dongThuong =
+    giftcode.coinMin === giftcode.coinMax
+      ? `${giftcode.coinMin.toLocaleString("vi-VN")} coin`
+      : `${giftcode.coinMin.toLocaleString("vi-VN")} - ${giftcode.coinMax.toLocaleString("vi-VN")} coin (ngẫu nhiên)`;
+
+  return (
+    "🎁 TÍNH NĂNG MỚI: GIFT CODE!\n\n" +
+    "Vua Cày Tiền vừa ra mắt tính năng nhập Gift Code — nhận coin miễn phí cực nhanh!\n\n" +
+    "✨ Cách nhận:\n" +
+    "1️⃣ Mở app → vào tab Nhiệm vụ\n" +
+    '2️⃣ Kéo xuống khối "🎁 Nhập Gift Code"\n' +
+    "3️⃣ Bấm vào mã bên dưới để copy, rồi dán vào ô nhập mã\n\n" +
+    `🎟️ Mã: \`${giftcode.code}\`\n` +
+    `🪙 Thưởng: ${dongThuong}\n` +
+    `👥 Giới hạn: ${giftcode.soLuongToiDa.toLocaleString("vi-VN")} người nhanh tay nhất\n\n` +
+    "⚠️ Mỗi tài khoản chỉ nhập được 1 lần, hết lượt là hết — nhanh tay kẻo lỡ!\n\n" +
+    "💸 Cày coin, đổi thưởng ngay hôm nay tại Vua Cày Tiền 💸"
+  );
+}
+
 // ==================================================
 // ⛏️ ĐÀO COIN — bấm "Đào Coin" ở Trang chủ, chạy liên tục tối đa 4 giờ,
 // coin cộng dần vào ví theo thời gian thực (mỗi lần client poll trạng thái
@@ -584,27 +607,51 @@ async function xuLyTaoGifcode(env, message) {
     return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: `❌ Mã "${ma}" đã tồn tại rồi, chọn mã khác.` });
   }
 
-  await env.USERS.put(
-    TIEN_TO_GIFCODE + ma,
-    JSON.stringify({
-      code: ma,
-      coinMin: khoangCoin.min,
-      coinMax: khoangCoin.max,
-      soLuongToiDa: soLuong,
-      soLuongDaDung: 0,
-      taoLuc: Date.now(),
-      taoBoi: String(message.from.id),
-    })
-  );
+  const giftcodeMoi = {
+    code: ma,
+    coinMin: khoangCoin.min,
+    coinMax: khoangCoin.max,
+    soLuongToiDa: soLuong,
+    soLuongDaDung: 0,
+    taoLuc: Date.now(),
+    taoBoi: String(message.from.id),
+  };
+  await env.USERS.put(TIEN_TO_GIFCODE + ma, JSON.stringify(giftcodeMoi));
 
   const dongThuong =
     khoangCoin.min === khoangCoin.max
       ? `${khoangCoin.min.toLocaleString("vi-VN")} coin/lượt`
       : `${khoangCoin.min.toLocaleString("vi-VN")} - ${khoangCoin.max.toLocaleString("vi-VN")} coin/lượt (ngẫu nhiên)`;
 
+  await telegramApi(env, "sendMessage", {
+    chat_id: message.chat.id,
+    text: `✅ Đã tạo gift code!\n\n🎁 Mã: \`${ma}\`\n🪙 Thưởng: ${dongThuong}\n👥 Số lượt tối đa: ${soLuong.toLocaleString("vi-VN")}\n\n⏳ Đang gửi thông báo tới toàn bộ user...`,
+    parse_mode: "Markdown",
+  });
+
+  // Tự động broadcast thông báo mã mới tới toàn bộ user — không cần dùng
+  // thêm lệnh /gui thủ công nữa. Cùng cơ chế duyệt toàn bộ user + delay
+  // 50ms/tin để né rate-limit Telegram như xuLyGuiThongBao.
+  const tinNhan = xayDungTinGifcode(giftcodeMoi);
+  let thanhCong = 0;
+  let thatBai = 0;
+  for await (const uid of duyetTatCaNguoiDung(env)) {
+    const ketQua = await telegramApi(env, "sendMessage", {
+      chat_id: Number(uid),
+      text: tinNhan,
+      parse_mode: "Markdown", // cho phép mã hiển thị dạng monospace, bấm vào là copy luôn — không cần gõ tay
+      reply_markup: {
+        inline_keyboard: [[{ text: "🎁 Nhập ngay", web_app: { url: env.LINK_MINIAPP } }]],
+      },
+    });
+    if (ketQua.ok) thanhCong += 1;
+    else thatBai += 1;
+    await cho(50); // né rate-limit Telegram, giống xuLyGuiThongBao
+  }
+
   return telegramApi(env, "sendMessage", {
     chat_id: message.chat.id,
-    text: `✅ Đã tạo gift code!\n\n🎁 Mã: ${ma}\n🪙 Thưởng: ${dongThuong}\n👥 Số lượt tối đa: ${soLuong.toLocaleString("vi-VN")}`,
+    text: `✅ Đã gửi xong thông báo Gift Code "${ma}"!\nThành công: ${thanhCong}\nThất bại: ${thatBai}`,
   });
 }
 

@@ -49,6 +49,15 @@ CHU_SO_HUU = "7055595466"
 NHOM_LOG = "@nhomlogbot"
 LINK_MINIAPP = "https://c.vuacaytienx.workers.dev/"
 LINK_ANH = "https://i.ibb.co/G30BjPLs/file-000000000740820bae9353d842911d28.png"
+# Dùng cho thông báo Gift Code tự động khi admin chạy /taogifcode — CHỈ gửi
+# vào kênh + nhóm này (không DM riêng từng user). Có thể là username public
+# (vd "@vuacaytien_news") hoặc chat_id số (vd "-1001234567890" nếu là nhóm/
+# kênh riêng tư). Nhớ thêm bot làm ADMIN của kênh/nhóm đó thì mới gửi được.
+KENH_THONG_BAO = "@vuacaytien_news"
+NHOM_CHAT = "@vuacaytien_chat"
+# Link mở chat riêng với bot — dùng làm nút bấm trong tin nhắn gửi vào
+# kênh/nhóm (vì nút web_app chỉ hoạt động trong chat riêng 1-1 với bot).
+LINK_BOT = "https://t.me/vuacaytien_bot"
 # THUONG_COIN_QUANG_CAO (mặc định 350) và THUONG_COIN_NHIEM_VU (mặc định 2000)
 # có thể khai báo ở đây nếu muốn ghi đè mặc định trong code.
 

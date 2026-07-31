@@ -579,6 +579,50 @@ async function xuLyDsAdmin(env, message) {
   return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text });
 }
 
+// /sluser — đếm tổng số user đã từng /start với bot (duyệt qua toàn bộ
+// key "user:*" trong D1/KV, giống cách /gui duyệt để broadcast).
+async function xuLySoLuongUser(env, message) {
+  if (!(await laAdmin(env, message.from.id))) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "❌ Bạn không có quyền!" });
+  }
+
+  let tongSo = 0;
+  for await (const _uid of duyetTatCaNguoiDung(env)) {
+    tongSo += 1;
+  }
+
+  return telegramApi(env, "sendMessage", {
+    chat_id: message.chat.id,
+    text: `👥 Tổng số user đã /start với bot: ${tongSo.toLocaleString("vi-VN")}`,
+  });
+}
+
+// /dslenh — liệt kê toàn bộ lệnh dành cho admin kèm mô tả ngắn + cú pháp.
+// Chỉ cần cập nhật DANH_SACH_LENH_ADMIN khi thêm/bớt lệnh admin mới, không
+// cần sửa gì khác.
+const DANH_SACH_LENH_ADMIN = [
+  { lenh: "/themadmin [ID]", moTa: "Thêm 1 admin mới (mọi admin đều dùng được)" },
+  { lenh: "/xoaadmin [ID]", moTa: "Xóa 1 admin (chỉ chủ sở hữu)" },
+  { lenh: "/dsadmin", moTa: "Xem danh sách admin hiện tại" },
+  { lenh: "/baotri [bat|tat]", moTa: "Bật/tắt chế độ bảo trì, hoặc xem trạng thái nếu không nhập tham số" },
+  { lenh: "/taogifcode [coin hoặc min-max] [code] [so_luot]", moTa: "Tạo gift code mới, tự thông báo vào kênh + nhóm" },
+  { lenh: "/gui", moTa: "Trả lời 1 tin nhắn kèm lệnh này để broadcast tới toàn bộ user" },
+  { lenh: "/sluser", moTa: "Xem tổng số user đã /start với bot" },
+  { lenh: "/dslenh", moTa: "Xem danh sách lệnh admin này" },
+];
+
+async function xuLyDsLenh(env, message) {
+  if (!(await laAdmin(env, message.from.id))) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "❌ Bạn không có quyền!" });
+  }
+
+  const text =
+    "🛠️ DANH SÁCH LỆNH ADMIN:\n\n" +
+    DANH_SACH_LENH_ADMIN.map((l, idx) => `${idx + 1}. \`${l.lenh}\`\n   ${l.moTa}`).join("\n\n");
+
+  return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text, parse_mode: "Markdown" });
+}
+
 // /baotri bat | /baotri tat | /baotri (xem trạng thái hiện tại)
 async function xuLyBaoTri(env, message) {
   if (!(await laAdmin(env, message.from.id))) {
@@ -828,6 +872,10 @@ async function xuLyUpdate(env, update) {
         return xuLyXoaAdmin(env, message);
       case "/dsadmin":
         return xuLyDsAdmin(env, message);
+      case "/sluser":
+        return xuLySoLuongUser(env, message);
+      case "/dslenh":
+        return xuLyDsLenh(env, message);
       case "/baotri":
         return xuLyBaoTri(env, message);
       case "/taogifcode":

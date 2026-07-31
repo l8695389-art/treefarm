@@ -606,6 +606,8 @@ const DANH_SACH_LENH_ADMIN = [
   { lenh: "/dsadmin", moTa: "Xem danh sách admin hiện tại" },
   { lenh: "/baotri [bat|tat]", moTa: "Bật/tắt chế độ bảo trì, hoặc xem trạng thái nếu không nhập tham số" },
   { lenh: "/taogifcode [coin hoặc min-max] [code] [so_luot]", moTa: "Tạo gift code mới, tự thông báo vào kênh + nhóm" },
+  { lenh: "/checkcode", moTa: "Xem danh sách các gift code đã tạo" },
+  { lenh: "/checkcodesl [code]", moTa: "Xem chi tiết + số người đã nhập 1 gift code" },
   { lenh: "/gui", moTa: "Trả lời 1 tin nhắn kèm lệnh này để broadcast tới toàn bộ user" },
   { lenh: "/sluser", moTa: "Xem tổng số user đã /start với bot" },
   { lenh: "/dslenh", moTa: "Xem danh sách lệnh admin này" },
@@ -760,6 +762,86 @@ async function xuLyTaoGifcode(env, message) {
   });
 }
 
+// /checkcode — liệt kê toàn bộ gift code đã tạo (mới nhất trước)
+async function xuLyCheckCode(env, message) {
+  if (!(await laAdmin(env, message.from.id))) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "❌ Bạn không có quyền!" });
+  }
+
+  const danhSachMa = [];
+  let cursor;
+  for (;;) {
+    const trang = await env.USERS.list({ prefix: TIEN_TO_GIFCODE, cursor });
+    for (const key of trang.keys) danhSachMa.push(key.name.slice(TIEN_TO_GIFCODE.length));
+    if (trang.list_complete) break;
+    cursor = trang.cursor;
+  }
+
+  if (danhSachMa.length === 0) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "📭 Chưa có gift code nào được tạo." });
+  }
+
+  const chiTiet = [];
+  for (const ma of danhSachMa) {
+    const raw = await env.USERS.get(TIEN_TO_GIFCODE + ma);
+    if (raw) chiTiet.push(JSON.parse(raw));
+  }
+  chiTiet.sort((a, b) => b.taoLuc - a.taoLuc);
+
+  // Telegram giới hạn 4096 ký tự/tin nhắn — chỉ hiện 50 mã gần nhất, kèm ghi chú nếu còn dư
+  const HIEN_TOI_DA = 50;
+  const dong = chiTiet.slice(0, HIEN_TOI_DA).map((gc, idx) => {
+    const thuong =
+      gc.coinMin === gc.coinMax
+        ? `${gc.coinMin.toLocaleString("vi-VN")} coin`
+        : `${gc.coinMin.toLocaleString("vi-VN")}-${gc.coinMax.toLocaleString("vi-VN")} coin`;
+    return `${idx + 1}. \`${gc.code}\` | ${thuong} | ${gc.soLuongDaDung}/${gc.soLuongToiDa} lượt`;
+  });
+
+  let text = `🎁 DANH SÁCH GIFT CODE (${chiTiet.length}):\n\n` + dong.join("\n");
+  if (chiTiet.length > HIEN_TOI_DA) {
+    text += `\n\n… và ${chiTiet.length - HIEN_TOI_DA} mã khác. Dùng /checkcodesl [code] để xem chi tiết 1 mã.`;
+  }
+
+  return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text, parse_mode: "Markdown" });
+}
+
+// /checkcodesl [code] — xem chi tiết + số lượt đã nhập của 1 gift code cụ thể
+async function xuLyCheckCodeSoLuong(env, message) {
+  if (!(await laAdmin(env, message.from.id))) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "❌ Bạn không có quyền!" });
+  }
+
+  const phan = message.text.trim().split(/\s+/);
+  if (phan.length < 2) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "⚠️ Dùng: /checkcodesl [code]" });
+  }
+
+  const ma = phan[1].toUpperCase();
+  const raw = await env.USERS.get(TIEN_TO_GIFCODE + ma);
+  if (!raw) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: `❌ Mã "${ma}" không tồn tại.` });
+  }
+
+  const gc = JSON.parse(raw);
+  const thuong =
+    gc.coinMin === gc.coinMax
+      ? `${gc.coinMin.toLocaleString("vi-VN")} coin/lượt`
+      : `${gc.coinMin.toLocaleString("vi-VN")} - ${gc.coinMax.toLocaleString("vi-VN")} coin/lượt`;
+  const conLai = Math.max(0, gc.soLuongToiDa - gc.soLuongDaDung);
+  const ngayTao = new Date(gc.taoLuc).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+
+  const text =
+    `🎁 Mã: \`${gc.code}\`\n` +
+    `🪙 Thưởng: ${thuong}\n` +
+    `👥 Đã dùng: ${gc.soLuongDaDung.toLocaleString("vi-VN")}/${gc.soLuongToiDa.toLocaleString("vi-VN")}\n` +
+    `📊 Còn lại: ${conLai.toLocaleString("vi-VN")} lượt\n` +
+    `🕒 Tạo lúc: ${ngayTao}\n` +
+    `👤 Tạo bởi: ${gc.taoBoi}`;
+
+  return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text, parse_mode: "Markdown" });
+}
+
 // ==================================================
 // 🚪 /start
 // ==================================================
@@ -880,6 +962,10 @@ async function xuLyUpdate(env, update) {
         return xuLyBaoTri(env, message);
       case "/taogifcode":
         return xuLyTaoGifcode(env, message);
+      case "/checkcode":
+        return xuLyCheckCode(env, message);
+      case "/checkcodesl":
+        return xuLyCheckCodeSoLuong(env, message);
       case "/gui":
         return xuLyGuiThongBao(env, message);
       default:

@@ -1,12 +1,106 @@
 import { telegramApi, cho } from "./telegram.js";
 
+// ==================================================
+// 🗄️ LỚP TƯƠNG THÍCH D1 — GIẢ LẬP GIAO DIỆN KV TRÊN NỀN D1
+// Toàn bộ code phía dưới gọi env.USERS.get/put/delete/list và
+// env.ADMINS.get/put y hệt như khi dùng KV Namespace thật — KHÔNG cần sửa
+// bất kỳ hàm nghiệp vụ nào (đào coin, hoa hồng, BXH, rút tiền...). Chỉ cần
+// đổi lớp lưu trữ bên dưới bằng bảng D1 "kv" (ns, key) → value.
+//
+// Bảng D1 cần tạo trước (xem schema.sql đi kèm):
+//   CREATE TABLE kv (
+//     ns    TEXT NOT NULL,
+//     key   TEXT NOT NULL,
+//     value TEXT,
+//     PRIMARY KEY (ns, key)
+//   );
+//
+// wrangler.toml cần khai báo binding D1 tên "DB":
+//   [[d1_databases]]
+//   binding = "DB"
+//   database_name = "vua-cay-tien"
+//   database_id = "<id>"
+// ==================================================
+
+// Escape ký tự đặc biệt của LIKE (%, _, \) để prefix match chính xác.
+function thoatKyTuLike(chuoi) {
+  return chuoi.replace(/[\\%_]/g, (m) => "\\" + m);
+}
+
+async function d1Get(db, ns, key) {
+  const hang = await db.prepare("SELECT value FROM kv WHERE ns = ?1 AND key = ?2").bind(ns, key).first();
+  return hang ? hang.value : null;
+}
+
+async function d1Put(db, ns, key, value) {
+  await db
+    .prepare(
+      "INSERT INTO kv (ns, key, value) VALUES (?1, ?2, ?3) ON CONFLICT(ns, key) DO UPDATE SET value = excluded.value"
+    )
+    .bind(ns, key, String(value))
+    .run();
+}
+
+async function d1Delete(db, ns, key) {
+  await db.prepare("DELETE FROM kv WHERE ns = ?1 AND key = ?2").bind(ns, key).run();
+}
+
+// Giả lập KV.list({ prefix, cursor, limit }) — phân trang theo key (ORDER BY
+// key ASC), cursor là key cuối cùng của trang trước. Trả về đúng hình dạng
+// { keys: [{name}], list_complete, cursor } như KV thật để duyetTatCaNguoiDung
+// và các chỗ gọi list() khác không cần sửa.
+async function d1List(db, ns, { prefix = "", cursor = null, limit = 1000 } = {}) {
+  const gioiHan = limit || 1000;
+  const thamSo = [ns, thoatKyTuLike(prefix) + "%"];
+  let cauLenh = "SELECT key FROM kv WHERE ns = ?1 AND key LIKE ?2 ESCAPE '\\'";
+  if (cursor) {
+    cauLenh += " AND key > ?3";
+    thamSo.push(cursor);
+  }
+  cauLenh += ` ORDER BY key ASC LIMIT ${cursor ? "?4" : "?3"}`;
+  thamSo.push(gioiHan + 1); // lấy dư 1 dòng để biết còn trang sau hay không
+
+  const { results } = await db.prepare(cauLenh).bind(...thamSo).all();
+  const conTrang = results.length > gioiHan;
+  const keys = results.slice(0, gioiHan).map((r) => ({ name: r.key }));
+
+  return {
+    keys,
+    list_complete: !conTrang,
+    cursor: conTrang ? keys[keys.length - 1].name : undefined,
+  };
+}
+
+// Tạo object có giao diện y hệt KV Namespace (get/put/delete/list) nhưng
+// chạy trên D1, phân theo "ns" (namespace) để dữ liệu USERS và ADMINS
+// không lẫn nhau dù cùng chung 1 bảng "kv".
+function taoD1TheoKV(db, ns) {
+  return {
+    get: (key) => d1Get(db, ns, key),
+    put: (key, value) => d1Put(db, ns, key, value),
+    delete: (key) => d1Delete(db, ns, key),
+    list: (tuyChon) => d1List(db, ns, tuyChon || {}),
+  };
+}
+
+// Bọc env gốc: thay USERS/ADMINS (trước đây là KV Namespace binding) bằng
+// adapter D1 ở trên. Không mutate env gốc — trả về 1 object mới để tránh
+// side-effect ngoài ý muốn giữa các request chạy song song trên cùng Worker.
+function boQuaD1(env) {
+  return {
+    ...env,
+    USERS: taoD1TheoKV(env.DB, "users"),
+    ADMINS: taoD1TheoKV(env.DB, "admins"),
+  };
+}
+
 const KEY_DANH_SACH_ADMIN = "danh_sach_admin";
 const KEY_BAO_TRI = "che-do-bao-tri"; // giá trị "1" = đang bảo trì (chặn toàn bộ miniapp + API), khác "1" = hoạt động bình thường
 const TIEN_TO_USER = "user:";
 const TIEN_TO_QC_SO_LAN_NGAY = "qc-so-lan-ngay:";
 const QC_GIOI_HAN_NGAY = 20;
 const TIEN_TO_QC_LAN_CUOI = "qc-lan-cuoi:"; // mốc thời gian lần xem quảng cáo gần nhất — chặn spam
-const QC_CHO_TOI_THIEU_MS = 30 * 1000; // phải chờ tối thiểu 30 giây giữa 2 lần xem quảng cáo
+const QC_CHO_TOI_THIEU_MS = 5 * 60 * 1000; // phải chờ tối thiểu 5 phút giữa 2 lần xem quảng cáo
 const TIEN_TO_TAI_KHOAN_NHAN = "tai-khoan-nhan:";
 const TIEN_TO_BAN_BE = "ban-be:"; // ban-be:{uid_nguoi_moi} — JSON array các bạn đã mời qua link ref_
 const SO_NGAY_DOI_TAI_KHOAN = 20; // chỉ cho đổi tài khoản nhận tiền 20 ngày / 1 lần
@@ -15,30 +109,19 @@ const TIEN_TO_CHO_DUYET_RUT = "cho-duyet-rut:"; // cho-duyet-rut:{uid}:{id} — 
 const TIEN_TO_RUT_NGAY = "rut-gem-ngay:"; // giữ tiền tố cũ để không lẫn dữ liệu hạn mức trước khi gộp gem vào coin
 const TIEN_TO_RUT_TUAN = "rut-gem-tuan:"; // tương tự — tiền tố nội bộ, không hiển thị ra ngoài
 const COIN_QUY_DOI_DONG_MAU_SO = 10; // 10 coin = 1đ khi rút — coin giờ là đơn vị duy nhất, rút thẳng không cần đổi qua gem nữa
+const PHI_RUT_TIEN_PHAN_TRAM = 0.10; // phí dịch vụ 10% mỗi lần rút — trừ trực tiếp vào số tiền quy đổi, KHÔNG đổi số coin bị trừ khỏi ví
 const RUT_TOI_THIEU = 20000; // coin (~2.000đ)
 const RUT_TOI_DA_NGAY = 180000; // coin / ngày (~18.000đ)
 const RUT_TOI_DA_TUAN = 500000; // coin / tuần (~50.000đ)
 const TIEN_TO_LINK4M_SO_LAN_NGAY = "link4m-so-lan-ngay:"; // số lần hoàn thành nhiệm vụ link4m hôm nay
-const LINK4M_GIOI_HAN_NGAY = 2; // tăng từ 1 lên 2 lần/ngày
-const KEY_CACHE_BANG_XEP_HANG = "cache-bang-xep-hang"; // JSON { kiem_xu, moi_ban, cap_nhat_luc } — làm mới mỗi 15 phút qua Cron Trigger
+const LINK4M_GIOI_HAN_NGAY = 3; // tăng từ 2 lên 3 lần/ngày
+const TIEN_TO_LINK4M_LAN_CUOI = "link4m-lan-cuoi:"; // mốc thời gian hoàn thành nhiệm vụ link4m gần nhất — chặn vượt liên tục
+const LINK4M_CHO_TOI_THIEU_MS = 5 * 60 * 1000; // phải chờ tối thiểu 5 phút giữa 2 lần vượt link
+const KEY_CACHE_BANG_XEP_HANG = "cache-bang-xep-hang"; // JSON { kiem_xu, cap_nhat_luc } — làm mới mỗi 15 phút qua Cron Trigger
 const KEY_MUA_GIAI = "mua-giai-bxh-hien-tai"; // JSON { bat_dau, ket_thuc } — mùa giải BXH hiện tại, tự mở mùa mới khi hết hạn
 const MUA_GIAI_SO_NGAY = 7; // độ dài 1 mùa giải BXH (ngày)
 const TOP_NHAN_THUONG = 10; // chỉ Top 10 mỗi bảng xếp hạng mới nhận thưởng khi kết thúc mùa giải (admin trao thủ công, giống quy trình duyệt rút tiền)
 const PHAN_THUONG_KIEM_XU = [10000, 5000, 2500, 2000, 2000, 2000, 2000, 2000, 2000, 2000]; // coin thưởng hạng 1→10, BXH "Đua Top Xu"
-const PHAN_THUONG_MOI_BAN = [
-  // coin thưởng hạng 1→10, BXH "Đua Top Mời Bạn" — bằng 1,5 lần thưởng "Đua Top Xu" cùng hạng.
-  // Mỗi bậc có mốc số bạn tối thiểu (can) riêng; đạt hạng nhưng chưa đủ mốc thì chỉ nhận 50% thưởng (xem tinhPhanThuong()).
-  { coin: 15000, can: 10 },
-  { coin: 7500, can: 5 },
-  { coin: 3750, can: 5 },
-  { coin: 3000, can: 2 },
-  { coin: 3000, can: 2 },
-  { coin: 3000, can: 2 },
-  { coin: 3000, can: 2 },
-  { coin: 3000, can: 2 },
-  { coin: 3000, can: 2 },
-  { coin: 3000, can: 2 },
-];
 const TIEN_TO_DIEM_DANH = "diem-danh:"; // diem-danh:{uid} — JSON { chuoi_hien_tai, ngay_cuoi }
 const THUONG_DIEM_DANH = [20, 40, 60, 90, 130, 160, 200]; // coin thưởng theo ngày 1→7 trong chu kỳ điểm danh, lặp lại sau ngày 7 (đã giảm ~15 lần so với bản gốc để kéo dài thời gian tích lũy tới mức rút tối thiểu)
 const THUONG_COIN_MOI_MOI = 50; // coin chào mừng cho người dùng mới — chỉ nhận 1 lần duy nhất khi /start lần đầu
@@ -621,6 +704,18 @@ async function xuLyTaoNhiemVu(env, url, goc) {
     return Response.json({ thanh_cong: false, loi: "da_vuot_hom_nay" });
   }
 
+  // Chặn vượt liên tục — phải cách lần hoàn thành trước tối thiểu
+  // LINK4M_CHO_TOI_THIEU_MS (5 phút), tương tự cơ chế chặn spam quảng cáo.
+  const lanCuoiXong = Number((await env.USERS.get(TIEN_TO_LINK4M_LAN_CUOI + uid)) || 0);
+  const daTroiTuLanCuoi = Date.now() - lanCuoiXong;
+  if (lanCuoiXong && daTroiTuLanCuoi < LINK4M_CHO_TOI_THIEU_MS) {
+    return Response.json({
+      thanh_cong: false,
+      loi: "cho_qua_nhanh",
+      cho_con_lai_giay: Math.ceil((LINK4M_CHO_TOI_THIEU_MS - daTroiTuLanCuoi) / 1000),
+    });
+  }
+
   // Còn nhiệm vụ đang chờ, chưa hoàn thành, chưa hết hạn → trả lại ĐÚNG
   // link cũ, không tạo mới. Đây là cơ chế giữ link khi thoát app rồi mở
   // lại — không cần gọi thêm Link4M, không sinh thêm mã thừa.
@@ -666,6 +761,7 @@ async function xuLyNhiemVuHienTai(env, url) {
   const soLanQcDaXem = Number((await env.USERS.get(TIEN_TO_QC_SO_LAN_NGAY + uid + ":" + homNay)) || 0);
   const qcLanCuoi = Number((await env.USERS.get(TIEN_TO_QC_LAN_CUOI + uid)) || 0);
   const soLanLink4mDaXong = Number((await env.USERS.get(TIEN_TO_LINK4M_SO_LAN_NGAY + uid + ":" + homNay)) || 0);
+  const link4mLanCuoi = Number((await env.USERS.get(TIEN_TO_LINK4M_LAN_CUOI + uid)) || 0);
 
   const trangThaiChung = {
     coin,
@@ -675,6 +771,8 @@ async function xuLyNhiemVuHienTai(env, url) {
     qc_cho_toi_thieu_giay: QC_CHO_TOI_THIEU_MS / 1000,
     so_lan_link4m_da_xong: soLanLink4mDaXong,
     link4m_gioi_han_ngay: LINK4M_GIOI_HAN_NGAY,
+    link4m_lan_cuoi: link4mLanCuoi,
+    link4m_cho_toi_thieu_giay: LINK4M_CHO_TOI_THIEU_MS / 1000,
   };
 
   if (soLanLink4mDaXong >= LINK4M_GIOI_HAN_NGAY) {
@@ -725,7 +823,7 @@ async function xuLyXacNhanQuangCao(env, url) {
   await env.USERS.put(key, String(soLanMoi));
   await env.USERS.put(keyLanCuoi, String(now));
 
-  const soCoinCong = Number(env.THUONG_COIN_QUANG_CAO || 350); // nếu đã đặt biến môi trường THUONG_COIN_QUANG_CAO trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
+  const soCoinCong = Number(env.THUONG_COIN_QUANG_CAO || 250); // nếu đã đặt biến môi trường THUONG_COIN_QUANG_CAO trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
   const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, tongDaKiem: 0 };
   nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
   congCoin(nguoiDung, soCoinCong);
@@ -1152,10 +1250,11 @@ async function xuLyXacNhanNhiemVu(env, url) {
   await env.USERS.put(key, JSON.stringify(banGhi));
   const soLanMoi = soLanDaXong + 1;
   await env.USERS.put(keySoLan, String(soLanMoi));
+  await env.USERS.put(TIEN_TO_LINK4M_LAN_CUOI + uid, String(Date.now())); // mốc chặn vượt liên tục, phải chờ LINK4M_CHO_TOI_THIEU_MS mới được vượt tiếp
   await xoaNhiemVuHienTai(env, uid); // dọn con trỏ, nhiệm vụ này xong rồi
 
   // Cộng thưởng coin
-  const soCoinCong = Number(env.THUONG_COIN_NHIEM_VU || 2000); // nếu đã đặt biến môi trường THUONG_COIN_NHIEM_VU trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
+  const soCoinCong = Number(env.THUONG_COIN_NHIEM_VU || 1000); // nếu đã đặt biến môi trường THUONG_COIN_NHIEM_VU trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
   const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, tongDaKiem: 0 };
   nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
   congCoin(nguoiDung, soCoinCong);
@@ -1169,53 +1268,38 @@ async function xuLyXacNhanNhiemVu(env, url) {
     coin_cong: soCoinCong,
     so_lan_link4m_da_xong: soLanMoi,
     link4m_gioi_han_ngay: LINK4M_GIOI_HAN_NGAY,
+    cho_toi_thieu_giay: LINK4M_CHO_TOI_THIEU_MS / 1000,
     cap_dao: nguoiDung.capDao || 1,
     xp_dao: nguoiDung.xpDao || 0,
   });
 }
 
 // ==================================================
-// 🏆 BẢNG XẾP HẠNG — 2 chế độ:
-//   • "kiem_xu"  Đua Top Xu       — xếp theo XU KIẾM ĐƯỢC TRONG MÙA GIẢI hiện tại
-//   • "moi_ban"  Đua Top Mời Bạn  — xếp theo SỐ BẠN ĐÃ MỜI TRONG MÙA GIẢI hiện tại
-// Chỉ Top 10 mỗi bảng mới nhận phần thưởng khi kết thúc mùa giải.
+// 🏆 BẢNG XẾP HẠNG — "Đua Top Xu": xếp theo XU KIẾM ĐƯỢC TRONG MÙA GIẢI
+// hiện tại. Chỉ Top 10 mới nhận phần thưởng khi kết thúc mùa giải.
 //
 // Điểm số tính THEO MÙA (không phải lũy kế toàn thời gian): mỗi user lưu 1
-// "mốc mùa giải" (mocMuaGiai) chụp lại tongDaKiem + số bạn bè tại thời điểm
-// mùa hiện tại bắt đầu quét user đó lần đầu (lazy — chỉ ghi lại khi phát
-// hiện số mùa đã đổi). Điểm hiển thị = giá trị lũy kế hiện tại − giá trị
-// tại mốc. Nhờ vậy KHÔNG cần sửa mọi nơi cộng coin/bạn bè trong toàn bộ
-// file, mùa mới tự "reset" điểm về 0 ngay lần quét đầu tiên của mùa đó.
+// "mốc mùa giải" (mocMuaGiai) chụp lại tongDaKiem tại thời điểm mùa hiện
+// tại bắt đầu quét user đó lần đầu (lazy — chỉ ghi lại khi phát hiện số
+// mùa đã đổi). Điểm hiển thị = giá trị lũy kế hiện tại − giá trị tại mốc.
+// Nhờ vậy KHÔNG cần sửa mọi nơi cộng coin trong toàn bộ file, mùa mới tự
+// "reset" điểm về 0 ngay lần quét đầu tiên của mùa đó.
 //
-// Để tránh quét toàn bộ KV (tốn CPU time) mỗi lần người dùng mở app, cả 2
-// bảng được TÍNH TRƯỚC và lưu chung 1 cache, làm mới mỗi 15 phút bằng Cron
-// Trigger (xem "scheduled" ở cuối file + [triggers] trong wrangler.toml).
+// Để tránh quét toàn bộ KV (tốn CPU time) mỗi lần người dùng mở app, bảng
+// được TÍNH TRƯỚC và lưu vào cache, làm mới mỗi 15 phút bằng Cron Trigger
+// (xem "scheduled" ở cuối file + [triggers] trong wrangler.toml).
 // Endpoint /bang-xep-hang chỉ đọc cache; nếu chưa có cache (lần đầu deploy)
 // thì tính trực tiếp 1 lần để không trả về rỗng.
 // ==================================================
 const MUC_TOI_THIEU_KIEM_XU = 5000; // xu tối thiểu kiếm được TRONG MÙA để được xếp vào BXH Đua Top Xu
 
 // Đảm bảo user có mốc mùa giải khớp với mùa hiện tại — nếu chưa có hoặc
-// mùa đã đổi thì chụp lại (coin, số bạn bè) hiện tại làm mốc 0 của mùa mới.
-// canBanBe: chỉ quét danh sách bạn bè (tốn nhiều lượt gọi KV — 1 lượt/bạn)
-// khi thực sự cần cho BXH "moi_ban". Khi tính BXH "kiem_xu" thì bỏ qua,
-// tránh vượt giới hạn subrequest của Worker khi quét nhiều user cùng lúc.
-async function damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai, canBanBe) {
+// mùa đã đổi thì chụp lại số coin hiện tại làm mốc 0 của mùa mới.
+async function damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai) {
   let moc = nguoiDung.mocMuaGiai;
-  let doiThay = false;
-
   if (!moc || moc.so_mua !== soMuaHienTai) {
     const coinHienTai = nguoiDung.tongDaKiem != null ? nguoiDung.tongDaKiem : nguoiDung.coin || 0;
-    moc = { so_mua: soMuaHienTai, coin_goc: coinHienTai, ban_be_goc: null };
-    doiThay = true;
-  }
-
-  if (canBanBe && moc.ban_be_goc == null) {
-    moc.ban_be_goc = await demBanBeHopLeChoBxh(env, uid);
-    doiThay = true;
-  }
-
-  if (doiThay) {
+    moc = { so_mua: soMuaHienTai, coin_goc: coinHienTai };
     nguoiDung.mocMuaGiai = moc;
     await luuNguoiDung(env, uid, nguoiDung);
   }
@@ -1235,7 +1319,7 @@ async function tinhBangXepHangKiemXu(env, soMuaHienTai) {
       if (!nguoiDung) continue;
 
       const coinHienTai = nguoiDung.tongDaKiem != null ? nguoiDung.tongDaKiem : nguoiDung.coin || 0;
-      const moc = await damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai, false); // không cần dữ liệu bạn bè ở bảng này
+      const moc = await damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai);
       const daKiemTrongMua = Math.max(0, coinHienTai - moc.coin_goc);
       if (daKiemTrongMua < MUC_TOI_THIEU_KIEM_XU) continue;
 
@@ -1253,46 +1337,11 @@ async function tinhBangXepHangKiemXu(env, soMuaHienTai) {
   return ketQua.slice(0, 50);
 }
 
-async function tinhBangXepHangMoiBan(env, soMuaHienTai) {
-  const QUET_TOI_DA = 20; // giảm tiếp từ 40 → 20 vì bảng này tốn nhiều lượt gọi KV nhất (mỗi user còn kéo theo tối đa GIOI_HAN_BAN_BE_QUET_BXH lượt đọc bạn bè) — đây là nguyên nhân chính khiến Cron 15 phút/lần vượt giới hạn ghi/đọc KV hàng ngày của Cloudflare
-  const ketQua = [];
-  let daQuet = 0;
-
-  try {
-    for await (const uid of duyetTatCaNguoiDung(env)) {
-      if (daQuet >= QUET_TOI_DA) break;
-      daQuet += 1;
-
-      const nguoiDung = await layNguoiDung(env, uid);
-      if (!nguoiDung) continue;
-
-      const banBeHienTai = await demBanBeHopLeChoBxh(env, uid);
-      const moc = await damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai, true);
-      const moiTrongMua = Math.max(0, banBeHienTai - moc.ban_be_goc);
-      if (moiTrongMua <= 0) continue;
-
-      const tenHienThi = (nguoiDung.ten && nguoiDung.ten.trim()) || (nguoiDung.username ? `@${nguoiDung.username}` : "");
-      if (!tenHienThi) continue;
-
-      ketQua.push({ uid, ten: tenHienThi, gia_tri: moiTrongMua });
-    }
-  } catch (e) {
-    // Có thể do vượt giới hạn subrequest/KV giữa chừng — dừng lại và trả về
-    // những gì đã quét được thay vì làm hỏng toàn bộ bảng xếp hạng.
-  }
-
-  ketQua.sort((a, b) => b.gia_tri - a.gia_tri);
-  return ketQua.slice(0, 50);
-}
-
 // Tính lại + ghi cache — được gọi bởi Cron Trigger mỗi 15 phút.
 async function lamMoiCacheBangXepHang(env, muaGiai) {
   const mg = muaGiai || (await layHoacTaoMuaGiai(env));
-  // Chạy tuần tự (không Promise.all) để tránh dồn quá nhiều lượt gọi KV
-  // đồng thời trong 1 request, dễ vượt giới hạn subrequest của Worker.
   const kiemXu = await tinhBangXepHangKiemXu(env, mg.so);
-  const moiBan = await tinhBangXepHangMoiBan(env, mg.so);
-  const duLieu = { so_mua: mg.so, kiem_xu: kiemXu, moi_ban: moiBan, cap_nhat_luc: Date.now() };
+  const duLieu = { so_mua: mg.so, kiem_xu: kiemXu, cap_nhat_luc: Date.now() };
   try {
     await env.USERS.put(KEY_CACHE_BANG_XEP_HANG, JSON.stringify(duLieu));
   } catch (e) {
@@ -1331,28 +1380,14 @@ async function layHoacTaoMuaGiai(env) {
   return moi;
 }
 
-// Tính phần thưởng hiển thị cho 1 hạng — với BXH Mời Bạn, mỗi bậc thưởng có
-// mốc số bạn tối thiểu riêng (vd hạng 1 cần ≥10 bạn); nếu đạt hạng nhưng
-// chưa đủ mốc thì thưởng giảm 50%.
-function tinhPhanThuong(loai, hang, giaTri) {
-  if (hang > TOP_NHAN_THUONG) return { coin: 0, dieu_kien_toi_thieu: null, dat_dieu_kien: true };
-
-  if (loai === "moi_ban") {
-    const bac = PHAN_THUONG_MOI_BAN[hang - 1];
-    const datDieuKien = giaTri >= bac.can;
-    const heSo = datDieuKien ? 1 : 0.5;
-    return {
-      coin: Math.floor(bac.coin * heSo),
-      dieu_kien_toi_thieu: bac.can,
-      dat_dieu_kien: datDieuKien,
-    };
-  }
-
-  return { coin: PHAN_THUONG_KIEM_XU[hang - 1], dieu_kien_toi_thieu: null, dat_dieu_kien: true };
+// Tính phần thưởng hiển thị cho 1 hạng của BXH Đua Top Xu.
+function tinhPhanThuong(hang) {
+  if (hang > TOP_NHAN_THUONG) return { coin: 0 };
+  return { coin: PHAN_THUONG_KIEM_XU[hang - 1] };
 }
 
 async function xuLyBangXepHang(env, url, ctx) {
-  const loai = url.searchParams.get("loai") === "moi-ban" ? "moi_ban" : "kiem_xu";
+  const loai = "kiem_xu";
   const uid = url.searchParams.get("uid");
 
   try {
@@ -1390,14 +1425,9 @@ async function xuLyBangXepHang(env, url, ctx) {
         try {
           const nd = await layNguoiDung(env, uid);
           if (nd) {
-            const moc = await damBaoMocMuaGiai(env, uid, nd, muaGiai.so, loai === "moi_ban");
-            if (loai === "kiem_xu") {
-              const coinHienTai = nd.tongDaKiem != null ? nd.tongDaKiem : nd.coin || 0;
-              giaTriCuaToi = Math.max(0, coinHienTai - moc.coin_goc);
-            } else {
-              const banBeHienTai = await demBanBeHopLeChoBxh(env, uid);
-              giaTriCuaToi = Math.max(0, banBeHienTai - moc.ban_be_goc);
-            }
+            const moc = await damBaoMocMuaGiai(env, uid, nd, muaGiai.so);
+            const coinHienTai = nd.tongDaKiem != null ? nd.tongDaKiem : nd.coin || 0;
+            giaTriCuaToi = Math.max(0, coinHienTai - moc.coin_goc);
           }
         } catch (e) {
           // Không tính được hạng riêng của user (vd hết subrequest) — bỏ
@@ -1409,20 +1439,16 @@ async function xuLyBangXepHang(env, url, ctx) {
     return Response.json({
       mua_giai: muaGiai,
       loai,
-      don_vi_gia_tri: loai === "moi_ban" ? "luot_moi" : "xu",
-      muc_toi_thieu_bxh: loai === "kiem_xu" ? MUC_TOI_THIEU_KIEM_XU : null,
+      don_vi_gia_tri: "xu",
+      muc_toi_thieu_bxh: MUC_TOI_THIEU_KIEM_XU,
       top_nhan_thuong: TOP_NHAN_THUONG,
-      bang_thuong: Array.from({ length: TOP_NHAN_THUONG }, (_, i) =>
-        loai === "moi_ban"
-          ? { hang: i + 1, coin: PHAN_THUONG_MOI_BAN[i].coin, dieu_kien_toi_thieu: PHAN_THUONG_MOI_BAN[i].can }
-          : { hang: i + 1, coin: PHAN_THUONG_KIEM_XU[i], dieu_kien_toi_thieu: null }
-      ),
+      bang_thuong: Array.from({ length: TOP_NHAN_THUONG }, (_, i) => ({ hang: i + 1, coin: PHAN_THUONG_KIEM_XU[i] })),
       bang_xep_hang: danhSach.map((nd, idx) => ({
         hang: idx + 1,
         uid: nd.uid,
         ten: nd.ten,
         gia_tri: nd.gia_tri,
-        phan_thuong: tinhPhanThuong(loai, idx + 1, nd.gia_tri),
+        phan_thuong: tinhPhanThuong(idx + 1),
       })),
       hang_cua_toi: hangCuaToi,
       gia_tri_cua_toi: giaTriCuaToi,
@@ -1435,8 +1461,8 @@ async function xuLyBangXepHang(env, url, ctx) {
     return Response.json({
       mua_giai: { so: 0, bat_dau: Date.now(), ket_thuc: Date.now() },
       loai,
-      don_vi_gia_tri: loai === "moi_ban" ? "luot_moi" : "xu",
-      muc_toi_thieu_bxh: loai === "kiem_xu" ? MUC_TOI_THIEU_KIEM_XU : null,
+      don_vi_gia_tri: "xu",
+      muc_toi_thieu_bxh: MUC_TOI_THIEU_KIEM_XU,
       top_nhan_thuong: TOP_NHAN_THUONG,
       bang_thuong: [],
       bang_xep_hang: [],
@@ -1457,26 +1483,6 @@ async function xuLyBangXepHang(env, url, ctx) {
 // ==================================================
 // 👥 BẠN BÈ — ghi nhận lượt mời qua link ref_, tra cứu cho tab Bạn bè
 // ==================================================
-const CAP_DAO_TOI_THIEU_TINH_BXH_MOI_BAN = 2; // người được mời phải đạt cấp đào (capDao) ≥ 2 mới được tính 1 lượt mời cho BXH "Đua Top Mời Bạn" — chặn tạo tài khoản ảo chỉ để farm điểm
-const GIOI_HAN_BAN_BE_QUET_BXH = 10; // giảm tiếp từ 20 → 10 bạn GẦN NHẤT/người khi tính BXH — nếu không giới hạn, 1 người mời được vài trăm bạn sẽ khiến việc tính BXH tốn hàng trăm lượt gọi KV riêng cho 1 user, dễ vượt giới hạn subrequest CŨNG NHƯ giới hạn ghi/đọc KV hàng ngày của Cloudflare
-
-// Đếm số bạn đã mời ĐẠT ĐIỀU KIỆN (cấp đào ≥ CAP_DAO_TOI_THIEU_TINH_BXH_MOI_BAN) —
-// dùng riêng cho tính điểm BXH Mời Bạn, khác với số lượng hiển thị thô ở tab Bạn bè.
-// LƯU Ý: chỉ quét tối đa GIOI_HAN_BAN_BE_QUET_BXH bạn gần nhất (danh sách đã
-// sắp mới nhất trước) — với người mời rất nhiều bạn, số liệu BXH có thể hơi
-// thấp hơn thực tế nhưng đổi lại tránh sập cả bảng xếp hạng vì quá tải KV.
-async function demBanBeHopLeChoBxh(env, uid) {
-  const raw = await env.USERS.get(TIEN_TO_BAN_BE + uid);
-  const danhSachDay = raw ? JSON.parse(raw) : [];
-  const danhSach = danhSachDay.slice(0, GIOI_HAN_BAN_BE_QUET_BXH);
-  let dem = 0;
-  for (const nb of danhSach) {
-    if (!nb.uid) continue; // bản ghi cũ trước khi lưu uid — không thể kiểm tra cấp, bỏ qua
-    const nguoiBanMoi = await layNguoiDung(env, nb.uid);
-    if (nguoiBanMoi && (nguoiBanMoi.capDao || 1) >= CAP_DAO_TOI_THIEU_TINH_BXH_MOI_BAN) dem += 1;
-  }
-  return dem;
-}
 
 async function ghiNhanBanBeMoi(env, refUid, banMoi) {
   const key = TIEN_TO_BAN_BE + refUid;
@@ -1585,7 +1591,8 @@ async function xuLyYeuCauRutTien(env, url) {
     return Response.json({ thanh_cong: false, loi: "khong_du_coin" });
   }
 
-  const soTien = Math.floor(soCoin / COIN_QUY_DOI_DONG_MAU_SO); // số tiền quy đổi để admin chuyển khoản
+  const soPhi = Math.floor(soCoin * PHI_RUT_TIEN_PHAN_TRAM); // phí dịch vụ 10% tính theo coin
+  const soTien = Math.floor((soCoin - soPhi) / COIN_QUY_DOI_DONG_MAU_SO); // số tiền THỰC NHẬN (đã trừ phí) để admin chuyển khoản
 
   // Cho phép đổi sang tài khoản nhận khác, nhưng chỉ 1 lần mỗi
   // SO_NGAY_DOI_TAI_KHOAN ngày — chống việc đổi liên tục để né kiểm soát.
@@ -1641,7 +1648,8 @@ async function xuLyYeuCauRutTien(env, url) {
     soTk,
     tenNguoiNhan,
     soCoin,
-    soTien, // số tiền quy đổi (soCoin / COIN_QUY_DOI_DONG_MAU_SO) — để admin chuyển khoản
+    soPhi, // phí dịch vụ 10%, tính theo coin (đã trừ vào soTien bên dưới)
+    soTien, // số tiền THỰC NHẬN, đã trừ phí 10% — để admin chuyển khoản
     trangThai: "cho_duyet",
     taoLuc: Date.now(),
     keyNgay,
@@ -1652,7 +1660,13 @@ async function xuLyYeuCauRutTien(env, url) {
   // xóa ngay khi giao dịch được xử lý xong (xem xuLyXuLyRutTienAdmin).
   await env.USERS.put(TIEN_TO_CHO_DUYET_RUT + uid + ":" + idGiaoDich, "1");
 
-  return Response.json({ thanh_cong: true, coin_con_lai: nguoiDung.coin, ma_giao_dich: idGiaoDich });
+  return Response.json({
+    thanh_cong: true,
+    coin_con_lai: nguoiDung.coin,
+    ma_giao_dich: idGiaoDich,
+    phi: soPhi,
+    so_tien_thuc_nhan: soTien,
+  });
 }
 
 // ==================================================
@@ -1761,7 +1775,8 @@ async function xuLyXuLyRutTienAdmin(env, request) {
       `❌ Yêu cầu rút ${giaoDich.soCoin} coin (~${giaoDich.soTien.toLocaleString("vi-VN")}đ, mã ${idGiaoDich}) đã bị từ chối.\n` +
       `🪙 Số coin đã được hoàn lại vào tài khoản của bạn.`;
   } else {
-    textThongBaoUser = `✅ Yêu cầu rút ${giaoDich.soCoin} coin (~${giaoDich.soTien.toLocaleString("vi-VN")}đ, mã ${idGiaoDich}) đã hoàn thành!`;
+    const ghiChuPhi = giaoDich.soPhi ? ` (đã trừ phí 10%: ${giaoDich.soPhi.toLocaleString("vi-VN")} coin)` : "";
+    textThongBaoUser = `✅ Yêu cầu rút ${giaoDich.soCoin} coin${ghiChuPhi} (~${giaoDich.soTien.toLocaleString("vi-VN")}đ, mã ${idGiaoDich}) đã hoàn thành!`;
   }
 
   await telegramApi(env, "sendMessage", { chat_id: Number(uid), text: textThongBaoUser });
@@ -1770,11 +1785,73 @@ async function xuLyXuLyRutTienAdmin(env, request) {
 }
 
 // ==================================================
+// 🔁 DI CHUYỂN DỮ LIỆU KV → D1 — chạy 1 lần duy nhất lúc chuyển hạ tầng.
+// Yêu cầu giữ tạm 2 binding KV cũ trong wrangler.toml với tên khác
+// (USERS_KV_CU, ADMINS_KV_CU) trỏ vào đúng namespace KV đang dùng hiện tại
+// — KHÔNG xóa 2 namespace đó cho tới khi xác nhận D1 đã đầy đủ dữ liệu.
+// Gọi 1 lần: POST /admin/migrate-kv-to-d1 (cùng header X-Admin-Secret như
+// các endpoint admin khác). Ghi đè (upsert) nên gọi lại nhiều lần vẫn an
+// toàn, không tạo dữ liệu trùng.
+// ==================================================
+async function diChuyenNamespace(db, ns, kvCu) {
+  let daChuyen = 0;
+  let cursor;
+  for (;;) {
+    const trang = await kvCu.list({ cursor });
+    for (const key of trang.keys) {
+      const value = await kvCu.get(key.name);
+      if (value !== null) {
+        await d1Put(db, ns, key.name, value);
+        daChuyen += 1;
+      }
+    }
+    if (trang.list_complete) break;
+    cursor = trang.cursor;
+  }
+  return daChuyen;
+}
+
+async function xuLyDiChuyenKvSangD1(env, request) {
+  if (!xacThucAdminWeb(env, request)) {
+    return Response.json({ thanh_cong: false, loi: "khong_co_quyen" }, { status: 401 });
+  }
+  if (!env.DB) {
+    return Response.json({ thanh_cong: false, loi: "thieu_binding_d1_ten_DB" }, { status: 400 });
+  }
+  if (!env.USERS_KV_CU || !env.ADMINS_KV_CU) {
+    return Response.json(
+      { thanh_cong: false, loi: "thieu_binding_kv_cu_USERS_KV_CU_hoac_ADMINS_KV_CU" },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const daChuyenUsers = await diChuyenNamespace(env.DB, "users", env.USERS_KV_CU);
+    const daChuyenAdmins = await diChuyenNamespace(env.DB, "admins", env.ADMINS_KV_CU);
+    return Response.json({
+      thanh_cong: true,
+      da_chuyen_users: daChuyenUsers,
+      da_chuyen_admins: daChuyenAdmins,
+    });
+  } catch (e) {
+    return Response.json({ thanh_cong: false, loi: String(e) }, { status: 500 });
+  }
+}
+
+// ==================================================
 // 🚦 ENTRYPOINT — thay app.run() / bot.polling()
 // ==================================================
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(requestGoc, envGoc, ctx) {
+    const request = requestGoc;
+    const env = boQuaD1(envGoc); // env.USERS / env.ADMINS giờ chạy trên D1 thay vì KV
     const url = new URL(request.url);
+
+    // Migrate dữ liệu KV cũ → D1 — chỉ chạy khi cần, dùng binding KV cũ ở
+    // envGoc (chưa bị boQuaD1 thay thế) làm nguồn đọc.
+    if (request.method === "POST" && url.pathname === "/admin/migrate-kv-to-d1") {
+      return xuLyDiChuyenKvSangD1({ ...env, USERS_KV_CU: envGoc.USERS_KV_CU, ADMINS_KV_CU: envGoc.ADMINS_KV_CU }, request);
+    }
 
     // Webhook Telegram — xác thực bằng secret_token header, không dùng polling
     if (request.method === "POST" && url.pathname === `/webhook/${env.WEBHOOK_SECRET}`) {
@@ -1852,7 +1929,8 @@ export default {
   // QUAN TRỌNG: nên đổi lịch cron trong wrangler.toml từ "*/15 * * * *" (15 phút)
   // sang "*/30 * * * *" hoặc "0 * * * *" (30-60 phút) — bản thân cron này là nguồn
   // ngốn lượt đọc KV lớn nhất trong toàn bộ app, không phụ thuộc số user thật.
-  async scheduled(event, env, ctx) {
+  async scheduled(event, envGoc, ctx) {
+    const env = boQuaD1(envGoc);
     ctx.waitUntil(lamMoiCacheBangXepHang(env));
   },
 };

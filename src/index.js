@@ -148,7 +148,7 @@ const TIEN_TO_GIFCODE_DA_DUNG = "gifcode-da-dung:"; // gifcode-da-dung:{MA}:{uid
 // giống hệt khi admin gõ lệnh /taogifcode thủ công.
 const GIFCODE_TU_DONG_COIN_MIN = 300;
 const GIFCODE_TU_DONG_COIN_MAX = 500;
-const GIFCODE_TU_DONG_SO_LUONG = 15;
+const GIFCODE_TU_DONG_SO_LUONG = 50;
 
 // Parse tham số số coin của gift code: chấp nhận 1 số cố định ("5000") hoặc
 // 1 khoảng "min-max" ("4000-5000") — mỗi lượt nhập sẽ random đều trong
@@ -601,6 +601,75 @@ async function xuLySoLuongUser(env, message) {
   });
 }
 
+// /check [ID] — hiển thị TOÀN BỘ thông tin của 1 người chơi: coin, tổng đã
+// kiếm, cấp/XP đào, trạng thái phiên đào hiện tại, chuỗi điểm danh, người
+// giới thiệu, số bạn đã mời, tài khoản nhận tiền đã liên kết, hạn mức rút
+// đã dùng trong ngày/tuần. Gộp nhiều nguồn dữ liệu (user, điểm danh, tài
+// khoản nhận, bạn bè, counter rút tiền) vào 1 tin nhắn duy nhất cho admin
+// tra cứu nhanh khi cần hỗ trợ/điều tra 1 tài khoản cụ thể.
+async function xuLyCheckUser(env, message) {
+  if (!(await laAdmin(env, message.from.id))) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "❌ Bạn không có quyền!" });
+  }
+
+  const phan = message.text.trim().split(/\s+/);
+  if (phan.length < 2) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "⚠️ Dùng: /check [ID_nguoi_dung]" });
+  }
+
+  const uid = phan[1];
+  const nguoiDung = await layNguoiDung(env, uid);
+  if (!nguoiDung) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: `❌ Không tìm thấy user ID: ${uid}` });
+  }
+
+  const dd = await layDiemDanh(env, uid);
+
+  const rawTaiKhoan = await env.USERS.get(TIEN_TO_TAI_KHOAN_NHAN + uid);
+  const taiKhoan = rawTaiKhoan ? JSON.parse(rawTaiKhoan) : null;
+
+  const rawBanBe = await env.USERS.get(TIEN_TO_BAN_BE + uid);
+  const danhSachBanBe = rawBanBe ? JSON.parse(rawBanBe) : [];
+
+  const homNay = ngayVnHomNay();
+  const tuanNay = dauTuanVN();
+  const daRutNgay = Number((await env.USERS.get(TIEN_TO_RUT_NGAY + uid + ":" + homNay)) || 0);
+  const daRutTuan = Number((await env.USERS.get(TIEN_TO_RUT_TUAN + uid + ":" + tuanNay)) || 0);
+  const soLanDaRutHomNay = Number((await env.USERS.get(TIEN_TO_SO_LAN_RUT_NGAY + uid + ":" + homNay)) || 0);
+
+  const dao = nguoiDung.dao;
+  let daoText = "Không đang đào";
+  if (dao && dao.dangDao) {
+    const conLaiMs = Math.max(0, dao.ketThucLuc - Date.now());
+    const phut = Math.floor(conLaiMs / 60000);
+    daoText = conLaiMs > 0 ? `⛏️ Đang đào — còn ${phut} phút` : "⛏️ Đang đào — sắp hoàn tất";
+  }
+
+  const text =
+    `👤 THÔNG TIN NGƯỜI CHƠI\n` +
+    `━━━━━━━━━━━━━━━━━━\n` +
+    `🆔 ID: ${uid}\n` +
+    `📛 Tên: ${nguoiDung.ten || "?"}\n` +
+    `🔖 Username: ${nguoiDung.username ? "@" + nguoiDung.username : "Không có"}\n` +
+    `📅 Tham gia lúc: ${nguoiDung.ngay_tham_gia || "?"}\n\n` +
+    `🪙 Coin hiện có: ${(nguoiDung.coin || 0).toLocaleString("vi-VN")}\n` +
+    `📊 Tổng đã kiếm (lũy kế): ${(nguoiDung.tongDaKiem || 0).toLocaleString("vi-VN")}\n` +
+    `👥 Coin kiếm từ bạn bè: ${(nguoiDung.coinTuBanBe || 0).toLocaleString("vi-VN")}\n\n` +
+    `⛏️ Cấp đào: ${nguoiDung.capDao || 1}/${CAP_DAO_TOI_DA}\n` +
+    `⚡ XP đào: ${(nguoiDung.xpDao || 0).toLocaleString("vi-VN")}\n` +
+    `🔄 Trạng thái: ${daoText}\n\n` +
+    `🔥 Chuỗi điểm danh: ${dd.chuoi_hien_tai || 0} ngày (gần nhất: ${dd.ngay_cuoi || "chưa điểm danh"})\n\n` +
+    `👤 Được giới thiệu bởi (UID): ${nguoiDung.gioiThieuBoi || "Không có"}\n` +
+    `👥 Số bạn đã mời: ${danhSachBanBe.length}\n\n` +
+    `💳 Tài khoản nhận tiền: ${
+      taiKhoan ? `${taiKhoan.nganHang} - ${taiKhoan.soTk} (${taiKhoan.tenNguoiNhan})` : "Chưa liên kết"
+    }\n` +
+    `💸 Đã rút hôm nay: ${daRutNgay.toLocaleString("vi-VN")} coin (${soLanDaRutHomNay}/${SO_LAN_RUT_TOI_DA_NGAY} lượt)\n` +
+    `💸 Đã rút tuần này: ${daRutTuan.toLocaleString("vi-VN")} coin`;
+
+  return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text });
+}
+
 // /dslenh — liệt kê toàn bộ lệnh dành cho admin kèm mô tả ngắn + cú pháp.
 // Chỉ cần cập nhật DANH_SACH_LENH_ADMIN khi thêm/bớt lệnh admin mới, không
 // cần sửa gì khác.
@@ -614,6 +683,7 @@ const DANH_SACH_LENH_ADMIN = [
   { lenh: "/checkcodesl [code]", moTa: "Xem chi tiết + số người đã nhập 1 gift code" },
   { lenh: "/gui", moTa: "Trả lời 1 tin nhắn kèm lệnh này để broadcast tới toàn bộ user" },
   { lenh: "/sluser", moTa: "Xem tổng số user đã /start với bot" },
+  { lenh: "/check [ID]", moTa: "Xem toàn bộ thông tin 1 người chơi (coin, cấp đào, điểm danh, ví, bạn bè...)" },
   { lenh: "/dslenh", moTa: "Xem danh sách lệnh admin này" },
 ];
 
@@ -960,6 +1030,8 @@ async function xuLyUpdate(env, update) {
         return xuLyDsAdmin(env, message);
       case "/sluser":
         return xuLySoLuongUser(env, message);
+      case "/check":
+        return xuLyCheckUser(env, message);
       case "/dslenh":
         return xuLyDsLenh(env, message);
       case "/baotri":

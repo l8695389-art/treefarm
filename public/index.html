@@ -6,6 +6,7 @@
   <title>MiniApp</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
   <script src='//libtl.com/sdk.js' data-zone='11396646' data-sdk='show_11396646'></script>
+  <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -621,6 +622,18 @@
           <div id="qc-success" class="success-text"></div>
         </div>
 
+        <!-- Khối 1b: Quảng cáo Adsgram -->
+        <div class="card highlight">
+          <div class="task-title">🎥 Xem quảng cáo (Adsgram)</div>
+          <div class="task-desc">Xem quảng cáo, nhận ngay +700 coin sau mỗi lần xem hết. Tối đa 20 lượt/ngày, cách nhau ít nhất 5 phút/lượt.</div>
+          <button id="btn-xem-adsgram" class="primary-btn" type="button">
+            <span class="spinner"></span>
+            <span class="btn-label">Xem quảng cáo</span>
+          </button>
+          <div id="adsgram-error" class="error-text"></div>
+          <div id="adsgram-success" class="success-text"></div>
+        </div>
+
         <!-- Khối 2: Vượt link Link4M -->
         <div class="card highlight">
           <div class="task-title">🔗 Vượt link nhận thưởng</div>
@@ -933,6 +946,12 @@
     // trường LINK4M_API_TOKEN trên Worker), tránh lộ token qua View Source.
     const LINK4M_CONFIG = {
       linkGoc: '' // rỗng = cùng origin — Worker phục vụ cả API lẫn miniapp này
+    };
+
+    // Block ID lấy từ https://partner.adsgram.ai (sau khi tạo ad unit "Reward")
+    // — điền vào đây trước khi deploy, nếu không nút Adsgram sẽ tự khóa.
+    const ADSGRAM_CONFIG = {
+      blockId: '40595'
     };
 
     function copyText(text) {
@@ -1658,8 +1677,121 @@
         copyText(valueEl.textContent).then(() => {
           const old = copyBtn.textContent;
           copyBtn.textContent = 'Đã sao chép';
-          setTimeout(() => { copyBtn.textContent = old; }, );
+          setTimeout(() => { copyBtn.textContent = old; }, 1500);
         });
+      });
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // TAB NHIỆM VỤ — Quảng cáo Adsgram. Khác Monetag: Adsgram không xác
+    // nhận thưởng qua callback phía CLIENT — Adsgram server tự gọi
+    // /adsgram-callback (S2S) sau khi user xem xong. Nút bấm chỉ có nhiệm
+    // vụ mở quảng cáo; số coin thật được đọc lại từ server vài giây sau,
+    // không tự cộng ở client (không đáng tin).
+    // ────────────────────────────────────────────────────────────
+    function setupAdsgramTab(tg) {
+      const uid = tg?.initDataUnsafe?.user?.id;
+      const btn = document.getElementById('btn-xem-adsgram');
+      const label = btn.querySelector('.btn-label');
+      const errorEl = document.getElementById('adsgram-error');
+      const successEl = document.getElementById('adsgram-success');
+
+      if (typeof window.Adsgram === 'undefined') {
+        errorEl.textContent = '❌ Không tải được Adsgram SDK.';
+        errorEl.style.display = 'block';
+        btn.disabled = true;
+        return;
+      }
+
+      const AdController = window.Adsgram.init({ blockId: ADSGRAM_CONFIG.blockId });
+      let adsgramHetLuotHomNay = false;
+      let adsgramDemNguoc = null;
+
+      function batDauDemNguoc(giayConLai) {
+        clearInterval(adsgramDemNguoc);
+        let conLai = Math.ceil(giayConLai);
+        const capNhat = () => {
+          if (conLai <= 0 || adsgramHetLuotHomNay) {
+            clearInterval(adsgramDemNguoc);
+            if (!adsgramHetLuotHomNay) {
+              btn.disabled = false;
+              label.textContent = 'Xem quảng cáo';
+            }
+            return;
+          }
+          btn.disabled = true;
+          label.textContent = `Chờ ${conLai}s để xem tiếp...`;
+          conLai -= 1;
+        };
+        capNhat();
+        adsgramDemNguoc = setInterval(capNhat, 1000);
+      }
+
+      function capNhatUiAdsgram(soLanDaXem, gioiHan) {
+        const conLai = Math.max(0, (gioiHan || 20) - (soLanDaXem || 0));
+        adsgramHetLuotHomNay = conLai <= 0;
+        if (adsgramHetLuotHomNay) {
+          clearInterval(adsgramDemNguoc);
+          btn.disabled = true;
+          label.textContent = 'Đã hết lượt hôm nay ✅';
+        } else if (!adsgramDemNguoc) {
+          btn.disabled = false;
+          label.textContent = `Xem quảng cáo (còn ${conLai} lượt)`;
+        }
+      }
+
+      // Khôi phục trạng thái ngay khi mở app — dùng chung endpoint
+      // /nhiem-vu-hien-tai đã trả thêm field adsgram_* ở phía Worker.
+      (async () => {
+        if (!uid) return;
+        const tt = await layTrangThaiHienTai(uid);
+        if (!tt || tt.adsgram_gioi_han_ngay === undefined) return;
+        capNhatUiAdsgram(tt.so_lan_adsgram_da_xem, tt.adsgram_gioi_han_ngay);
+        if (!adsgramHetLuotHomNay && tt.adsgram_lan_cuoi) {
+          const daTroiGiay = (Date.now() - tt.adsgram_lan_cuoi) / 1000;
+          const conLaiGiay = (tt.adsgram_cho_toi_thieu_giay || 300) - daTroiGiay;
+          if (conLaiGiay > 0) batDauDemNguoc(conLaiGiay);
+        }
+      })();
+
+      btn.addEventListener('click', () => {
+        if (!uid) {
+          errorEl.textContent = '❌ Không xác định được tài khoản Telegram.';
+          errorEl.style.display = 'block';
+          return;
+        }
+        errorEl.style.display = 'none';
+        successEl.style.display = 'none';
+        btn.disabled = true;
+        btn.classList.add('loading');
+        label.textContent = 'Đang tải quảng cáo...';
+
+        AdController.show()
+          .then(async () => {
+            btn.classList.remove('loading');
+            successEl.textContent = '⏳ Đang chờ hệ thống xác nhận, coin sẽ cộng trong vài giây...';
+            successEl.style.display = 'block';
+
+            // Adsgram xác nhận thưởng qua callback phía SERVER (S2S), không
+            // phải ngay lúc show() resolve — đợi rồi đọc lại trạng thái thật
+            // từ Worker, thay vì tự cộng coin ở client.
+            setTimeout(async () => {
+              const tt = await layTrangThaiHienTai(uid);
+              if (tt) {
+                hienThiCoin(tt.coin);
+                capNhatUiAdsgram(tt.so_lan_adsgram_da_xem, tt.adsgram_gioi_han_ngay);
+                if (!adsgramHetLuotHomNay) batDauDemNguoc(tt.adsgram_cho_toi_thieu_giay || 300);
+                successEl.textContent = '✅ Đã nhận thưởng (nếu quảng cáo hiển thị đủ)!';
+              }
+            }, 4000);
+          })
+          .catch(() => {
+            btn.disabled = false;
+            btn.classList.remove('loading');
+            label.textContent = 'Xem quảng cáo';
+            errorEl.textContent = '❌ Quảng cáo bị bỏ qua hoặc lỗi tải, thử lại sau.';
+            errorEl.style.display = 'block';
+          });
       });
     }
 
@@ -2296,6 +2428,7 @@
       populateMain(tg);
       setupTabBar();
       setupLinkButton(tg);
+      setupAdsgramTab(tg);
       setupGifcodeTab(tg);
       setupModalChonNganHang();
       setupViTab(tg);

@@ -101,6 +101,10 @@ const TIEN_TO_QC_SO_LAN_NGAY = "qc-so-lan-ngay:";
 const QC_GIOI_HAN_NGAY = 20;
 const TIEN_TO_QC_LAN_CUOI = "qc-lan-cuoi:"; // mốc thời gian lần xem quảng cáo gần nhất — chặn spam
 const QC_CHO_TOI_THIEU_MS = 5 * 60 * 1000; // phải chờ tối thiểu 5 phút giữa 2 lần xem quảng cáo
+const TIEN_TO_ADSGRAM_SO_LAN_NGAY = "adsgram-so-lan-ngay:"; // số lần được cộng thưởng Adsgram hôm nay
+const ADSGRAM_GIOI_HAN_NGAY = 20;
+const TIEN_TO_ADSGRAM_LAN_CUOI = "adsgram-lan-cuoi:"; // mốc thời gian lần cộng thưởng Adsgram gần nhất — chặn callback dồn dập
+const ADSGRAM_CHO_TOI_THIEU_MS = 5 * 60 * 1000; // phải chờ tối thiểu 5 phút giữa 2 lần được cộng thưởng Adsgram
 const TIEN_TO_TAI_KHOAN_NHAN = "tai-khoan-nhan:";
 const TIEN_TO_BAN_BE = "ban-be:"; // ban-be:{uid_nguoi_moi} — JSON array các bạn đã mời qua link ref_
 const SO_NGAY_DOI_TAI_KHOAN = 20; // chỉ cho đổi tài khoản nhận tiền 20 ngày / 1 lần
@@ -1115,6 +1119,8 @@ async function xuLyNhiemVuHienTai(env, url) {
   const qcLanCuoi = Number((await env.USERS.get(TIEN_TO_QC_LAN_CUOI + uid)) || 0);
   const soLanLink4mDaXong = Number((await env.USERS.get(TIEN_TO_LINK4M_SO_LAN_NGAY + uid + ":" + homNay)) || 0);
   const link4mLanCuoi = Number((await env.USERS.get(TIEN_TO_LINK4M_LAN_CUOI + uid)) || 0);
+  const soLanAdsgramDaXem = Number((await env.USERS.get(TIEN_TO_ADSGRAM_SO_LAN_NGAY + uid + ":" + homNay)) || 0);
+  const adsgramLanCuoi = Number((await env.USERS.get(TIEN_TO_ADSGRAM_LAN_CUOI + uid)) || 0);
 
   const trangThaiChung = {
     coin,
@@ -1126,6 +1132,10 @@ async function xuLyNhiemVuHienTai(env, url) {
     link4m_gioi_han_ngay: LINK4M_GIOI_HAN_NGAY,
     link4m_lan_cuoi: link4mLanCuoi,
     link4m_cho_toi_thieu_giay: LINK4M_CHO_TOI_THIEU_MS / 1000,
+    so_lan_adsgram_da_xem: soLanAdsgramDaXem,
+    adsgram_gioi_han_ngay: ADSGRAM_GIOI_HAN_NGAY,
+    adsgram_lan_cuoi: adsgramLanCuoi,
+    adsgram_cho_toi_thieu_giay: ADSGRAM_CHO_TOI_THIEU_MS / 1000,
   };
 
   if (soLanLink4mDaXong >= LINK4M_GIOI_HAN_NGAY) {
@@ -1191,6 +1201,55 @@ async function xuLyXacNhanQuangCao(env, url) {
     so_lan_qc_da_xem: soLanMoi,
     qc_gioi_han_ngay: QC_GIOI_HAN_NGAY,
     cho_toi_thieu_giay: QC_CHO_TOI_THIEU_MS / 1000,
+    cap_dao: nguoiDung.capDao || 1,
+    xp_dao: nguoiDung.xpDao || 0,
+  });
+}
+
+// ==================================================
+// 🎥 QUẢNG CÁO ADSGRAM — callback SERVER-TO-SERVER, Adsgram tự gọi endpoint
+// này sau khi user xem xong quảng cáo (Reward URL cấu hình ở partner.adsgram.ai,
+// dạng https://<domain>/adsgram-callback?userid=[userId]). Không có chữ ký
+// để verify ở tier này — giới hạn ngày + cooldown là lớp phòng vệ duy nhất,
+// y hệt cơ chế của khối quảng cáo Monetag.
+// ==================================================
+async function xuLyAdsgramCallback(env, url) {
+  const uid = url.searchParams.get("userid");
+  if (!uid) return new Response("thieu_userid", { status: 400 });
+
+  const homNay = ngayVnHomNay();
+  const key = TIEN_TO_ADSGRAM_SO_LAN_NGAY + uid + ":" + homNay;
+  const soLanDaXem = Number((await env.USERS.get(key)) || 0);
+
+  if (soLanDaXem >= ADSGRAM_GIOI_HAN_NGAY) {
+    return Response.json({ thanh_cong: false, loi: "da_vuot_hom_nay" });
+  }
+
+  const keyLanCuoi = TIEN_TO_ADSGRAM_LAN_CUOI + uid;
+  const lanCuoi = Number((await env.USERS.get(keyLanCuoi)) || 0);
+  const now = Date.now();
+  if (lanCuoi && now - lanCuoi < ADSGRAM_CHO_TOI_THIEU_MS) {
+    return Response.json({ thanh_cong: false, loi: "cho_qua_nhanh" });
+  }
+
+  const soLanMoi = soLanDaXem + 1;
+  await env.USERS.put(key, String(soLanMoi));
+  await env.USERS.put(keyLanCuoi, String(now));
+
+  const soCoinCong = Number(env.THUONG_COIN_ADSGRAM || 700); // nếu đã đặt biến môi trường THUONG_COIN_ADSGRAM trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
+  const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, tongDaKiem: 0 };
+  nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
+  congCoin(nguoiDung, soCoinCong);
+  congXpDaoVaLenCap(nguoiDung, XP_MOI_LUOT_QUANG_CAO);
+  await luuNguoiDung(env, uid, nguoiDung);
+  await congHoaHongGioiThieu(env, uid, soCoinCong);
+
+  return Response.json({
+    thanh_cong: true,
+    coin: nguoiDung.coin,
+    coin_cong: soCoinCong,
+    so_lan_adsgram_da_xem: soLanMoi,
+    adsgram_gioi_han_ngay: ADSGRAM_GIOI_HAN_NGAY,
     cap_dao: nguoiDung.capDao || 1,
     xp_dao: nguoiDung.xpDao || 0,
   });
@@ -2316,6 +2375,8 @@ export default {
           return xuLyXacNhanNhiemVu(env, url);
         case "/xac-nhan-quang-cao":
           return xuLyXacNhanQuangCao(env, url);
+        case "/adsgram-callback":
+          return xuLyAdsgramCallback(env, url);
         case "/thong-tin-diem-danh":
           return xuLyThongTinDiemDanh(env, url);
         case "/diem-danh":

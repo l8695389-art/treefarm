@@ -39,12 +39,15 @@ tag = "v2"
 deleted_classes = ["IpRegistry"]
 
 # Cron Trigger:
-#   "0 */1 * * *" — làm mới cache bảng xếp hạng mỗi giờ (đã hạ từ 15 phút
-#                   xuống 1 giờ trước đó — nguồn ngốn đọc KV/D1 lớn nhất)
-#   "0 14 * * *"  — 14:00 UTC = 21:00 giờ Việt Nam mỗi ngày, tự động tạo
-#                   1 gift code mới (300-500 coin/lượt, tối đa 50 lượt)
+#   "*/10 * * * *" — làm mới cache bảng xếp hạng mỗi 10 phút (tăng tần suất
+#                    từ 1 giờ/lần lên 10 phút/lần để BXH cập nhật sát hơn)
+#   "0 14 * * *"   — 14:00 UTC = 21:00 giờ Việt Nam mỗi ngày, tự động tạo
+#                    1 gift code mới (300-500 coin/lượt, tối đa 50 lượt)
+#                    (trước đây ghi nhầm "0 13 * * *" nên KHÔNG khớp với
+#                    event.cron === "0 14 * * *" trong index.js — lịch gift
+#                    code tự động chưa từng chạy được; đã sửa lại cho khớp)
 [triggers]
-crons = ["0 */1 * * *", "0 13 * * *"]
+crons = ["*/10 * * * *", "0 14 * * *"]
 
 [vars]
 CHU_SO_HUU = "7055595466"

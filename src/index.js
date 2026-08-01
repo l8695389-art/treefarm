@@ -148,7 +148,7 @@ const TIEN_TO_GIFCODE_DA_DUNG = "gifcode-da-dung:"; // gifcode-da-dung:{MA}:{uid
 // giống hệt khi admin gõ lệnh /taogifcode thủ công.
 const GIFCODE_TU_DONG_COIN_MIN = 300;
 const GIFCODE_TU_DONG_COIN_MAX = 500;
-const GIFCODE_TU_DONG_SO_LUONG = 50;
+const GIFCODE_TU_DONG_SO_LUONG = 15;
 
 // Parse tham số số coin của gift code: chấp nhận 1 số cố định ("5000") hoặc
 // 1 khoảng "min-max" ("4000-5000") — mỗi lượt nhập sẽ random đều trong

@@ -874,13 +874,13 @@ async function xuLyLayId(env, message) {
     const tenReply = reply.from.first_name || reply.from.username || "Người dùng";
     return telegramApi(env, "sendMessage", {
       chat_id: message.chat.id,
-      text: `ID của ${tenReply} là: \`${reply.from.id}.\`,
+      text: `ID của ${tenReply} là: \`${reply.from.id}\`.`,
     });
   }
 
   return telegramApi(env, "sendMessage", {
     chat_id: message.chat.id,
-    text: `ID cuộc trò chuyện này là: \`${message.chat.id}.\`,
+    text: `ID cuộc trò chuyện này là: \`${message.chat.id}\`.`,
   });
 }
 

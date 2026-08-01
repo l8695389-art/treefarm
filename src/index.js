@@ -651,6 +651,38 @@ async function xuLyCheckUser(env, message) {
     daoText = conLaiMs > 0 ? `⛏️ Đang đào — còn ${phut} phút` : "⛏️ Đang đào — sắp hoàn tất";
   }
 
+  // 🏆 Số xu kiếm được TRONG MÙA GIẢI BXH hiện tại — dùng chung cơ chế "mốc
+  // mùa giải" với /bang-xep-hang (damBaoMocMuaGiai): điểm BXH = tổng đã kiếm
+  // lũy kế trừ đi mốc chụp tại thời điểm mùa hiện tại bắt đầu, KHÔNG phải
+  // tổng đã kiếm cả đời. Đọc thêm cache để biết hạng hiện tại (nếu đã lọt
+  // Top 50 được cache), không bắt buộc phải có mới hiển thị được số xu.
+  const muaGiai = await layHoacTaoMuaGiai(env);
+  const coinChoBXH = nguoiDung.tongDaKiem != null ? nguoiDung.tongDaKiem : nguoiDung.coin || 0;
+  const mocMuaGiai = await damBaoMocMuaGiai(env, uid, nguoiDung, muaGiai.so);
+  const daKiemTrongMua = Math.max(0, coinChoBXH - mocMuaGiai.coin_goc);
+  const duDieuKienBXH = daKiemTrongMua >= MUC_TOI_THIEU_KIEM_XU;
+
+  let hangHienTai = null;
+  try {
+    const rawCache = await env.USERS.get(KEY_CACHE_BANG_XEP_HANG);
+    const cache = rawCache ? JSON.parse(rawCache) : null;
+    if (cache && cache.so_mua === muaGiai.so && Array.isArray(cache.kiem_xu)) {
+      const idx = cache.kiem_xu.findIndex((nd) => String(nd.uid) === String(uid));
+      if (idx >= 0) hangHienTai = idx + 1;
+    }
+  } catch (e) {
+    // cache lỗi/thiếu — bỏ qua, vẫn hiển thị được số xu tính trực tiếp ở trên
+  }
+
+  let dongTrangThaiBXH;
+  if (hangHienTai) {
+    dongTrangThaiBXH = `📍 Đang xếp hạng #${hangHienTai} trong BXH`;
+  } else if (duDieuKienBXH) {
+    dongTrangThaiBXH = `📍 Đủ điều kiện vào BXH, đợi cache cập nhật (tối đa 10 phút/lần)`;
+  } else {
+    dongTrangThaiBXH = `📍 Chưa đủ điều kiện vào BXH`;
+  }
+
   const text =
     `👤 THÔNG TIN NGƯỜI CHƠI\n` +
     `━━━━━━━━━━━━━━━━━━\n` +
@@ -665,6 +697,9 @@ async function xuLyCheckUser(env, message) {
     `⚡ XP đào: ${(nguoiDung.xpDao || 0).toLocaleString("vi-VN")}\n` +
     `🔄 Trạng thái: ${daoText}\n\n` +
     `🔥 Chuỗi điểm danh: ${dd.chuoi_hien_tai || 0} ngày (gần nhất: ${dd.ngay_cuoi || "chưa điểm danh"})\n\n` +
+    `🏆 Mùa giải BXH #${muaGiai.so}\n` +
+    `🏆 Đã kiếm trong mùa: ${daKiemTrongMua.toLocaleString("vi-VN")} xu (tối thiểu ${MUC_TOI_THIEU_KIEM_XU.toLocaleString("vi-VN")} xu để vào BXH)\n` +
+    `${dongTrangThaiBXH}\n\n` +
     `👤 Được giới thiệu bởi (UID): ${nguoiDung.gioiThieuBoi || "Không có"}\n` +
     `👥 Số bạn đã mời: ${danhSachBanBe.length}\n\n` +
     `💳 Tài khoản nhận tiền: ${
@@ -689,7 +724,7 @@ const DANH_SACH_LENH_ADMIN = [
   { lenh: "/checkcodesl [code]", moTa: "Xem chi tiết + số người đã nhập 1 gift code" },
   { lenh: "/gui", moTa: "Trả lời 1 tin nhắn kèm lệnh này để broadcast tới toàn bộ user" },
   { lenh: "/sluser", moTa: "Xem tổng số user đã /start với bot" },
-  { lenh: "/check [ID]", moTa: "Xem toàn bộ thông tin 1 người chơi (coin, cấp đào, điểm danh, ví, bạn bè...)" },
+  { lenh: "/check [ID]", moTa: "Xem toàn bộ thông tin 1 người chơi (coin, cấp đào, điểm danh, xu BXH mùa hiện tại, ví, bạn bè...)" },
   { lenh: "/dslenh", moTa: "Xem danh sách lệnh admin này" },
 ];
 

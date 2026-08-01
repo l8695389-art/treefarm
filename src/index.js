@@ -123,7 +123,7 @@ const TIEN_TO_LINK4M_SO_LAN_NGAY = "link4m-so-lan-ngay:"; // số lần hoàn th
 const LINK4M_GIOI_HAN_NGAY = 3; // tăng từ 2 lên 3 lần/ngày
 const TIEN_TO_LINK4M_LAN_CUOI = "link4m-lan-cuoi:"; // mốc thời gian hoàn thành nhiệm vụ link4m gần nhất — chặn vượt liên tục
 const LINK4M_CHO_TOI_THIEU_MS = 5 * 60 * 1000; // phải chờ tối thiểu 5 phút giữa 2 lần vượt link
-const KEY_CACHE_BANG_XEP_HANG = "cache-bang-xep-hang"; // JSON { kiem_xu, cap_nhat_luc } — làm mới mỗi 15 phút qua Cron Trigger
+const KEY_CACHE_BANG_XEP_HANG = "cache-bang-xep-hang"; // JSON { kiem_xu, cap_nhat_luc } — làm mới mỗi 10 phút qua Cron Trigger
 const KEY_MUA_GIAI = "mua-giai-bxh-hien-tai"; // JSON { bat_dau, ket_thuc } — mùa giải BXH hiện tại, tự mở mùa mới khi hết hạn
 const MUA_GIAI_SO_NGAY = 7; // độ dài 1 mùa giải BXH (ngày)
 const TOP_NHAN_THUONG = 10; // chỉ Top 10 mỗi bảng xếp hạng mới nhận thưởng khi kết thúc mùa giải (admin trao thủ công, giống quy trình duyệt rút tiền)
@@ -1819,7 +1819,7 @@ async function xuLyNhapGifcode(env, url) {
 // "reset" điểm về 0 ngay lần quét đầu tiên của mùa đó.
 //
 // Để tránh quét toàn bộ KV (tốn CPU time) mỗi lần người dùng mở app, bảng
-// được TÍNH TRƯỚC và lưu vào cache, làm mới mỗi 15 phút bằng Cron Trigger
+// được TÍNH TRƯỚC và lưu vào cache, làm mới mỗi 10 phút bằng Cron Trigger
 // (xem "scheduled" ở cuối file + [triggers] trong wrangler.toml).
 // Endpoint /bang-xep-hang chỉ đọc cache; nếu chưa có cache (lần đầu deploy)
 // thì tính trực tiếp 1 lần để không trả về rỗng.
@@ -1840,7 +1840,7 @@ async function damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai) {
 }
 
 async function tinhBangXepHangKiemXu(env, soMuaHienTai) {
-  const QUET_TOI_DA = 50; // giảm từ 100 → 50 — cron 15 phút/lần × quét lớn từng gần chạm trần 100k đọc KV/ngày dù CHƯA có user thật nào gọi API; xem ghi chú ở lamMoiCacheBangXepHang
+  const QUET_TOI_DA = 50; // giữ 50 user/lần quét — cron đã tăng tần suất lên 10 phút/lần (144 lần/ngày), nhưng dữ liệu giờ nằm ở D1 (hạn mức đọc/ngày cao hơn nhiều so với KV free plan trước đây) nên vẫn thoải mái; xem ghi chú ở lamMoiCacheBangXepHang
   const ketQua = [];
   let daQuet = 0;
 
@@ -1870,7 +1870,7 @@ async function tinhBangXepHangKiemXu(env, soMuaHienTai) {
   return ketQua.slice(0, 50);
 }
 
-// Tính lại + ghi cache — được gọi bởi Cron Trigger mỗi 15 phút.
+// Tính lại + ghi cache — được gọi bởi Cron Trigger mỗi 10 phút.
 async function lamMoiCacheBangXepHang(env, muaGiai) {
   const mg = muaGiai || (await layHoacTaoMuaGiai(env));
   const kiemXu = await tinhBangXepHangKiemXu(env, mg.so);
@@ -2479,9 +2479,9 @@ export default {
   },
 
   // Cron Trigger — 2 lịch chạy khai báo ở wrangler.toml ([triggers] crons):
-  //   "0 */1 * * *" (mỗi giờ)   → làm mới cache bảng xếp hạng
-  //   "0 14 * * *"  (14:00 UTC = 21:00 giờ VN mỗi ngày) → tự tạo gift code
-  //                                300-500 coin, 50 lượt nhập
+  //   "*/10 * * * *" (mỗi 10 phút)  → làm mới cache bảng xếp hạng
+  //   "0 14 * * *"   (14:00 UTC = 21:00 giờ VN mỗi ngày) → tự tạo gift code
+  //                                 300-500 coin, 50 lượt nhập
   // Phân biệt bằng event.cron để mỗi lịch chỉ chạy đúng việc của nó.
   async scheduled(event, envGoc, ctx) {
     const env = boQuaD1(envGoc);

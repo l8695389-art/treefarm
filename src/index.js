@@ -846,6 +846,7 @@ const DANH_SACH_LENH_ADMIN = [
   { lenh: "/check [ID]", moTa: "Xem toàn bộ thông tin 1 người chơi (coin, cấp đào, điểm danh, xu BXH mùa hiện tại, ví, bạn bè...)" },
   { lenh: "/lammoibxh", moTa: "Ép tính lại + ghi cache BXH ngay lập tức, không cần chờ Cron Trigger" },
   { lenh: "/checknv", moTa: "Xem tổng số lượt QC (Monetag+Adsgram) và vượt link đã hoàn thành (all-time)" },
+  { lenh: "/id", moTa: "[Ai cũng dùng được] Lấy ID cuộc trò chuyện hiện tại; trả lời 1 tin nhắn kèm lệnh này để lấy thêm ID người được trả lời" },
   { lenh: "/dslenh", moTa: "Xem danh sách lệnh admin này" },
 ];
 
@@ -861,7 +862,38 @@ async function xuLyDsLenh(env, message) {
   return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text, parse_mode: "Markdown" });
 }
 
-// /baotri bat | /baotri tat | /baotri (xem trạng thái hiện tại)
+// /id — lấy ID cuộc trò chuyện hiện tại (chat riêng, nhóm, hoặc kênh).
+// Nếu gõ lệnh này kèm TRẢ LỜI (reply) 1 tin nhắn khác, sẽ lấy thêm ID +
+// tên + username của người gửi tin nhắn được trả lời — tiện dùng để lấy
+// nhanh ID người dùng/nhóm/kênh mà không cần tra cứu thủ công. Lệnh này
+// KHÔNG giới hạn admin — user thường cũng gõ được.
+async function xuLyLayId(env, message) {
+  const tenLoaiChat = { private: "Riêng tư", group: "Nhóm", supergroup: "Siêu nhóm", channel: "Kênh" };
+
+  let text =
+    `🆔 THÔNG TIN ID\n` +
+    `━━━━━━━━━━━━━━━━━━\n` +
+    `💬 ID cuộc trò chuyện: \`${message.chat.id}\`\n` +
+    `📍 Loại: ${tenLoaiChat[message.chat.type] || message.chat.type}` +
+    (message.chat.title ? ` (${message.chat.title})` : "") +
+    `\n👤 ID người gửi lệnh: \`${message.from.id}\``;
+
+  const reply = message.reply_to_message;
+  if (reply && reply.from) {
+    const tenReply = `${reply.from.first_name || ""} ${reply.from.last_name || ""}`.trim() || "?";
+    const unameReply = reply.from.username ? "@" + reply.from.username : "Không có";
+    text +=
+      `\n\n↩️ NGƯỜI ĐƯỢC TRẢ LỜI\n` +
+      `🆔 ID: \`${reply.from.id}\`\n` +
+      `📛 Tên: ${tenReply}\n` +
+      `🔖 Username: ${unameReply}` +
+      (reply.from.is_bot ? `\n🤖 Đây là tài khoản BOT` : "");
+  }
+
+  return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text, parse_mode: "Markdown" });
+}
+
+
 async function xuLyBaoTri(env, message) {
   if (!(await laAdmin(env, message.from.id))) {
     return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "❌ Bạn không có quyền!" });
@@ -1198,6 +1230,8 @@ async function xuLyUpdate(env, update) {
         return xuLyLamMoiBangXepHang(env, message);
       case "/checknv":
         return xuLyCheckNhiemVu(env, message);
+      case "/id":
+        return xuLyLayId(env, message);
       case "/dslenh":
         return xuLyDsLenh(env, message);
       case "/baotri":

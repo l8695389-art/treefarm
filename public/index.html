@@ -108,6 +108,19 @@
     }
     .block-badge svg { width: 15px; height: 15px; fill: var(--tg-blue); }
 
+    /* ─── JOIN GATE (chưa tham gia nhóm/kênh) ─── */
+    #screen-join {
+      position: fixed; inset: 0; display: none; flex-direction: column;
+      align-items: center; justify-content: center; padding: 32px;
+      background: var(--tg-dark); z-index: 95;
+    }
+    #screen-join .block-card { border-color: var(--tg-border); }
+    #screen-join .block-card::before { background: linear-gradient(135deg, rgba(34,158,217,0.18), transparent 60%); }
+    #screen-join .block-icon.join-icon { background: rgba(34,158,217,0.12); border-color: var(--tg-border); }
+    #screen-join .block-icon.join-icon svg { stroke: var(--tg-blue); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 8px var(--tg-glow)); }
+    .join-links { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+    .join-link-btn { padding: 13px 14px; font-size: 14px; text-decoration: none; }
+
     /* ─── APP SHELL (4 tabs) ─── */
     #screen-main {
       position: fixed; inset: 0; display: none; flex-direction: column;
@@ -531,6 +544,31 @@
         <svg viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
         Mở bằng Telegram
       </a>
+    </div>
+  </div>
+
+  <!-- JOIN GATE: bắt buộc tham gia nhóm + kênh trước khi vào app -->
+  <div id="screen-join">
+    <div class="block-card">
+      <div class="block-icon join-icon">
+        <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.6"/><path d="M15.2 14.2c2.6.4 4.8 2.7 4.8 5.8"/></svg>
+      </div>
+      <div class="block-title">Tham gia để mở khóa app</div>
+      <div class="block-subtitle">
+        Vui lòng tham gia <strong style="color:var(--tg-text)">Nhóm trò chuyện</strong> và
+        <strong style="color:var(--tg-text)">Kênh thông báo</strong> để bắt đầu cày coin.
+      </div>
+
+      <div class="join-links">
+        <a id="join-link-nhom" class="secondary-btn join-link-btn" href="#" target="_blank" rel="noopener">🌐 Tham gia nhóm trò chuyện</a>
+        <a id="join-link-kenh" class="secondary-btn join-link-btn" href="#" target="_blank" rel="noopener">📢 Theo dõi kênh thông báo</a>
+      </div>
+
+      <button id="btn-kiem-tra-tham-gia" class="primary-btn" type="button" style="width:100%;">
+        <span class="spinner"></span>
+        <span class="btn-label">✅ Tôi đã tham gia, kiểm tra lại</span>
+      </button>
+      <div id="join-error" class="error-text" style="margin-top:14px;"></div>
     </div>
   </div>
 
@@ -2421,6 +2459,75 @@
       lamMoiDao();
     }
 
+    // ────────────────────────────────────────────────────────────
+    // JOIN GATE — hỏi backend xem user đã tham gia nhóm + kênh chưa
+    // (endpoint /kiem-tra-thanh-vien, dùng Bot API getChatMember phía
+    // server). Chưa đủ điều kiện → chặn lại ở màn hình "Tham gia để mở
+    // khóa"; đủ điều kiện → cho vào thẳng app như bình thường.
+    // ────────────────────────────────────────────────────────────
+    async function kiemTraThanhVienNhomKenh(uid) {
+      if (!uid) return { thanh_cong: false, da_tham_gia: true }; // không xác định được uid — không chặn oan
+      try {
+        const endpoint = `${LINK4M_CONFIG.linkGoc}/kiem-tra-thanh-vien?uid=${encodeURIComponent(uid)}`;
+        const res = await fetch(endpoint);
+        if (!res.ok) return { thanh_cong: false, da_tham_gia: true }; // lỗi mạng tạm thời — không khóa cứng user
+        return await res.json();
+      } catch (e) {
+        return { thanh_cong: false, da_tham_gia: true };
+      }
+    }
+
+    // Mở link nhóm/kênh — ưu tiên openTelegramLink() của Telegram WebApp
+    // (mượt hơn, không rời hẳn khỏi ngữ cảnh Telegram), fallback window.open
+    // nếu API này không tồn tại (vd bản Telegram cũ).
+    function moLinkTelegram(tg, link) {
+      if (!link) return;
+      if (tg && typeof tg.openTelegramLink === 'function' && link.indexOf('t.me/') !== -1) {
+        try { tg.openTelegramLink(link); return; } catch (e) {}
+      }
+      window.open(link, '_blank');
+    }
+
+    // Gắn sự kiện cho màn hình "Tham gia để mở khóa": 2 nút mở link + 1 nút
+    // kiểm tra lại. onDaThamGia() được gọi khi kiểm tra lại xác nhận user đã
+    // đủ điều kiện (đã tham gia cả nhóm lẫn kênh, hoặc điều kiện nào đó chưa
+    // cấu hình trên Worker nên được bỏ qua).
+    function setupManHinhThamGia(tg, tt, onDaThamGia) {
+      const linkNhomEl = document.getElementById('join-link-nhom');
+      const linkKenhEl = document.getElementById('join-link-kenh');
+      const btnKiemTra = document.getElementById('btn-kiem-tra-tham-gia');
+      const labelKiemTra = btnKiemTra.querySelector('.btn-label');
+      const errorEl = document.getElementById('join-error');
+
+      const linkNhom = tt.link_nhom || '#';
+      const linkKenh = tt.link_kenh || '#';
+      linkNhomEl.href = linkNhom;
+      linkKenhEl.href = linkKenh;
+      linkNhomEl.addEventListener('click', (e) => { e.preventDefault(); moLinkTelegram(tg, linkNhom); });
+      linkKenhEl.addEventListener('click', (e) => { e.preventDefault(); moLinkTelegram(tg, linkKenh); });
+
+      btnKiemTra.addEventListener('click', async () => {
+        errorEl.style.display = 'none';
+        btnKiemTra.disabled = true;
+        btnKiemTra.classList.add('loading');
+        labelKiemTra.textContent = 'Đang kiểm tra...';
+
+        const uid = tg?.initDataUnsafe?.user?.id;
+        const ttMoi = await kiemTraThanhVienNhomKenh(uid);
+
+        btnKiemTra.disabled = false;
+        btnKiemTra.classList.remove('loading');
+        labelKiemTra.textContent = '✅ Tôi đã tham gia, kiểm tra lại';
+
+        if (ttMoi.da_tham_gia) {
+          onDaThamGia();
+        } else {
+          errorEl.textContent = '❌ Bạn cần tham gia đủ nhóm và kênh ở trên rồi bấm kiểm tra lại nhé.';
+          errorEl.style.display = 'block';
+        }
+      });
+    }
+
     (function init() {
       if (!isTelegramMiniApp()) {
         document.getElementById('screen-loading').style.display = 'none';
@@ -2432,44 +2539,74 @@
       tg.expand();
       applyTelegramTheme(tg);
       populateMain(tg);
-      setupTabBar();
-      setupLinkButton(tg);
-      setupAdsgramTab(tg);
-      setupGifcodeTab(tg);
-      setupModalChonNganHang();
-      setupViTab(tg);
-      setupBanBeTab(tg);
-      setupDiemDanhTab(tg);
-      setupBangXepHangTab(tg);
-      setupDaoTab(tg);
 
-      // Cập nhật định kỳ mỗi 20–30 giây (ngẫu nhiên mỗi vòng) — số dư, bảng xếp
-      // hạng, ví. Dùng setTimeout tự lặp thay vì setInterval cố định để: (1)
-      // vòng sau luôn cách vòng trước ĐỦ 20-30s dù request trước có chậm hay
-      // không (setInterval không đảm bảo điều này); (2) rải đều thời điểm
-      // gọi giữa nhiều user thay vì tất cả cùng bấm nhịp, giúp giảm tải KV.
-      // (Khoảng poll được giãn ra so với trước vì phần "coin tăng mượt mỗi
-      // giây" giờ do client tự nội suy — xem daoUocTinhTimer trong renderDao —
-      // nên không cần hỏi server dồn dập để giữ cảm giác real-time nữa.)
-      const uid = tg?.initDataUnsafe?.user?.id;
-      function lapCapNhatDinhKy() {
-        const doTreGiay = 45000 + Math.random() * 15000; // ngẫu nhiên 45000–60000ms — giãn ra từ 20-30s để chịu được nhiều user online cùng lúc hơn trên free plan (100k đọc KV/ngày)
-        setTimeout(async () => {
-          await capNhatDinhKy(uid);
-          lapCapNhatDinhKy();
-        }, doTreGiay);
-      }
-      lapCapNhatDinhKy();
-      document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) capNhatDinhKy(uid);
-      });
+      // Toàn bộ phần khởi tạo các tab + vòng lặp cập nhật định kỳ + hiện màn
+      // hình chính — chỉ chạy SAU KHI xác nhận user đã tham gia đủ nhóm/kênh.
+      function batDauApp() {
+        setupTabBar();
+        setupLinkButton(tg);
+        setupAdsgramTab(tg);
+        setupGifcodeTab(tg);
+        setupModalChonNganHang();
+        setupViTab(tg);
+        setupBanBeTab(tg);
+        setupDiemDanhTab(tg);
+        setupBangXepHangTab(tg);
+        setupDaoTab(tg);
 
-      setTimeout(() => {
+        // Cập nhật định kỳ mỗi 20–30 giây (ngẫu nhiên mỗi vòng) — số dư, bảng xếp
+        // hạng, ví. Dùng setTimeout tự lặp thay vì setInterval cố định để: (1)
+        // vòng sau luôn cách vòng trước ĐỦ 20-30s dù request trước có chậm hay
+        // không (setInterval không đảm bảo điều này); (2) rải đều thời điểm
+        // gọi giữa nhiều user thay vì tất cả cùng bấm nhịp, giúp giảm tải KV.
+        // (Khoảng poll được giãn ra so với trước vì phần "coin tăng mượt mỗi
+        // giây" giờ do client tự nội suy — xem daoUocTinhTimer trong renderDao —
+        // nên không cần hỏi server dồn dập để giữ cảm giác real-time nữa.)
+        const uid = tg?.initDataUnsafe?.user?.id;
+        function lapCapNhatDinhKy() {
+          const doTreGiay = 45000 + Math.random() * 15000; // ngẫu nhiên 45000–60000ms — giãn ra từ 20-30s để chịu được nhiều user online cùng lúc hơn trên free plan (100k đọc KV/ngày)
+          setTimeout(async () => {
+            await capNhatDinhKy(uid);
+            lapCapNhatDinhKy();
+          }, doTreGiay);
+        }
+        lapCapNhatDinhKy();
+        document.addEventListener('visibilitychange', () => {
+          if (!document.hidden) capNhatDinhKy(uid);
+        });
+
         hideLoading();
         reveal('screen-main');
-      }, 600);
 
-      tg.onEvent && tg.onEvent('themeChanged', () => applyTelegramTheme(tg));
+        tg.onEvent && tg.onEvent('themeChanged', () => applyTelegramTheme(tg));
+      }
+
+      // Kiểm tra tham gia nhóm/kênh NGAY sau màn hình tải. Đủ điều kiện →
+      // vào thẳng app (giữ nguyên độ trễ 600ms cho cảm giác loading mượt).
+      // Chưa đủ → hiện màn hình "Tham gia để mở khóa", nút kiểm tra lại sẽ
+      // tự gọi batDauApp() ngay khi đạt điều kiện, không cần tải lại trang.
+      (async () => {
+        const uid = tg?.initDataUnsafe?.user?.id;
+        const tt = await kiemTraThanhVienNhomKenh(uid);
+
+        if (!tt.da_tham_gia) {
+          document.getElementById('screen-loading').style.display = 'none';
+          setupManHinhThamGia(tg, tt, () => {
+            const manHinhThamGia = document.getElementById('screen-join');
+            gsap.to(manHinhThamGia, {
+              opacity: 0, y: -12, duration: 0.3, ease: 'power2.in',
+              onComplete: () => {
+                manHinhThamGia.style.display = 'none';
+                batDauApp();
+              },
+            });
+          });
+          reveal('screen-join');
+          return;
+        }
+
+        setTimeout(batDauApp, 600);
+      })();
     })();
   </script>
 </body>

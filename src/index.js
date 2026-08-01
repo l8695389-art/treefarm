@@ -227,8 +227,7 @@ function xayDungTinGifcode(giftcode) {
       : `${giftcode.coinMin.toLocaleString("vi-VN")} - ${giftcode.coinMax.toLocaleString("vi-VN")} coin (ngẫu nhiên)`;
 
   return (
-    "🎁 TÍNH NĂNG MỚI: GIFT CODE!\n\n" +
-    "Vua Cày Tiền vừa ra mắt tính năng nhập Gift Code — nhận coin miễn phí cực nhanh!\n\n" +
+    "🎁 GIFT CODE MỖI NGÀY!\n\n" +
     "✨ Cách nhận:\n" +
     "1️⃣ Mở app → vào tab Nhiệm vụ\n" +
     '2️⃣ Kéo xuống khối "🎁 Nhập Gift Code"\n' +

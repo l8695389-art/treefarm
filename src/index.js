@@ -266,8 +266,8 @@ async function taoGifcodeTuDong(env) {
   const tinNhan = xayDungTinGifcode(giftcodeMoi);
   const linkBot = env.LINK_BOT || "https://t.me/vuacaytien_bot";
 
+  // Chỉ gửi vào NHÓM TRÒ CHUYỆN — không gửi vào kênh thông báo nữa.
   const diaChiGui = [];
-  if (env.KENH_THONG_BAO) diaChiGui.push(env.KENH_THONG_BAO);
   if (env.NHOM_CHAT) diaChiGui.push(env.NHOM_CHAT);
 
   for (const chatId of diaChiGui) {
@@ -978,13 +978,13 @@ async function xuLyTaoGifcode(env, message) {
 
   await telegramApi(env, "sendMessage", {
     chat_id: message.chat.id,
-    text: `✅ Đã tạo gift code!\n\n🎁 Mã: \`${ma}\`\n🪙 Thưởng: ${dongThuong}\n👥 Số lượt tối đa: ${soLuong.toLocaleString("vi-VN")}\n\n📣 Đang gửi thông báo tới kênh & nhóm...`,
+    text: `✅ Đã tạo gift code!\n\n🎁 Mã: \`${ma}\`\n🪙 Thưởng: ${dongThuong}\n👥 Số lượt tối đa: ${soLuong.toLocaleString("vi-VN")}\n\n📣 Đang gửi thông báo tới nhóm...`,
     parse_mode: "Markdown",
   });
 
-  // Chỉ gửi thông báo vào KÊNH THÔNG BÁO + NHÓM TRÒ CHUYỆN (cấu hình qua
-  // biến môi trường KENH_THONG_BAO / NHOM_CHAT trên Worker) — KHÔNG gửi
-  // riêng (DM) cho từng user như trước nữa. Vì đây là nhóm/kênh (không
+  // Chỉ gửi thông báo vào NHÓM TRÒ CHUYỆN (cấu hình qua biến môi trường
+  // NHOM_CHAT trên Worker) — KHÔNG gửi vào kênh thông báo nữa, và cũng
+  // KHÔNG gửi riêng (DM) cho từng user như trước. Vì đây là nhóm (không
   // phải chat riêng với bot), nút web_app KHÔNG dùng được ở đây (Telegram
   // chỉ cho phép web_app trong chat riêng 1-1 với bot) nên dùng nút "url"
   // trỏ về chat riêng với bot, từ đó user tự bấm nút mở miniapp ở /start.
@@ -992,7 +992,6 @@ async function xuLyTaoGifcode(env, message) {
   const linkBot = env.LINK_BOT || "https://t.me/vuacaytien_bot";
 
   const diaChiGui = [];
-  if (env.KENH_THONG_BAO) diaChiGui.push({ ten: "📢 Kênh thông báo", chatId: env.KENH_THONG_BAO });
   if (env.NHOM_CHAT) diaChiGui.push({ ten: "🌐 Nhóm trò chuyện", chatId: env.NHOM_CHAT });
 
   if (diaChiGui.length === 0) {
@@ -1000,8 +999,8 @@ async function xuLyTaoGifcode(env, message) {
       chat_id: message.chat.id,
       text:
         "⚠️ Mã đã tạo thành công nhưng CHƯA gửi được thông báo — chưa cấu hình biến môi trường " +
-        "KENH_THONG_BAO / NHOM_CHAT trên Worker (Dashboard > Settings > Variables and secrets). " +
-        "Nhớ thêm bot làm admin của kênh/nhóm đó trước khi gửi.",
+        "NHOM_CHAT trên Worker (Dashboard > Settings > Variables and secrets). " +
+        "Nhớ thêm bot làm admin của nhóm đó trước khi gửi.",
     });
   }
 

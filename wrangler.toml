@@ -44,7 +44,7 @@ deleted_classes = ["IpRegistry"]
 #   "0 14 * * *"  — 14:00 UTC = 21:00 giờ Việt Nam mỗi ngày, tự động tạo
 #                   1 gift code mới (300-500 coin/lượt, tối đa 50 lượt)
 [triggers]
-crons = ["0 */1 * * *", "0 14 * * *"]
+crons = ["0 */1 * * *", "0 13 * * *"]
 
 [vars]
 CHU_SO_HUU = "7055595466"

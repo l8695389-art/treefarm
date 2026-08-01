@@ -128,6 +128,73 @@ function boQuaD1(env) {
 
 const KEY_DANH_SACH_ADMIN = "danh_sach_admin";
 const KEY_BAO_TRI = "che-do-bao-tri"; // giá trị "1" = đang bảo trì (chặn toàn bộ miniapp + API), khác "1" = hoạt động bình thường
+
+// ==================================================
+// 🔒 BẮT BUỘC THAM GIA NHÓM + KÊNH — trước khi cho vào miniapp, frontend
+// gọi /kiem-tra-thanh-vien để hỏi bot xem user (theo Telegram ID) đã tham
+// gia NHÓM TRÒ CHUYỆN và KÊNH THÔNG BÁO chưa (dùng Bot API getChatMember).
+// Chưa đủ 2 điều kiện → app hiện màn hình "Tham gia để mở khóa", đã đủ →
+// vào thẳng app như bình thường. Link mặc định dùng khi chưa cấu hình biến
+// môi trường LINK_NHOM_CHAT / LINK_KENH_THONG_BAO trên Worker.
+// ==================================================
+const LINK_NHOM_MAC_DINH = "https://t.me/vuacaytien_chat";
+const LINK_KENH_MAC_DINH = "https://t.me/vuacaytien_news";
+// Các trạng thái getChatMember được coi là "đã tham gia" — "left"/"kicked"
+// (hoặc bất kỳ trạng thái lạ nào khác) đều bị coi là CHƯA tham gia.
+const TRANG_THAI_DA_THAM_GIA = ["creator", "administrator", "member", "restricted"];
+
+// Kiểm tra 1 user có đang là thành viên của 1 chat (nhóm hoặc kênh) hay
+// không, qua Bot API getChatMember — yêu cầu bot phải có mặt trong chat đó
+// (khuyến khích thêm bot làm admin để đọc được cả kênh).
+async function laThanhVienChat(env, chatId, uid) {
+  if (!chatId) return true; // chưa cấu hình chat này trên Worker — bỏ qua điều kiện, không chặn nhầm user
+  try {
+    const ketQua = await telegramApi(env, "getChatMember", { chat_id: chatId, user_id: Number(uid) });
+    if (!ketQua || !ketQua.ok) return false;
+    const trangThai = ketQua.result && ketQua.result.status;
+    return TRANG_THAI_DA_THAM_GIA.includes(trangThai);
+  } catch (e) {
+    // Lỗi mạng/API tạm thời (vd Telegram chậm) — KHÔNG chặn oan user, coi
+    // như đã tham gia; lần kiểm tra kế tiếp (khi mở lại app) sẽ tự đúng lại.
+    return true;
+  }
+}
+
+// /kiem-tra-thanh-vien?uid=... — frontend gọi ngay sau màn hình tải để
+// quyết định cho vào thẳng app hay chặn lại ở màn hình "Tham gia để mở khóa".
+// Kiểm tra 2 chat: env.NHOM_CHAT (nhóm trò chuyện, đã dùng sẵn để gửi thông
+// báo gift code) và env.KENH_CHAT (kênh thông báo, cần thêm binding riêng
+// vì trước giờ code không gửi tin vào kênh nên chưa cần biết chat_id của
+// nó). Nếu 1 trong 2 biến môi trường trên chưa cấu hình, điều kiện đó được
+// bỏ qua (coi như luôn đạt) để không khóa nhầm khi admin chưa setup đủ.
+async function xuLyKiemTraThanhVien(env, url) {
+  const uid = url.searchParams.get("uid");
+  const linkNhom = env.LINK_NHOM_CHAT || LINK_NHOM_MAC_DINH;
+  const linkKenh = env.LINK_KENH_THONG_BAO || LINK_KENH_MAC_DINH;
+
+  if (!uid) {
+    // Thiếu uid (vd mở ngoài Telegram) — không thể kiểm tra, mặc định cho
+    // qua để không khóa cứng người dùng trong trường hợp bất thường này.
+    return Response.json({ thanh_cong: false, loi: "thieu_uid", da_tham_gia: true, link_nhom: linkNhom, link_kenh: linkKenh });
+  }
+
+  const [trongNhom, trongKenh] = await Promise.all([
+    laThanhVienChat(env, env.NHOM_CHAT, uid),
+    laThanhVienChat(env, env.KENH_CHAT, uid),
+  ]);
+
+  const thieu = [];
+  if (!trongNhom) thieu.push("nhom");
+  if (!trongKenh) thieu.push("kenh");
+
+  return Response.json({
+    thanh_cong: true,
+    da_tham_gia: thieu.length === 0,
+    thieu, // ["nhom"] và/hoặc ["kenh"] — frontend có thể dùng để tô đậm phần còn thiếu (hiện tại hiện chung 1 màn hình cho cả 2)
+    link_nhom: linkNhom,
+    link_kenh: linkKenh,
+  });
+}
 // Bộ đếm TOÀN CỤC (cộng dồn all-time, gộp mọi user) — dùng cho lệnh admin
 // /checknv để xem nhanh tổng số lượt nhiệm vụ đã hoàn thành, không cần quét
 // lại toàn bộ user mỗi lần hỏi. Lưu ở namespace ADMINS (giống KEY_BAO_TRI,
@@ -1154,8 +1221,8 @@ async function xuLyStart(env, message) {
     reply_markup: {
       inline_keyboard: [
         [{ text: "💸 BẮT ĐẦU CÀY TIỀN NGAY", web_app: { url: env.LINK_MINIAPP } }],
-        [{ text: "📢 Kênh thông báo", url: "https://t.me/vuacaytien_news" }],
-        [{ text: "🌐 Nhóm trò chuyện", url: "https://t.me/vuacaytien_chat" }],
+        [{ text: "📢 Kênh thông báo", url: env.LINK_KENH_THONG_BAO || LINK_KENH_MAC_DINH }],
+        [{ text: "🌐 Nhóm trò chuyện", url: env.LINK_NHOM_CHAT || LINK_NHOM_MAC_DINH }],
       ],
     },
   });
@@ -2734,6 +2801,8 @@ export default {
       }
 
       switch (url.pathname) {
+        case "/kiem-tra-thanh-vien":
+          return xuLyKiemTraThanhVien(env, url);
         case "/tao-nhiem-vu":
           return xuLyTaoNhiemVu(env, url, url.origin);
         case "/nhiem-vu-hien-tai":

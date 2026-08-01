@@ -111,12 +111,13 @@
   .tab-info .nhan { color: var(--tg-muted); }
   .tab-info .gia-tri { word-break: break-all; }
 
-  .tab-actions { display: flex; gap: 10px; }
+  .tab-actions { display: flex; gap: 10px; flex-wrap: wrap; }
   .tab-actions button {
-    flex: 1; border: none; border-radius: 10px; padding: 11px; font-size: 14px; font-weight: 600; cursor: pointer;
+    flex: 1 1 auto; min-width: 108px; border: none; border-radius: 10px; padding: 11px; font-size: 13.5px; font-weight: 600; cursor: pointer;
   }
   .btn-hoan-thanh { background: var(--ok-glow); color: var(--ok); border: 1px solid rgba(61,220,132,0.4) !important; }
   .btn-tu-choi { background: var(--danger-glow); color: var(--danger); border: 1px solid rgba(255,77,109,0.4) !important; }
+  .btn-that-bai { background: rgba(245,185,66,0.15); color: var(--gold); border: 1px solid rgba(245,185,66,0.4) !important; }
   .tab-actions button:disabled { opacity: 0.5; cursor: default; }
 
   .thong-bao-cap-nhat {
@@ -253,6 +254,7 @@
         </div>
         <div class="tab-actions">
           <button class="btn-hoan-thanh" onclick="xuLy('${gd.uid}','${gd.id}','hoan_thanh',this)">✅ Hoàn thành</button>
+          <button class="btn-that-bai" onclick="xuLy('${gd.uid}','${gd.id}','that_bai',this)">⚠️ Thất bại (hoàn coin)</button>
           <button class="btn-tu-choi" onclick="xuLy('${gd.uid}','${gd.id}','tu_choi',this)">❌ Từ chối (hoàn coin)</button>
         </div>
       `;
@@ -267,6 +269,8 @@
     if (dangXuLy.has(id)) return;
     const xacNhan = hanhDong === "hoan_thanh"
       ? "Xác nhận đã chuyển tiền thành công cho yêu cầu này?"
+      : hanhDong === "that_bai"
+      ? "Đánh dấu chuyển khoản THẤT BẠI cho yêu cầu này? Số coin sẽ được hoàn lại cho người dùng."
       : "Từ chối yêu cầu này? Số coin sẽ được hoàn lại cho người dùng.";
     if (!confirm(xacNhan)) return;
 

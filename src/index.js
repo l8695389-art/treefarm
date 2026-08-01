@@ -32,13 +32,19 @@ async function d1Get(db, ns, key) {
   return hang ? hang.value : null;
 }
 
-async function d1Put(db, ns, key, value) {
-  await db
+// Trả về statement ĐÃ bind nhưng CHƯA chạy — dùng khi cần gộp nhiều lệnh ghi
+// vào 1 lượt db.batch() duy nhất (vd cập nhật mốc mùa giải cho hàng loạt
+// user khi tính lại bảng xếp hạng), thay vì mỗi lệnh 1 round-trip riêng.
+function d1PutCauLenh(db, ns, key, value) {
+  return db
     .prepare(
       "INSERT INTO kv (ns, key, value) VALUES (?1, ?2, ?3) ON CONFLICT(ns, key) DO UPDATE SET value = excluded.value"
     )
-    .bind(ns, key, String(value))
-    .run();
+    .bind(ns, key, String(value));
+}
+
+async function d1Put(db, ns, key, value) {
+  await d1PutCauLenh(db, ns, key, value).run();
 }
 
 async function d1Delete(db, ns, key) {
@@ -1839,31 +1845,78 @@ async function damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai) {
   return moc;
 }
 
+// Trần AN TOÀN chỉ để chặn trường hợp cực đoan (app có hàng chục nghìn
+// user cùng lúc) — KHÔNG phải giới hạn "chỉ xét N user đầu" như biến
+// QUET_TOI_DA cũ. Với quy mô hiện tại, con số này gần như không bao giờ
+// chạm tới, nên MỌI user đủ điều kiện đều được xét vào BXH.
+const TRAN_AN_TOAN_QUET_BXH = 20000;
+
 async function tinhBangXepHangKiemXu(env, soMuaHienTai) {
-  const QUET_TOI_DA = 50; // giữ 50 user/lần quét — cron đã tăng tần suất lên 10 phút/lần (144 lần/ngày), nhưng dữ liệu giờ nằm ở D1 (hạn mức đọc/ngày cao hơn nhiều so với KV free plan trước đây) nên vẫn thoải mái; xem ghi chú ở lamMoiCacheBangXepHang
   const ketQua = [];
-  let daQuet = 0;
+  const canGhiMocMoi = []; // { uid, nguoiDung } — user vừa phát hiện đổi mùa, cần lưu mốc mới
 
+  let hangDoi;
   try {
-    for await (const uid of duyetTatCaNguoiDung(env)) {
-      if (daQuet >= QUET_TOI_DA) break;
-      daQuet += 1;
-      const nguoiDung = await layNguoiDung(env, uid);
-      if (!nguoiDung) continue;
-
-      const coinHienTai = nguoiDung.tongDaKiem != null ? nguoiDung.tongDaKiem : nguoiDung.coin || 0;
-      const moc = await damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai);
-      const daKiemTrongMua = Math.max(0, coinHienTai - moc.coin_goc);
-      if (daKiemTrongMua < MUC_TOI_THIEU_KIEM_XU) continue;
-
-      const tenHienThi = (nguoiDung.ten && nguoiDung.ten.trim()) || (nguoiDung.username ? `@${nguoiDung.username}` : "");
-      if (!tenHienThi) continue;
-
-      ketQua.push({ uid, ten: tenHienThi, gia_tri: daKiemTrongMua });
-    }
+    // 1 CÂU SQL DUY NHẤT lấy toàn bộ user (ns='users', key bắt đầu bằng
+    // "user:") thay vì gọi layNguoiDung() từng người một trong vòng lặp —
+    // trước đây cách cũ buộc phải "cắt" ở 50 user đầu tiên (luôn CỐ ĐỊNH
+    // cùng 50 người theo thứ tự key) để tránh tốn quá nhiều round-trip,
+    // khiến user kiếm coin nhiều nhưng không nằm trong 50 người đó thì
+    // KHÔNG BAO GIỜ được xét lên BXH dù có kiếm bao nhiêu đi nữa. Gộp lại
+    // thành 1 query giúp quét được TẤT CẢ user chỉ với 1 lượt gọi D1.
+    const tienTo = thoatKyTuLike(TIEN_TO_USER) + "%";
+    const { results } = await env.DB.prepare(
+      "SELECT key, value FROM kv WHERE ns = 'users' AND key LIKE ?1 ESCAPE '\\' LIMIT ?2"
+    )
+      .bind(tienTo, TRAN_AN_TOAN_QUET_BXH)
+      .all();
+    hangDoi = results;
   } catch (e) {
-    // Có thể do vượt giới hạn subrequest/KV giữa chừng — dừng lại và trả về
-    // những gì đã quét được thay vì làm hỏng toàn bộ bảng xếp hạng.
+    // Lỗi D1 (timeout, quá tải...) — trả về rỗng, không làm hỏng cache cũ
+    // (xuLyBangXepHang vẫn giữ cache trước đó nếu lần làm mới này lỗi).
+    return [];
+  }
+
+  for (const hang of hangDoi) {
+    const uid = hang.key.slice(TIEN_TO_USER.length);
+    let nguoiDung;
+    try {
+      nguoiDung = JSON.parse(hang.value);
+    } catch (e) {
+      continue; // dữ liệu hỏng, bỏ qua user này
+    }
+
+    const coinHienTai = nguoiDung.tongDaKiem != null ? nguoiDung.tongDaKiem : nguoiDung.coin || 0;
+
+    let moc = nguoiDung.mocMuaGiai;
+    if (!moc || moc.so_mua !== soMuaHienTai) {
+      moc = { so_mua: soMuaHienTai, coin_goc: coinHienTai };
+      nguoiDung.mocMuaGiai = moc;
+      canGhiMocMoi.push({ uid, nguoiDung });
+    }
+
+    const daKiemTrongMua = Math.max(0, coinHienTai - moc.coin_goc);
+    if (daKiemTrongMua < MUC_TOI_THIEU_KIEM_XU) continue;
+
+    const tenHienThi = (nguoiDung.ten && nguoiDung.ten.trim()) || (nguoiDung.username ? `@${nguoiDung.username}` : "");
+    if (!tenHienThi) continue;
+
+    ketQua.push({ uid, ten: tenHienThi, gia_tri: daKiemTrongMua });
+  }
+
+  // Ghi lại mốc mùa giải mới (chỉ user vừa phát hiện đổi mùa) — gộp thành
+  // 1 lượt db.batch() DUY NHẤT thay vì N request riêng lẻ, để không đội
+  // số round-trip lên dù có hàng trăm user cần cập nhật cùng lúc (vd ngay
+  // sau khi mùa giải mới mở).
+  if (canGhiMocMoi.length > 0) {
+    try {
+      const cacCauLenh = canGhiMocMoi.map(({ uid, nguoiDung }) =>
+        d1PutCauLenh(env.DB, "users", TIEN_TO_USER + uid, JSON.stringify(nguoiDung))
+      );
+      await env.DB.batch(cacCauLenh);
+    } catch (e) {
+      console.error("Không ghi được mốc mùa giải mới cho user (batch):", e);
+    }
   }
 
   ketQua.sort((a, b) => b.gia_tri - a.gia_tri);

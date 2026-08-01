@@ -22,9 +22,26 @@ import { telegramApi, cho } from "./telegram.js";
 //   database_id = "<id>"
 // ==================================================
 
-// Escape ký tự đặc biệt của LIKE (%, _, \) để prefix match chính xác.
-function thoatKyTuLike(chuoi) {
-  return chuoi.replace(/[\\%_]/g, (m) => "\\" + m);
+// TRƯỚC ĐÂY dùng "key LIKE ?2 ESCAPE '\\'" để lọc theo prefix — nhưng theo
+// tài liệu chính thức của SQLite (Query Optimizer Overview), ĐIỀU KIỆN BẮT
+// BUỘC để LIKE tận dụng được index là "mệnh đề ESCAPE KHÔNG được xuất hiện".
+// Có ESCAPE nghĩa là SQLite BỎ QUA tối ưu index, quét TOÀN BỘ các dòng
+// khớp ns=?1 (tức là toàn bộ dữ liệu app, không riêng gì prefix cần tìm)
+// rồi mới lọc LIKE trong bộ nhớ — khiến rows_read của D1 tăng vọt theo
+// TỔNG số dòng toàn hệ thống thay vì theo số dòng thực sự khớp prefix.
+// Đây chính là nguyên nhân khiến D1 báo đọc hơn 1 triệu dòng/ngày dù app
+// chỉ có ~170 user. Sửa lại bằng range query "key >= prefix AND key <
+// capTrên" — dùng đúng kỹ thuật range-scan trên B-tree index, không phụ
+// thuộc bất kỳ điều kiện tối ưu tinh vi nào của LIKE.
+//
+// Tính cận trên (EXCLUSIVE) cho 1 prefix theo thứ tự byte: tăng ký tự cuối
+// cùng của prefix lên 1 đơn vị. Mọi key bắt đầu bằng prefix chắc chắn nhỏ
+// hơn cận trên này (vì tại vị trí ký tự cuối, prefix có mã nhỏ hơn 1 đơn
+// vị so với cận trên, bất kể các ký tự theo sau là gì).
+function capTrenChoPrefix(prefix) {
+  if (!prefix) return null; // prefix rỗng = không giới hạn trên
+  const maKyTuCuoi = prefix.charCodeAt(prefix.length - 1);
+  return prefix.slice(0, -1) + String.fromCharCode(maKyTuCuoi + 1);
 }
 
 async function d1Get(db, ns, key) {
@@ -57,13 +74,22 @@ async function d1Delete(db, ns, key) {
 // và các chỗ gọi list() khác không cần sửa.
 async function d1List(db, ns, { prefix = "", cursor = null, limit = 1000 } = {}) {
   const gioiHan = limit || 1000;
-  const thamSo = [ns, thoatKyTuLike(prefix) + "%"];
-  let cauLenh = "SELECT key FROM kv WHERE ns = ?1 AND key LIKE ?2 ESCAPE '\\'";
-  if (cursor) {
-    cauLenh += " AND key > ?3";
-    thamSo.push(cursor);
+  const capTren = capTrenChoPrefix(prefix);
+
+  const thamSo = [ns, prefix];
+  let cauLenh = "SELECT key FROM kv WHERE ns = ?1 AND key >= ?2";
+  let idx = 3;
+  if (capTren !== null) {
+    cauLenh += ` AND key < ?${idx}`;
+    thamSo.push(capTren);
+    idx += 1;
   }
-  cauLenh += ` ORDER BY key ASC LIMIT ${cursor ? "?4" : "?3"}`;
+  if (cursor) {
+    cauLenh += ` AND key > ?${idx}`;
+    thamSo.push(cursor);
+    idx += 1;
+  }
+  cauLenh += ` ORDER BY key ASC LIMIT ?${idx}`;
   thamSo.push(gioiHan + 1); // lấy dư 1 dòng để biết còn trang sau hay không
 
   const { results } = await db.prepare(cauLenh).bind(...thamSo).all();
@@ -2001,11 +2027,13 @@ async function tinhBangXepHangKiemXu(env, soMuaHienTai) {
     // khiến user kiếm coin nhiều nhưng không nằm trong 50 người đó thì
     // KHÔNG BAO GIỜ được xét lên BXH dù có kiếm bao nhiêu đi nữa. Gộp lại
     // thành 1 query giúp quét được TẤT CẢ user chỉ với 1 lượt gọi D1.
-    const tienTo = thoatKyTuLike(TIEN_TO_USER) + "%";
+    // Dùng range "key >= / key <" (KHÔNG dùng LIKE+ESCAPE) để SQLite tận
+    // dụng được index — xem giải thích chi tiết ở capTrenChoPrefix().
+    const capTren = capTrenChoPrefix(TIEN_TO_USER);
     const { results } = await env.DB.prepare(
-      "SELECT key, value FROM kv WHERE ns = 'users' AND key LIKE ?1 ESCAPE '\\' LIMIT ?2"
+      "SELECT key, value FROM kv WHERE ns = 'users' AND key >= ?1 AND key < ?2 LIMIT ?3"
     )
-      .bind(tienTo, TRAN_AN_TOAN_QUET_BXH)
+      .bind(TIEN_TO_USER, capTren, TRAN_AN_TOAN_QUET_BXH)
       .all();
     hangDoi = results;
   } catch (e) {

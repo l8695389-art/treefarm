@@ -2456,6 +2456,39 @@ function xacThucAdminWeb(env, request) {
   return Boolean(env.ADMIN_WEB_SECRET) && secret === env.ADMIN_WEB_SECRET;
 }
 
+// Che 1 phần chuỗi (ID Telegram, số TK...) khi hiển thị công khai ra nhóm —
+// giữ vài ký tự đầu/cuối, phần giữa thay bằng ****, giống format thông báo
+// thanh toán mẫu (VD: 828****39456).
+function cheGiuaChuoi(chuoi, soDauGiu, soCuoiGiu) {
+  const s = String(chuoi ?? "");
+  if (s.length <= soDauGiu + soCuoiGiu) return s;
+  return s.slice(0, soDauGiu) + "****" + s.slice(-soCuoiGiu);
+}
+
+// Định dạng "HH:mm:ss dd/MM/yyyy" theo giờ Việt Nam — dùng cho tin thông báo
+// thanh toán ở nhóm chat, khớp format trong ảnh mẫu.
+function dinhDangThoiGianThanhToan(ts) {
+  const d = new Date(ts);
+  const gio = d.toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour12: false });
+  const ngay = d.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }); // dd/mm/yyyy
+  return `${gio} ${ngay}`;
+}
+
+// Dựng nội dung tin "ĐÃ THANH TOÁN" gửi vào nhóm chat sau khi admin bấm
+// Hoàn thành trên trang web duyệt rút tiền — che 1 phần ID Telegram và số
+// TK/SĐT để không lộ thông tin nhạy cảm của user ra nhóm công khai.
+function xayDungTinThanhToanNhom(giaoDich) {
+  return (
+    "🎉 ĐÃ THANH TOÁN\n" +
+    `🆔 Telegram: ${cheGiuaChuoi(giaoDich.uid, 3, 5)}\n` +
+    `🏦 Phương thức: ${giaoDich.nganHang}\n` +
+    `🔢 SĐT/STK: ${cheGiuaChuoi(giaoDich.soTk, 3, 3)}\n` +
+    `🥈 Tài nguyên: ${giaoDich.soCoin.toLocaleString("vi-VN")} coin\n` +
+    `💰 Số tiền: ${giaoDich.soTien.toLocaleString("vi-VN")}đ\n` +
+    `🕐 Thời gian: ${dinhDangThoiGianThanhToan(giaoDich.duyetLuc)}`
+  );
+}
+
 async function xuLyDanhSachRutTienCho(env, request) {
   if (!xacThucAdminWeb(env, request)) {
     return Response.json({ loi: "khong_co_quyen" }, { status: 401 });
@@ -2504,7 +2537,13 @@ async function xuLyXuLyRutTienAdmin(env, request) {
   }
 
   const { uid, id: idGiaoDich, hanh_dong: hanhDong } = body || {};
-  if (!uid || !idGiaoDich || !["hoan_thanh", "tu_choi"].includes(hanhDong)) {
+  // 3 hành động admin có thể chọn trên trang web duyệt rút tiền:
+  //   hoan_thanh → đã chuyển khoản thành công, KHÔNG hoàn coin
+  //   tu_choi    → admin chủ động từ chối yêu cầu, HOÀN coin
+  //   that_bai   → chuyển khoản thất bại (lỗi kỹ thuật, sai thông tin...),
+  //                cũng HOÀN coin giống tu_choi nhưng lưu trạng thái riêng
+  //                để phân biệt lý do trong lịch sử/thống kê
+  if (!uid || !idGiaoDich || !["hoan_thanh", "tu_choi", "that_bai"].includes(hanhDong)) {
     return Response.json({ thanh_cong: false, loi: "thieu_tham_so" }, { status: 400 });
   }
 
@@ -2526,9 +2565,10 @@ async function xuLyXuLyRutTienAdmin(env, request) {
   // Xử lý xong → xóa khỏi index chờ, tab tương ứng biến mất khỏi trang web.
   await env.USERS.delete(TIEN_TO_CHO_DUYET_RUT + uid + ":" + idGiaoDich);
 
-  let textThongBaoUser;
-  if (hanhDong === "tu_choi") {
-    // Hoàn coin + trả lại hạn mức ngày/tuần đã trừ lúc gửi yêu cầu
+  // tu_choi (admin từ chối) và that_bai (chuyển khoản lỗi) đều HOÀN coin +
+  // trả lại hạn mức ngày/tuần/số lần đã trừ lúc gửi yêu cầu — chỉ khác nhau
+  // ở trangThai lưu lại để phân biệt lý do. hoan_thanh thì KHÔNG hoàn gì cả.
+  if (hanhDong === "tu_choi" || hanhDong === "that_bai") {
     const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0 };
     nguoiDung.coin = (nguoiDung.coin || 0) + giaoDich.soCoin;
     await luuNguoiDung(env, uid, nguoiDung);
@@ -2545,16 +2585,22 @@ async function xuLyXuLyRutTienAdmin(env, request) {
       const soLanDaRut = Number((await env.USERS.get(giaoDich.keySoLanNgay)) || 0);
       await env.USERS.put(giaoDich.keySoLanNgay, String(Math.max(0, soLanDaRut - 1)));
     }
-
-    textThongBaoUser =
-      `❌ Yêu cầu rút ${giaoDich.soCoin} coin (~${giaoDich.soTien.toLocaleString("vi-VN")}đ, mã ${idGiaoDich}) đã bị từ chối.\n` +
-      `🪙 Số coin đã được hoàn lại vào tài khoản của bạn.`;
-  } else {
-    const ghiChuPhi = giaoDich.soPhi ? ` (đã trừ phí 10%: ${giaoDich.soPhi.toLocaleString("vi-VN")} coin)` : "";
-    textThongBaoUser = `✅ Yêu cầu rút ${giaoDich.soCoin} coin${ghiChuPhi} (~${giaoDich.soTien.toLocaleString("vi-VN")}đ, mã ${idGiaoDich}) đã hoàn thành!`;
   }
 
-  await telegramApi(env, "sendMessage", { chat_id: Number(uid), text: textThongBaoUser });
+  // KHÔNG gửi DM riêng cho user ở bất kỳ trạng thái nào nữa (hoàn thành, từ
+  // chối, thất bại) — user tự xem trạng thái/lịch sử ở tab Ví trong app.
+  // CHỈ khi HOÀN THÀNH mới thông báo công khai vào nhóm chat; từ chối/thất
+  // bại thì không gửi gì cả (tiền chưa thực sự được chuyển).
+  if (hanhDong === "hoan_thanh" && env.NHOM_CHAT) {
+    try {
+      await telegramApi(env, "sendMessage", {
+        chat_id: env.NHOM_CHAT,
+        text: xayDungTinThanhToanNhom(giaoDich),
+      });
+    } catch (e) {
+      console.error("Lỗi gửi thông báo thanh toán vào NHOM_CHAT:", e);
+    }
+  }
 
   return Response.json({ thanh_cong: true });
 }

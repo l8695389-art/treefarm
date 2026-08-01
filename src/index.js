@@ -102,6 +102,14 @@ function boQuaD1(env) {
 
 const KEY_DANH_SACH_ADMIN = "danh_sach_admin";
 const KEY_BAO_TRI = "che-do-bao-tri"; // giá trị "1" = đang bảo trì (chặn toàn bộ miniapp + API), khác "1" = hoạt động bình thường
+// Bộ đếm TOÀN CỤC (cộng dồn all-time, gộp mọi user) — dùng cho lệnh admin
+// /checknv để xem nhanh tổng số lượt nhiệm vụ đã hoàn thành, không cần quét
+// lại toàn bộ user mỗi lần hỏi. Lưu ở namespace ADMINS (giống KEY_BAO_TRI,
+// KEY_DANH_SACH_ADMIN — đều là cấu hình/thống kê toàn hệ thống, không phải
+// dữ liệu riêng của 1 user).
+const KEY_TONG_LUOT_QC = "tong-luot-qc-hoan-thanh"; // tổng lượt xem quảng cáo Monetag đã hoàn thành (mọi user, mọi thời điểm)
+const KEY_TONG_LUOT_ADSGRAM = "tong-luot-adsgram-hoan-thanh"; // tương tự, cho quảng cáo Adsgram
+const KEY_TONG_LUOT_LINK4M = "tong-luot-link4m-hoan-thanh"; // tương tự, cho lượt vượt link Link4M hoàn thành
 const TIEN_TO_USER = "user:";
 const TIEN_TO_QC_SO_LAN_NGAY = "qc-so-lan-ngay:";
 const QC_GIOI_HAN_NGAY = 20;
@@ -431,6 +439,21 @@ async function datCheDoBaoTri(env, bat) {
 }
 
 // ==================================================
+// 📈 BỘ ĐẾM NHIỆM VỤ TOÀN CỤC — cộng dồn all-time, phục vụ /checknv.
+// Đơn giản là đọc-rồi-ghi-đè (không atomic tuyệt đối), CHẤP NHẬN ĐƯỢC vì
+// đây chỉ là số liệu thống kê tham khảo cho admin, không ảnh hưởng tới
+// coin hay quyền lợi của user — giống cách các counter *-so-lan-ngay:
+// khác trong file này vẫn đang làm.
+async function tangBoDemToanCuc(env, key) {
+  const hienTai = Number((await env.ADMINS.get(key)) || 0);
+  await env.ADMINS.put(key, String(hienTai + 1));
+}
+
+async function layBoDemToanCuc(env, key) {
+  return Number((await env.ADMINS.get(key)) || 0);
+}
+
+// ==================================================
 // 👤 DỮ LIỆU NGƯỜI DÙNG — KV thay cho FILE_NGUOI_DUNG (json)
 // ==================================================
 async function layNguoiDung(env, uid) {
@@ -754,6 +777,33 @@ async function xuLyLamMoiBangXepHang(env, message) {
   }
 }
 
+// /checknv — xem NHANH tổng số lượt nhiệm vụ đã hoàn thành trên toàn hệ
+// thống (cộng dồn all-time, mọi user): quảng cáo Monetag, quảng cáo
+// Adsgram, và vượt link Link4M. Đọc thẳng 3 bộ đếm toàn cục
+// (KEY_TONG_LUOT_QC / KEY_TONG_LUOT_ADSGRAM / KEY_TONG_LUOT_LINK4M),
+// không cần quét lại toàn bộ user nên trả lời gần như tức thì.
+async function xuLyCheckNhiemVu(env, message) {
+  if (!(await laAdmin(env, message.from.id))) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "❌ Bạn không có quyền!" });
+  }
+
+  const tongQc = await layBoDemToanCuc(env, KEY_TONG_LUOT_QC);
+  const tongAdsgram = await layBoDemToanCuc(env, KEY_TONG_LUOT_ADSGRAM);
+  const tongLink4m = await layBoDemToanCuc(env, KEY_TONG_LUOT_LINK4M);
+  const tongQuangCao = tongQc + tongAdsgram;
+
+  const text =
+    `📊 THỐNG KÊ NHIỆM VỤ (ALL-TIME)\n` +
+    `━━━━━━━━━━━━━━━━━━\n` +
+    `🎬 Quảng cáo Monetag: ${tongQc.toLocaleString("vi-VN")} lượt\n` +
+    `🎥 Quảng cáo Adsgram: ${tongAdsgram.toLocaleString("vi-VN")} lượt\n` +
+    `📺 Tổng quảng cáo (2 nguồn): ${tongQuangCao.toLocaleString("vi-VN")} lượt\n\n` +
+    `🔗 Vượt link Link4M thành công: ${tongLink4m.toLocaleString("vi-VN")} lượt\n\n` +
+    `ℹ️ Số liệu cộng dồn từ trước tới nay, tính trên toàn bộ user.`;
+
+  return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text });
+}
+
 // /dslenh — liệt kê toàn bộ lệnh dành cho admin kèm mô tả ngắn + cú pháp.
 // Chỉ cần cập nhật DANH_SACH_LENH_ADMIN khi thêm/bớt lệnh admin mới, không
 // cần sửa gì khác.
@@ -769,6 +819,7 @@ const DANH_SACH_LENH_ADMIN = [
   { lenh: "/sluser", moTa: "Xem tổng số user đã /start với bot" },
   { lenh: "/check [ID]", moTa: "Xem toàn bộ thông tin 1 người chơi (coin, cấp đào, điểm danh, xu BXH mùa hiện tại, ví, bạn bè...)" },
   { lenh: "/lammoibxh", moTa: "Ép tính lại + ghi cache BXH ngay lập tức, không cần chờ Cron Trigger" },
+  { lenh: "/checknv", moTa: "Xem tổng số lượt QC (Monetag+Adsgram) và vượt link đã hoàn thành (all-time)" },
   { lenh: "/dslenh", moTa: "Xem danh sách lệnh admin này" },
 ];
 
@@ -1119,6 +1170,8 @@ async function xuLyUpdate(env, update) {
         return xuLyCheckUser(env, message);
       case "/lammoibxh":
         return xuLyLamMoiBangXepHang(env, message);
+      case "/checknv":
+        return xuLyCheckNhiemVu(env, message);
       case "/dslenh":
         return xuLyDsLenh(env, message);
       case "/baotri":
@@ -1352,6 +1405,7 @@ async function xuLyXacNhanQuangCao(env, url) {
   congXpDaoVaLenCap(nguoiDung, XP_MOI_LUOT_QUANG_CAO); // +8 XP đào/lượt xem quảng cáo
   await luuNguoiDung(env, uid, nguoiDung);
   await congHoaHongGioiThieu(env, uid, soCoinCong);
+  await tangBoDemToanCuc(env, KEY_TONG_LUOT_QC); // thống kê cho /checknv
 
   return Response.json({
     thanh_cong: true,
@@ -1402,6 +1456,7 @@ async function xuLyAdsgramCallback(env, url) {
   congXpDaoVaLenCap(nguoiDung, XP_MOI_LUOT_QUANG_CAO);
   await luuNguoiDung(env, uid, nguoiDung);
   await congHoaHongGioiThieu(env, uid, soCoinCong);
+  await tangBoDemToanCuc(env, KEY_TONG_LUOT_ADSGRAM); // thống kê cho /checknv
 
   return Response.json({
     thanh_cong: true,
@@ -1832,6 +1887,7 @@ async function xuLyXacNhanNhiemVu(env, url) {
   congXpDaoVaLenCap(nguoiDung, XP_MOI_LUOT_VUOT_LINK); // +15 XP đào/lượt vượt link
   await luuNguoiDung(env, uid, nguoiDung);
   await congHoaHongGioiThieu(env, uid, soCoinCong);
+  await tangBoDemToanCuc(env, KEY_TONG_LUOT_LINK4M); // thống kê cho /checknv
 
   return Response.json({
     hoan_thanh: true,

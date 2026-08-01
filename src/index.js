@@ -1979,8 +1979,16 @@ async function tinhBangXepHangKiemXu(env, soMuaHienTai) {
     const daKiemTrongMua = Math.max(0, coinHienTai - moc.coin_goc);
     if (daKiemTrongMua < MUC_TOI_THIEU_KIEM_XU) continue;
 
-    const tenHienThi = (nguoiDung.ten && nguoiDung.ten.trim()) || (nguoiDung.username ? `@${nguoiDung.username}` : "");
-    if (!tenHienThi) continue;
+    // Trước đây nếu user KHÔNG có cả `ten` lẫn `username` (vd tài khoản cũ
+    // từ trước khi /start lưu đủ 2 trường này, hoặc dữ liệu import thiếu),
+    // code sẽ ÂM THẦM loại bỏ hẳn user đó khỏi BXH bằng "continue" — dù
+    // kiếm bao nhiêu xu cũng không bao giờ lên hạng được. Giờ dùng tên dự
+    // phòng "Người chơi #{4 số cuối UID}" để KHÔNG ai bị loại khỏi BXH chỉ
+    // vì thiếu tên hiển thị.
+    const tenHienThi =
+      (nguoiDung.ten && nguoiDung.ten.trim()) ||
+      (nguoiDung.username ? `@${nguoiDung.username}` : "") ||
+      `Người chơi #${String(uid).slice(-4)}`;
 
     ketQua.push({ uid, ten: tenHienThi, gia_tri: daKiemTrongMua });
   }

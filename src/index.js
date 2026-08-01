@@ -711,6 +711,49 @@ async function xuLyCheckUser(env, message) {
   return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text });
 }
 
+// /lammoibxh — ÉP tính lại + ghi cache bảng xếp hạng NGAY LẬP TỨC, không
+// cần chờ Cron Trigger (tối đa 10 phút/lần). Hữu ích để: (1) kiểm tra ngay
+// xem code tính BXH có lỗi gì không thay vì phải đoán qua việc chờ đợi;
+// (2) admin có thể tự làm mới thủ công nếu nghi ngờ Cron Trigger chưa chạy
+// hoặc chạy lỗi. Trả về đầy đủ lỗi (nếu có) + top 5 để đối chiếu nhanh.
+async function xuLyLamMoiBangXepHang(env, message) {
+  if (!(await laAdmin(env, message.from.id))) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "❌ Bạn không có quyền!" });
+  }
+
+  await telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "⏳ Đang làm mới bảng xếp hạng..." });
+
+  try {
+    const muaGiai = await layHoacTaoMuaGiai(env);
+    const ketQua = await lamMoiCacheBangXepHang(env, muaGiai);
+    const danhSach = ketQua.kiem_xu || [];
+
+    const top5 = danhSach.length
+      ? danhSach
+          .slice(0, 5)
+          .map((nd, idx) => `${idx + 1}. ${nd.ten} — ${nd.gia_tri.toLocaleString("vi-VN")} xu`)
+          .join("\n")
+      : "(chưa có ai đủ điều kiện tối thiểu để lọt BXH)";
+
+    const capNhatLuc = new Date(ketQua.cap_nhat_luc).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+
+    return telegramApi(env, "sendMessage", {
+      chat_id: message.chat.id,
+      text:
+        `✅ Đã làm mới xong bảng xếp hạng!\n\n` +
+        `🏆 Mùa giải #${ketQua.so_mua}\n` +
+        `👥 Tổng số người đủ điều kiện vào BXH: ${danhSach.length}\n` +
+        `🕒 Cập nhật lúc: ${capNhatLuc}\n\n` +
+        `🏅 Top 5:\n${top5}`,
+    });
+  } catch (e) {
+    return telegramApi(env, "sendMessage", {
+      chat_id: message.chat.id,
+      text: `❌ Lỗi khi làm mới BXH:\n${String(e)}`,
+    });
+  }
+}
+
 // /dslenh — liệt kê toàn bộ lệnh dành cho admin kèm mô tả ngắn + cú pháp.
 // Chỉ cần cập nhật DANH_SACH_LENH_ADMIN khi thêm/bớt lệnh admin mới, không
 // cần sửa gì khác.
@@ -725,6 +768,7 @@ const DANH_SACH_LENH_ADMIN = [
   { lenh: "/gui", moTa: "Trả lời 1 tin nhắn kèm lệnh này để broadcast tới toàn bộ user" },
   { lenh: "/sluser", moTa: "Xem tổng số user đã /start với bot" },
   { lenh: "/check [ID]", moTa: "Xem toàn bộ thông tin 1 người chơi (coin, cấp đào, điểm danh, xu BXH mùa hiện tại, ví, bạn bè...)" },
+  { lenh: "/lammoibxh", moTa: "Ép tính lại + ghi cache BXH ngay lập tức, không cần chờ Cron Trigger" },
   { lenh: "/dslenh", moTa: "Xem danh sách lệnh admin này" },
 ];
 
@@ -1073,6 +1117,8 @@ async function xuLyUpdate(env, update) {
         return xuLySoLuongUser(env, message);
       case "/check":
         return xuLyCheckUser(env, message);
+      case "/lammoibxh":
+        return xuLyLamMoiBangXepHang(env, message);
       case "/dslenh":
         return xuLyDsLenh(env, message);
       case "/baotri":

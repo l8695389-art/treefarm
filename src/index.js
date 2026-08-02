@@ -1329,17 +1329,20 @@ async function xuLyGuiThongBao(env, message) {
 }
 
 // ==================================================
-// 🚫 LỌC LINK LẠ TRONG NHÓM — tự động XOÁ tin nhắn chứa link KHÔNG thuộc
-// hệ sinh thái Vua Cày Tiền (bot khác, nhóm khác, kênh khác, website
-// khác...) để hạn chế bị spam quảng cáo app "kiếm tiền" đối thủ ngay
-// trong nhóm chính (vd link t.me/KhoHangKiemtien_Bot?start=... bị đăng
-// lặp lại nhiều lần trong nhóm chat).
+// 🚫 LỌC LINK LẠ + TỪ KHOÁ CẤM TRONG NHÓM — tự động XOÁ tin nhắn chứa link
+// KHÔNG thuộc hệ sinh thái Vua Cày Tiền (bot khác, nhóm khác, kênh khác,
+// website khác...), HOẶC chứa 1 trong các từ khoá cấm (xem
+// DANH_SACH_TU_KHOA_CAM — vd "app", "tiểu sử", "tsu") để hạn chế bị spam
+// quảng cáo app "kiếm tiền" đối thủ ngay trong nhóm chính (vd link
+// t.me/KhoHangKiemtien_Bot?start=... hoặc chỉ nhắc "xem tiểu sử để biết
+// thêm" bị đăng lặp lại nhiều lần trong nhóm chat).
 //
 // Cách hoạt động: quét MỌI URL xuất hiện trong tin nhắn (kể cả link ẩn
 // sau chữ kiểu "bấm vào đây") — nếu có ÍT NHẤT 1 link không nằm trong
 // danh sách được phép (bot/nhóm/kênh chính thức của app, cộng thêm danh
-// sách bổ sung bên dưới nếu cần), tin nhắn bị xoá NGAY. Trước khi xoá,
-// tin được forward nguyên văn vào NHOM_LOG để admin xem lại nếu cần.
+// sách bổ sung bên dưới nếu cần) HOẶC tin nhắn chứa từ khoá cấm, tin nhắn
+// bị xoá NGAY. Trước khi xoá, tin được forward nguyên văn vào NHOM_LOG để
+// admin xem lại nếu cần.
 //
 // MIỄN TRỪ: admin (theo layDanhSachAdmin) và tin gửi ẩn danh THAY MẶT
 // NHÓM (tính năng "Gửi ẩn danh" dành cho quản trị viên) — để không tự
@@ -1461,6 +1464,33 @@ function coLinkLaTrongTinNhan(env, message) {
   return cacLink.some((link) => !linkThuocHeSinhThai(link, danhSachUsername, danhSachDomain));
 }
 
+// ── LỌC THEO TỪ KHOÁ CẤM ──────────────────────────────────────────────
+// Một số spammer né được bộ lọc link ở trên bằng cách KHÔNG dán link trực
+// tiếp — thay vào đó chỉ nhắc tên app đối thủ, hoặc bảo nạn nhân "xem tiểu
+// sử" (bio Telegram) để lấy link, hoặc nhắc tới dịch vụ rút gọn link như
+// "tsu". Nên chặn thêm ở cấp độ TỪ, không cần chờ có URL mới xoá được.
+const DANH_SACH_TU_KHOA_CAM = ["bio", "tiểu sử", "trang cá nhân", "profile"]; // so khớp KHÔNG phân biệt hoa/thường, khớp NGUYÊN TỪ
+
+// Escape ký tự đặc biệt regex trong 1 từ khoá trước khi dựng RegExp động.
+function escapeRegex(chuoi) {
+  return chuoi.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// true nếu tin nhắn (text hoặc caption) chứa ÍT NHẤT 1 từ trong
+// DANH_SACH_TU_KHOA_CAM, khớp NGUYÊN TỪ (không dính vào 1 từ khác — vd
+// "app" không được khớp nhầm bên trong "happy", "sapp"...). Dùng
+// \p{L}/\p{N} (chữ + số Unicode) làm ranh giới từ vì \b của JS không nhận
+// diện đúng ký tự có dấu tiếng Việt.
+function coTuCamTrongTinNhan(message) {
+  const vanBan = (message.text || message.caption || "").toLowerCase();
+  if (!vanBan) return false;
+
+  return DANH_SACH_TU_KHOA_CAM.some((tu) => {
+    const re = new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRegex(tu.toLowerCase())}(?![\\p{L}\\p{N}_])`, "u");
+    return re.test(vanBan);
+  });
+}
+
 // Tin gửi "ẩn danh" THAY MẶT nhóm/kênh (tính năng dành cho quản trị viên)
 // — Bot API trả sender_chat trùng với chat.id trong trường hợp này. Coi
 // như admin, KHÔNG lọc, để không tự khoá tay quản trị viên nhóm.
@@ -1469,13 +1499,14 @@ function laGuiAnDanhBoiNhom(message) {
 }
 
 // Điều kiện tổng: CHỈ lọc trong nhóm/siêu nhóm (không áp dụng chat riêng
-// với bot), bỏ qua admin và tin gửi ẩn danh thay mặt nhóm.
+// với bot), bỏ qua admin và tin gửi ẩn danh thay mặt nhóm. Xoá nếu tin
+// chứa link lạ HOẶC chứa từ khoá cấm (app / tiểu sử / tsu).
 async function canXoaViLinkLa(env, message) {
   if (loaiChat(message) !== "👥 NHÓM") return false;
   if (laGuiAnDanhBoiNhom(message)) return false;
   const nguoiGuiId = message.from && message.from.id;
   if (nguoiGuiId && (await laAdmin(env, nguoiGuiId))) return false;
-  return coLinkLaTrongTinNhan(env, message);
+  return coLinkLaTrongTinNhan(env, message) || coTuCamTrongTinNhan(message);
 }
 
 // Lưu vết (forward nguyên văn) vào NHOM_LOG rồi xoá tin khỏi nhóm. Trả về
@@ -1485,7 +1516,7 @@ async function xuLyXoaTinNhanLinkLa(env, message) {
   try {
     await telegramApi(env, "sendMessage", {
       chat_id: env.NHOM_LOG,
-      text: `🚫 Tự động xoá tin nhắn chứa link lạ trong nhóm "${message.chat.title || message.chat.id}"`,
+      text: `🚫 Tự động xoá tin nhắn chứa link lạ hoặc từ khoá cấm trong nhóm "${message.chat.title || message.chat.id}"`,
     });
     await telegramApi(env, "forwardMessage", {
       chat_id: env.NHOM_LOG,

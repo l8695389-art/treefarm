@@ -205,11 +205,11 @@ const KEY_TONG_LUOT_ADSGRAM = "tong-luot-adsgram-hoan-thanh"; // tương tự, c
 const KEY_TONG_LUOT_LINK4M = "tong-luot-link4m-hoan-thanh"; // tương tự, cho lượt vượt link Link4M hoàn thành
 const TIEN_TO_USER = "user:";
 const TIEN_TO_QC_SO_LAN_NGAY = "qc-so-lan-ngay:";
-const QC_GIOI_HAN_NGAY = 10;
+const QC_GIOI_HAN_NGAY = 20;
 const TIEN_TO_QC_LAN_CUOI = "qc-lan-cuoi:"; // mốc thời gian lần xem quảng cáo gần nhất — chặn spam
 const QC_CHO_TOI_THIEU_MS = 5 * 60 * 1000; // phải chờ tối thiểu 5 phút giữa 2 lần xem quảng cáo
 const TIEN_TO_ADSGRAM_SO_LAN_NGAY = "adsgram-so-lan-ngay:"; // số lần được cộng thưởng Adsgram hôm nay
-const ADSGRAM_GIOI_HAN_NGAY = 10;
+const ADSGRAM_GIOI_HAN_NGAY = 20;
 const TIEN_TO_ADSGRAM_LAN_CUOI = "adsgram-lan-cuoi:"; // mốc thời gian lần cộng thưởng Adsgram gần nhất — chặn callback dồn dập
 const ADSGRAM_CHO_TOI_THIEU_MS = 5 * 60 * 1000; // phải chờ tối thiểu 5 phút giữa 2 lần được cộng thưởng Adsgram
 const TIEN_TO_TAI_KHOAN_NHAN = "tai-khoan-nhan:";
@@ -227,7 +227,7 @@ const RUT_TOI_THIEU = 500000; // coin (~5.000đ) — tăng từ 200.000 lên 500
 const RUT_TOI_DA_NGAY = 1800000; // coin / ngày (~18.000đ)
 const RUT_TOI_DA_TUAN = 5000000; // coin / tuần (~50.000đ)
 const TIEN_TO_LINK4M_SO_LAN_NGAY = "link4m-so-lan-ngay:"; // số lần hoàn thành nhiệm vụ link4m hôm nay
-const LINK4M_GIOI_HAN_NGAY = 2; // tăng từ 2 lên 3 lần/ngày
+const LINK4M_GIOI_HAN_NGAY = 3; // tăng từ 2 lên 3 lần/ngày
 const TIEN_TO_LINK4M_LAN_CUOI = "link4m-lan-cuoi:"; // mốc thời gian hoàn thành nhiệm vụ link4m gần nhất — chặn vượt liên tục
 const LINK4M_CHO_TOI_THIEU_MS = 5 * 60 * 1000; // phải chờ tối thiểu 5 phút giữa 2 lần vượt link
 const KEY_CACHE_BANG_XEP_HANG = "cache-bang-xep-hang"; // JSON { kiem_xu, cap_nhat_luc } — làm mới mỗi 10 phút qua Cron Trigger
@@ -1309,6 +1309,186 @@ async function xuLyGuiThongBao(env, message) {
 }
 
 // ==================================================
+// 🚫 LỌC LINK LẠ TRONG NHÓM — tự động XOÁ tin nhắn chứa link KHÔNG thuộc
+// hệ sinh thái Vua Cày Tiền (bot khác, nhóm khác, kênh khác, website
+// khác...) để hạn chế bị spam quảng cáo app "kiếm tiền" đối thủ ngay
+// trong nhóm chính (vd link t.me/KhoHangKiemtien_Bot?start=... bị đăng
+// lặp lại nhiều lần trong nhóm chat).
+//
+// Cách hoạt động: quét MỌI URL xuất hiện trong tin nhắn (kể cả link ẩn
+// sau chữ kiểu "bấm vào đây") — nếu có ÍT NHẤT 1 link không nằm trong
+// danh sách được phép (bot/nhóm/kênh chính thức của app, cộng thêm danh
+// sách bổ sung bên dưới nếu cần), tin nhắn bị xoá NGAY. Trước khi xoá,
+// tin được forward nguyên văn vào NHOM_LOG để admin xem lại nếu cần.
+//
+// MIỄN TRỪ: admin (theo layDanhSachAdmin) và tin gửi ẩn danh THAY MẶT
+// NHÓM (tính năng "Gửi ẩn danh" dành cho quản trị viên) — để không tự
+// khoá tay admin khi cần đăng link cần thiết (vd link nạp/rút, đối tác).
+//
+// LƯU Ý: bot cần được thêm làm ADMIN của nhóm kèm quyền "Xoá tin nhắn"
+// (Delete messages) thì deleteMessage bên dưới mới có tác dụng.
+// ==================================================
+
+// Bổ sung thủ công các username Telegram (bot/nhóm/kênh) khác NGOÀI bot
+// chính/nhóm chính/kênh chính vẫn muốn CHO PHÉP đăng trong nhóm (vd kênh
+// phụ, đối tác chính thức...). So khớp KHÔNG phân biệt hoa thường.
+const DANH_SACH_USERNAME_TG_DUOC_PHEP_THEM = [];
+
+// Bổ sung thủ công các domain (ngoài t.me/telegram.me) được coi là AN
+// TOÀN — vd nếu có trang landing/hỗ trợ riêng ở domain khác.
+const DANH_SACH_DOMAIN_DUOC_PHEP_THEM = [];
+
+// Lấy "username" (đoạn đầu tiên trong path) từ 1 link t.me/telegram.me —
+// vd "https://t.me/vuacaytien_bot?start=x" → "vuacaytien_bot". Trả về
+// null nếu link không hợp lệ hoặc không phải domain Telegram.
+function tenNguoiDungTuLinkTelegram(link) {
+  if (!link) return null;
+  try {
+    const u = new URL(link);
+    if (!["t.me", "telegram.me"].includes(u.hostname.toLowerCase())) return null;
+    const doan = u.pathname.split("/").filter(Boolean)[0];
+    return doan ? doan.toLowerCase() : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Danh sách username Telegram được coi là "thuộc app" — tự suy ra từ các
+// biến môi trường LINK_BOT / LINK_NHOM_CHAT / LINK_KENH_THONG_BAO đang
+// cấu hình (fallback về link mặc định nếu chưa cấu hình), gộp thêm
+// DANH_SACH_USERNAME_TG_DUOC_PHEP_THEM.
+function layDanhSachUsernameDuocPhep(env) {
+  const raw = [
+    tenNguoiDungTuLinkTelegram(env.LINK_BOT || "https://t.me/vuacaytien_bot"),
+    tenNguoiDungTuLinkTelegram(env.LINK_NHOM_CHAT || LINK_NHOM_MAC_DINH),
+    tenNguoiDungTuLinkTelegram(env.LINK_KENH_THONG_BAO || LINK_KENH_MAC_DINH),
+    ...DANH_SACH_USERNAME_TG_DUOC_PHEP_THEM,
+  ];
+  return new Set(raw.filter(Boolean).map((s) => s.toLowerCase()));
+}
+
+// Danh sách domain (ngoài t.me/telegram.me, vốn được xét riêng theo
+// username ở trên) được coi là AN TOÀN — gồm domain của LINK_MINIAPP (nếu
+// deploy ở domain riêng) + DANH_SACH_DOMAIN_DUOC_PHEP_THEM.
+function layDanhSachDomainDuocPhep(env) {
+  const raw = ["t.me", "telegram.me", ...DANH_SACH_DOMAIN_DUOC_PHEP_THEM];
+  if (env.LINK_MINIAPP) {
+    try {
+      raw.push(new URL(env.LINK_MINIAPP).hostname.toLowerCase());
+    } catch (e) {
+      // LINK_MINIAPP không phải 1 URL đầy đủ (vd thiếu scheme) — bỏ qua
+    }
+  }
+  return new Set(raw.map((s) => s.toLowerCase()));
+}
+
+// Trích TOÀN BỘ URL xuất hiện trong 1 tin nhắn (text hoặc caption ảnh/
+// video). Ưu tiên đọc từ entities Telegram trả sẵn (type "url" và
+// "text_link" — bắt được cả link ẩn sau chữ như "bấm vào đây"); offset/
+// length của entity tính theo UTF-16 code unit, KHỚP với cách JS String
+// đánh chỉ số nên .slice() dùng thẳng được, không cần quy đổi gì thêm.
+// Có thêm regex quét thô làm lưới an toàn thứ 2, phòng khi entities bị
+// thiếu (hiếm khi xảy ra).
+function trichCacLinkTrongTinNhan(message) {
+  const vanBan = message.text || message.caption || "";
+  const entities = message.entities || message.caption_entities || [];
+  const cacLink = new Set();
+
+  for (const en of entities) {
+    if (en.type === "text_link" && en.url) {
+      cacLink.add(en.url);
+    } else if (en.type === "url") {
+      cacLink.add(vanBan.slice(en.offset, en.offset + en.length));
+    }
+  }
+
+  const regexUrl = /(https?:\/\/[^\s]+)|(\bt\.me\/[^\s]+)/gi;
+  let khop;
+  while ((khop = regexUrl.exec(vanBan)) !== null) {
+    cacLink.add(khop[0].replace(/[)\]}.,!?;:'"]+$/, "")); // bỏ dấu câu dính đuôi (vd ".", "!" cuối câu)
+  }
+
+  return Array.from(cacLink);
+}
+
+// 1 link được coi là "thuộc hệ sinh thái app" nếu: (a) là link t.me/
+// telegram.me VÀ username khớp bot/nhóm/kênh chính, HOẶC (b) domain nằm
+// trong danh sách domain được phép. Link parse lỗi (dị dạng) → coi như AN
+// TOÀN, không chặn oan vì lý do kỹ thuật.
+function linkThuocHeSinhThai(link, danhSachUsername, danhSachDomain) {
+  let u;
+  try {
+    u = new URL(link.startsWith("http") ? link : "https://" + link);
+  } catch (e) {
+    return true;
+  }
+  const host = u.hostname.toLowerCase();
+
+  if (["t.me", "telegram.me"].includes(host)) {
+    const doan = u.pathname.split("/").filter(Boolean)[0];
+    return danhSachUsername.has(doan ? doan.toLowerCase() : "");
+  }
+  return danhSachDomain.has(host);
+}
+
+// true nếu tin nhắn chứa ÍT NHẤT 1 link không thuộc hệ sinh thái app.
+function coLinkLaTrongTinNhan(env, message) {
+  const cacLink = trichCacLinkTrongTinNhan(message);
+  if (cacLink.length === 0) return false;
+
+  const danhSachUsername = layDanhSachUsernameDuocPhep(env);
+  const danhSachDomain = layDanhSachDomainDuocPhep(env);
+  return cacLink.some((link) => !linkThuocHeSinhThai(link, danhSachUsername, danhSachDomain));
+}
+
+// Tin gửi "ẩn danh" THAY MẶT nhóm/kênh (tính năng dành cho quản trị viên)
+// — Bot API trả sender_chat trùng với chat.id trong trường hợp này. Coi
+// như admin, KHÔNG lọc, để không tự khoá tay quản trị viên nhóm.
+function laGuiAnDanhBoiNhom(message) {
+  return !!(message.sender_chat && message.chat && message.sender_chat.id === message.chat.id);
+}
+
+// Điều kiện tổng: CHỈ lọc trong nhóm/siêu nhóm (không áp dụng chat riêng
+// với bot), bỏ qua admin và tin gửi ẩn danh thay mặt nhóm.
+async function canXoaViLinkLa(env, message) {
+  if (loaiChat(message) !== "👥 NHÓM") return false;
+  if (laGuiAnDanhBoiNhom(message)) return false;
+  const nguoiGuiId = message.from && message.from.id;
+  if (nguoiGuiId && (await laAdmin(env, nguoiGuiId))) return false;
+  return coLinkLaTrongTinNhan(env, message);
+}
+
+// Lưu vết (forward nguyên văn) vào NHOM_LOG rồi xoá tin khỏi nhóm. Trả về
+// true nếu ĐÃ xoá thành công — router dùng giá trị này để quyết định có
+// cần ghiLogVaThongBao() bình thường nữa hay không (tránh log trùng lặp).
+async function xuLyXoaTinNhanLinkLa(env, message) {
+  try {
+    await telegramApi(env, "sendMessage", {
+      chat_id: env.NHOM_LOG,
+      text: `🚫 Tự động xoá tin nhắn chứa link lạ trong nhóm "${message.chat.title || message.chat.id}"`,
+    });
+    await telegramApi(env, "forwardMessage", {
+      chat_id: env.NHOM_LOG,
+      from_chat_id: message.chat.id,
+      message_id: message.message_id,
+    });
+  } catch (e) {
+    console.error("Lỗi lưu vết tin nhắn link lạ trước khi xoá:", e);
+  }
+
+  try {
+    const ketQua = await telegramApi(env, "deleteMessage", {
+      chat_id: message.chat.id,
+      message_id: message.message_id,
+    });
+    return !!(ketQua && ketQua.ok);
+  } catch (e) {
+    console.error("Lỗi xoá tin nhắn link lạ (bot có thể chưa là admin / thiếu quyền xoá tin):", e);
+    return false;
+  }
+}
+
+// ==================================================
 // 🔀 Router lệnh + bắt tất cả tin nhắn còn lại
 // ==================================================
 async function xuLyUpdate(env, update) {
@@ -1316,6 +1496,19 @@ async function xuLyUpdate(env, update) {
 
   const message = update.message;
   if (!message) return;
+
+  // 🚫 Lọc link lạ — kiểm tra TRƯỚC khi xét lệnh, để chặn được cả trường
+  // hợp link lạ bị nhét kèm vào chuỗi trông giống lệnh (vd "/x http://...").
+  // Bọc try/catch riêng: nếu bước lọc lỗi vì lý do gì đó, KHÔNG để mất bản
+  // ghi log bình thường của tin nhắn — rơi xuống dưới xử lý như cũ.
+  try {
+    if (await canXoaViLinkLa(env, message)) {
+      const daXoa = await xuLyXoaTinNhanLinkLa(env, message);
+      if (daXoa) return; // đã xoá + lưu vết riêng — khỏi cần log lại lần nữa
+    }
+  } catch (e) {
+    console.error("Lỗi khi lọc link lạ, bỏ qua bước lọc cho tin nhắn này:", e);
+  }
 
   if (message.text && message.text.startsWith("/")) {
     const lenh = message.text.trim().split(/\s+/)[0].split("@")[0];

@@ -128,7 +128,6 @@ function boQuaD1(env) {
 
 const KEY_DANH_SACH_ADMIN = "danh_sach_admin";
 const KEY_BAO_TRI = "che-do-bao-tri"; // giá trị "1" = đang bảo trì (chặn toàn bộ miniapp + API), khác "1" = hoạt động bình thường
-const KEY_TAT_AI_LOC_BIO = "tat-ai-loc-bio"; // giá trị "1" = đã TẮT lớp AI phát hiện lôi kéo xem bio (aiPhatHienLoiKeoXemBio), khác "1" = đang bật (mặc định). KHÔNG ảnh hưởng 2 lớp lọc rẻ tiền: link lạ + từ khoá cấm cố định — 2 lớp đó vẫn luôn hoạt động.
 
 // ==================================================
 // 🔒 BẮT BUỘC THAM GIA NHÓM + KÊNH — trước khi cho vào miniapp, frontend
@@ -589,24 +588,6 @@ async function datCheDoBaoTri(env, bat) {
 }
 
 // ==================================================
-// 🤖🚫 CÔNG TẮC RIÊNG CHO LỚP AI LỌC BIO — admin bật/tắt qua lệnh Telegram
-// /tatai, KHÔNG cần deploy lại. Chỉ ảnh hưởng lớp AI (aiPhatHienLoiKeoXemBio)
-// — lớp phòng vệ THỨ 3, tốn round-trip mạng + Neurons/API — trong khi 2 lớp
-// rẻ tiền chạy local (link lạ, từ khoá cấm cố định) LUÔN hoạt động bình
-// thường dù cờ này bật hay tắt. Hữu ích khi muốn tạm ngưng gọi AI (vd nghi
-// ngờ AI đang chặn nhầm tin nhắn bình thường, hoặc muốn tiết kiệm quota
-// Neurons/ngày) mà không cần tắt hẳn toàn bộ bộ lọc chống spam link lạ.
-// ==================================================
-async function dangTatAiLocBio(env) {
-  const gt = await env.ADMINS.get(KEY_TAT_AI_LOC_BIO);
-  return gt === "1";
-}
-
-async function datTatAiLocBio(env, tat) {
-  await env.ADMINS.put(KEY_TAT_AI_LOC_BIO, tat ? "1" : "0");
-}
-
-// ==================================================
 // 📈 BỘ ĐẾM NHIỆM VỤ TOÀN CỤC — cộng dồn all-time, phục vụ /checknv.
 // Đơn giản là đọc-rồi-ghi-đè (không atomic tuyệt đối), CHẤP NHẬN ĐƯỢC vì
 // đây chỉ là số liệu thống kê tham khảo cho admin, không ảnh hưởng tới
@@ -980,7 +961,6 @@ const DANH_SACH_LENH_ADMIN = [
   { lenh: "/xoaadmin [ID]", moTa: "Xóa 1 admin (chỉ chủ sở hữu)" },
   { lenh: "/dsadmin", moTa: "Xem danh sách admin hiện tại" },
   { lenh: "/baotri [bat|tat]", moTa: "Bật/tắt chế độ bảo trì, hoặc xem trạng thái nếu không nhập tham số" },
-  { lenh: "/tatai [bat|tat]", moTa: "Bật/tắt RIÊNG lớp AI phát hiện lôi kéo xem bio trong nhóm (không ảnh hưởng lọc link lạ + từ khoá cấm), hoặc xem trạng thái nếu không nhập tham số" },
   { lenh: "/taogifcode [coin hoặc min-max] [code] [so_luot] [loi_nhan]", moTa: "Tạo gift code mới, tự thông báo vào nhóm. loi_nhan tùy chọn — không nhập thì mặc định \"🎁 GIFT CODE NGẪU NHIÊN!\"" },
   { lenh: "/checkcode", moTa: "Xem danh sách các gift code đã tạo" },
   { lenh: "/checkcodesl [code]", moTa: "Xem chi tiết + số người đã nhập 1 gift code" },
@@ -1053,43 +1033,6 @@ async function xuLyBaoTri(env, message) {
   return telegramApi(env, "sendMessage", {
     chat_id: message.chat.id,
     text: `ℹ️ Chế độ bảo trì hiện đang: ${dangBat ? "🛠️ BẬT" : "✅ TẮT"}\n\nDùng: /baotri bat  hoặc  /baotri tat`,
-  });
-}
-
-// /tatai [bat|tat] — bật/tắt RIÊNG lớp AI phát hiện lôi kéo xem bio
-// (aiPhatHienLoiKeoXemBio). KHÔNG ảnh hưởng lớp lọc link lạ
-// (coLinkLaTrongTinNhan) hay lớp từ khoá cấm cố định (coTuCamTrongTinNhan)
-// — 2 lớp đó luôn chạy bình thường dù cờ này bật hay tắt. Không nhập tham
-// số → chỉ xem trạng thái hiện tại.
-async function xuLyTatAi(env, message) {
-  if (!(await laAdmin(env, message.from.id))) {
-    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "❌ Bạn không có quyền!" });
-  }
-
-  const hanhDong = (message.text.trim().split(/\s+/)[1] || "").toLowerCase();
-
-  if (hanhDong === "bat" || hanhDong === "on") {
-    await datTatAiLocBio(env, false);
-    return telegramApi(env, "sendMessage", {
-      chat_id: message.chat.id,
-      text: "✅ Đã BẬT lại lớp AI phát hiện lôi kéo xem bio trong nhóm.",
-    });
-  }
-  if (hanhDong === "tat" || hanhDong === "off") {
-    await datTatAiLocBio(env, true);
-    return telegramApi(env, "sendMessage", {
-      chat_id: message.chat.id,
-      text:
-        "🛑 Đã TẮT lớp AI phát hiện lôi kéo xem bio.\n" +
-        "Bộ lọc link lạ + từ khoá cấm cố định (bio/tiểu sử/trang cá nhân/profile) vẫn hoạt động bình thường.\n" +
-        "Dùng /tatai bat để bật lại khi cần.",
-    });
-  }
-
-  const dangTat = await dangTatAiLocBio(env);
-  return telegramApi(env, "sendMessage", {
-    chat_id: message.chat.id,
-    text: `ℹ️ Lớp AI lọc bio hiện đang: ${dangTat ? "🛑 TẮT" : "✅ BẬT"}\n\nDùng: /tatai bat  hoặc  /tatai tat`,
   });
 }
 
@@ -1667,7 +1610,6 @@ async function canXoaViLinkLa(env, message) {
 
   if (coLinkLaTrongTinNhan(env, message)) return true;
   if (coTuCamTrongTinNhan(message)) return true;
-  if (await dangTatAiLocBio(env)) return false; // admin đã /tatai tat — dừng ở đây, không gọi AI
 
   const tenHienThi = [
     `${(message.from && message.from.first_name) || ""} ${(message.from && message.from.last_name) || ""}`.trim(),
@@ -1757,8 +1699,6 @@ async function xuLyUpdate(env, update) {
         return xuLyDsLenh(env, message);
       case "/baotri":
         return xuLyBaoTri(env, message);
-      case "/tatai":
-        return xuLyTatAi(env, message);
       case "/taogifcode":
         return xuLyTaoGifcode(env, message);
       case "/checkcode":
@@ -3009,8 +2949,15 @@ async function xuLyThongTinBanBe(env, url) {
   const danhSach = raw ? JSON.parse(raw) : [];
   const nguoiDung = await layNguoiDung(env, uid);
 
+  // Luôn lấy số lượng từ ĐỘ DÀI mảng ban-be:{uid} — đây là nguồn dữ liệu
+  // đầy đủ, luôn được ghi (ghiNhanBanBeMoi) mỗi khi có người mới qua link.
+  // TRƯỚC ĐÂY dùng nguoiDung.soBanBeMoi (1 counter riêng) làm ưu tiên số 1,
+  // nhưng field này chỉ tồn tại/tăng từ sau khi được thêm vào code — user
+  // có lượt mời TỪ TRƯỚC đó sẽ bị đếm thiếu (vd mảng có 4 người nhưng
+  // soBanBeMoi chỉ ghi nhận 1), gây lệch số hiển thị "Bạn đã mời" so với
+  // danh sách bên dưới. Bỏ hẳn phụ thuộc vào soBanBeMoi cho số hiển thị.
   return Response.json({
-    so_luong: nguoiDung ? nguoiDung.soBanBeMoi || danhSach.length : danhSach.length, // tổng bạn đã mời thành công — ĐÃ nhận thưởng 80 coin, không cần Lv2
+    so_luong: danhSach.length, // tổng bạn đã mời thành công — ĐÃ nhận thưởng 80 coin, không cần Lv2
     so_luong_dat_lv2: nguoiDung ? nguoiDung.soBanBeDatLv2 || 0 : 0, // trong số đó, bao nhiêu bạn đã đạt Lv2 máy đào — CHỈ dùng để tính BXH Mời Bạn
     coin_tu_ban_be: nguoiDung ? nguoiDung.coinTuBanBe || 0 : 0, // tổng coin kiếm được từ bạn bè (thưởng mời thành công + hoa hồng nhiều tầng)
     danh_sach: danhSach.map((nb) => ({ ten: nb.ten, tham_gia_luc: nb.thamGiaLuc, da_dat_lv2: !!nb.daDatLv2 })),

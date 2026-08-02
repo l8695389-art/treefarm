@@ -223,7 +223,7 @@ const TIEN_TO_SO_LAN_RUT_NGAY = "so-lan-rut-ngay:"; // đếm SỐ LƯỢT gửi
 const SO_LAN_RUT_TOI_DA_NGAY = 1; // mỗi ngày chỉ được gửi 1 yêu cầu rút tiền, bất kể số coin
 const COIN_QUY_DOI_DONG_MAU_SO = 100; // 100 coin = 1đ khi rút — coin giờ là đơn vị duy nhất, rút thẳng không cần đổi qua gem nữa
 const PHI_RUT_TIEN_PHAN_TRAM = 0.10; // phí dịch vụ 10% mỗi lần rút — trừ trực tiếp vào số tiền quy đổi, KHÔNG đổi số coin bị trừ khỏi ví
-const RUT_TOI_THIEU = 200000; // coin (~2.000đ)
+const RUT_TOI_THIEU = 500000; // coin (~5.000đ) — tăng từ 200.000 lên 500.000
 const RUT_TOI_DA_NGAY = 1800000; // coin / ngày (~18.000đ)
 const RUT_TOI_DA_TUAN = 5000000; // coin / tuần (~50.000đ)
 const TIEN_TO_LINK4M_SO_LAN_NGAY = "link4m-so-lan-ngay:"; // số lần hoàn thành nhiệm vụ link4m hôm nay
@@ -235,6 +235,11 @@ const KEY_MUA_GIAI = "mua-giai-bxh-hien-tai"; // JSON { bat_dau, ket_thuc } — 
 const MUA_GIAI_SO_NGAY = 7; // độ dài 1 mùa giải BXH (ngày)
 const TOP_NHAN_THUONG = 10; // chỉ Top 10 mỗi bảng xếp hạng mới nhận thưởng khi kết thúc mùa giải (admin trao thủ công, giống quy trình duyệt rút tiền)
 const PHAN_THUONG_KIEM_XU = [50000, 10000, 5000, 2000, 2000, 2000, 2000, 2000, 2000, 2000]; // coin thưởng hạng 1→10, BXH "Đua Top Xu"
+const PHAN_THUONG_MOI_BAN = [50000, 10000, 5000, 2000, 2000, 2000, 2000, 2000, 2000, 2000]; // coin thưởng hạng 1→10, BXH "Đua Top Mời Bạn"
+const MUC_TOI_THIEU_MOI_BAN = 3; // tối thiểu mời được 3 bạn (đã đạt Lv2 máy đào) TRONG MÙA mới lọt BXH
+const MOI_BAN_MO_TU_MUA = 2; // BXH "Đua Top Mời Bạn" CHỈ xuất hiện từ mùa giải #2 trở đi — tức là sau khi
+// mùa giải #1 (mùa đầu tiên, chỉ có BXH "Đua Top Xu") kết thúc. Trong suốt mùa #1, endpoint
+// /bang-xep-hang trả về chua_mo=true cho loai=moi_ban thay vì bảng xếp hạng rỗng.
 const TIEN_TO_DIEM_DANH = "diem-danh:"; // diem-danh:{uid} — JSON { chuoi_hien_tai, ngay_cuoi }
 const THUONG_DIEM_DANH = [200, 400, 600, 900, 1300, 1600, 2000]; // coin thưởng theo ngày 1→7 trong chu kỳ điểm danh, lặp lại sau ngày 7 (đã giảm ~15 lần so với bản gốc để kéo dài thời gian tích lũy tới mức rút tối thiểu)
 const THUONG_COIN_MOI_MOI = 500; // coin chào mừng cho người dùng mới — chỉ nhận 1 lần duy nhất khi /start lần đầu
@@ -382,6 +387,34 @@ const XP_MOI_100_COIN_DAO = 5; // mỗi 100 coin đào được (đã cộng và
 const XP_MOI_LUOT_QUANG_CAO = 8; // mỗi lượt xem quảng cáo hoàn thành => +8 XP
 const XP_MOI_LUOT_VUOT_LINK = 15; // mỗi lượt vượt link hoàn thành => +15 XP
 
+// ==================================================
+// 🛒 CỬA HÀNG — coin sink, dùng coin đã kiếm mua vật phẩm hỗ trợ. Trạng
+// thái vật phẩm lưu thẳng trong object user (nguoiDung.boostDao,
+// nguoiDung.baoVeChuoiSoLuong) — không cần bảng riêng.
+// ==================================================
+const BOOST_DAO_THOI_GIAN_MS = 2 * 60 * 60 * 1000; // hiệu lực 2 giờ / lần mua
+const BOOST_DAO_HE_SO = 2; // nhân đôi tốc độ đào trong lúc hiệu lực
+const BOOST_DAO_GIA = 15000; // coin
+const BAO_VE_CHUOI_GIA = 8000; // coin / lượt
+const BAO_VE_CHUOI_TOI_DA = 5; // tối đa tích trữ 5 lượt bảo vệ chuỗi cùng lúc
+
+const SHOP_VAT_PHAM = {
+  boost_dao_x2: {
+    ma: "boost_dao_x2",
+    ten: "Tăng Tốc Đào x2",
+    icon: "⚡",
+    moTa: "Nhân đôi tốc độ đào coin trong 2 giờ liên tục kể từ lúc kích hoạt.",
+    gia: BOOST_DAO_GIA,
+  },
+  bao_ve_chuoi: {
+    ma: "bao_ve_chuoi",
+    ten: "Bảo Vệ Chuỗi Điểm Danh",
+    icon: "🛡️",
+    moTa: "Lỡ quên điểm danh 1 ngày cũng không bị reset chuỗi. Tự động dùng 1 lượt khi cần, có thể mua tích trữ nhiều lượt.",
+    gia: BAO_VE_CHUOI_GIA,
+  },
+};
+
 // XP cần để lên tiếp 1 cấp, tính từ cấp hiện tại: cấp 1→2 cần 500, cấp 2→3
 // cần 1.000, cấp 3→4 cần 1.500, v.v. (mỗi cấp sau tăng thêm 500 XP).
 function xpCanChoCapTiepTheo(capHienTai) {
@@ -392,7 +425,18 @@ function xpCanChoCapTiepTheo(capHienTai) {
 // trên cấp 1 cộng thêm 10%.
 function tocDoDaoMoiGio(nguoiDung) {
   const cap = nguoiDung.capDao || 1;
-  return COIN_DAO_MOI_GIO * (1 + TANG_TOC_DO_MOI_CAP * (cap - 1));
+  let toc = COIN_DAO_MOI_GIO * (1 + TANG_TOC_DO_MOI_CAP * (cap - 1));
+  if (nguoiDung.boostDao && nguoiDung.boostDao.hetHanLuc > Date.now()) {
+    toc *= nguoiDung.boostDao.heSo || 1;
+  }
+  return toc;
+}
+
+// Vật phẩm "Tăng Tốc Đào x2" còn hiệu lực bao lâu — trả về null nếu không
+// có / đã hết hạn. Dùng ở cả /trang-thai-dao (hiển thị) và /shop-thong-tin.
+function thongTinBoostDaoDeTra(nguoiDung) {
+  if (!nguoiDung.boostDao || nguoiDung.boostDao.hetHanLuc <= Date.now()) return null;
+  return { he_so: nguoiDung.boostDao.heSo, het_han_luc: nguoiDung.boostDao.hetHanLuc };
 }
 
 // Cộng XP + tự động lên cấp (có thể lên nhiều cấp cùng lúc nếu dư XP).
@@ -463,6 +507,8 @@ async function xuLyCreditDaoNeuCo(env, uid, nguoiDung, batBuoc = false) {
     dao.lanCuoiCongLuc = moc;
   }
 
+  await congBxhMoiBanNeuDuDieuKien(env, uid, nguoiDung); // chỉ tính vào BXH Mời Bạn nếu vừa đạt Lv2 (KHÔNG cộng thêm coin)
+
   if (daKetThuc) dao.dangDao = false;
   return { daKetThuc, daGhi: true };
 }
@@ -484,6 +530,7 @@ function thongTinDaoDeTra(nguoiDung) {
     dang_dao: dangDao,
     bat_dau_luc: dangDao ? dao.batDauLuc : null,
     ket_thuc_luc: dangDao ? dao.ketThucLuc : null,
+    boost_dao: thongTinBoostDaoDeTra(nguoiDung),
   };
 }
 
@@ -1207,8 +1254,9 @@ async function xuLyStart(env, message) {
       uid,
       ten: `${message.from.first_name} ${message.from.last_name || ""}`.trim() || "Người dùng",
       thamGiaLuc: Date.now(),
+      daDatLv2: false, // chỉ để HIỂN THỊ trạng thái trong tab Bạn bè — xem congBxhMoiBanNeuDuDieuKien(); KHÔNG ảnh hưởng thưởng 80 coin (đã cộng ngay bên dưới)
     });
-    await congThuongMoiBanThanhCong(env, refUid); // +10.000 coin cho người mời
+    await congThuongMoiBanThanhCong(env, refUid); // +80 coin cho người mời — NHẬN NGAY, không cần điều kiện gì
   }
 
   return telegramApi(env, "sendPhoto", {
@@ -1516,11 +1564,12 @@ async function xuLyXacNhanQuangCao(env, url) {
   await env.USERS.put(key, String(soLanMoi));
   await env.USERS.put(keyLanCuoi, String(now));
 
-  const soCoinCong = Number(env.THUONG_COIN_QUANG_CAO || 500); // nếu đã đặt biến môi trường THUONG_COIN_QUANG_CAO trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
+  const soCoinCong = Number(env.THUONG_COIN_QUANG_CAO || 5000); // nếu đã đặt biến môi trường THUONG_COIN_QUANG_CAO trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
   const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, tongDaKiem: 0 };
   nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
   congCoin(nguoiDung, soCoinCong);
   congXpDaoVaLenCap(nguoiDung, XP_MOI_LUOT_QUANG_CAO); // +8 XP đào/lượt xem quảng cáo
+  await congBxhMoiBanNeuDuDieuKien(env, uid, nguoiDung); // chỉ tính vào BXH Mời Bạn nếu vừa đạt Lv2 (KHÔNG cộng thêm coin)
   await luuNguoiDung(env, uid, nguoiDung);
   await congHoaHongGioiThieu(env, uid, soCoinCong);
   await tangBoDemToanCuc(env, KEY_TONG_LUOT_QC); // thống kê cho /checknv
@@ -1567,11 +1616,12 @@ async function xuLyAdsgramCallback(env, url) {
   await env.USERS.put(key, String(soLanMoi));
   await env.USERS.put(keyLanCuoi, String(now));
 
-  const soCoinCong = Number(env.THUONG_COIN_ADSGRAM || 500); // nếu đã đặt biến môi trường THUONG_COIN_ADSGRAM trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
+  const soCoinCong = Number(env.THUONG_COIN_ADSGRAM || 5000); // nếu đã đặt biến môi trường THUONG_COIN_ADSGRAM trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
   const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, tongDaKiem: 0 };
   nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
   congCoin(nguoiDung, soCoinCong);
   congXpDaoVaLenCap(nguoiDung, XP_MOI_LUOT_QUANG_CAO);
+  await congBxhMoiBanNeuDuDieuKien(env, uid, nguoiDung); // chỉ tính vào BXH Mời Bạn nếu vừa đạt Lv2 (KHÔNG cộng thêm coin)
   await luuNguoiDung(env, uid, nguoiDung);
   await congHoaHongGioiThieu(env, uid, soCoinCong);
   await tangBoDemToanCuc(env, KEY_TONG_LUOT_ADSGRAM); // thống kê cho /checknv
@@ -1608,12 +1658,14 @@ async function xuLyThongTinDiemDanh(env, url) {
 
   const homNay = ngayVnHomNay();
   const dd = await layDiemDanh(env, uid);
+  const nguoiDung = await layNguoiDung(env, uid);
 
   return Response.json({
     thanh_cong: true,
     chuoi_hien_tai: dd.chuoi_hien_tai || 0,
     da_diem_danh_hom_nay: dd.ngay_cuoi === homNay,
     thuong: THUONG_DIEM_DANH,
+    bao_ve_chuoi_con_lai: nguoiDung ? nguoiDung.baoVeChuoiSoLuong || 0 : 0,
   });
 }
 
@@ -1635,14 +1687,27 @@ async function xuLyDiemDanh(env, url) {
   }
 
   const homQua = ngayTruocVN(homNay);
-  const chuoiMoi = dd.ngay_cuoi === homQua ? (dd.chuoi_hien_tai || 0) + 1 : 1;
+  const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, tongDaKiem: 0 };
+
+  let chuoiMoi;
+  let daDungBaoVeChuoi = false;
+  if (dd.ngay_cuoi === homQua) {
+    chuoiMoi = (dd.chuoi_hien_tai || 0) + 1;
+  } else if (dd.ngay_cuoi && (nguoiDung.baoVeChuoiSoLuong || 0) > 0) {
+    // Đứt chuỗi (bỏ lỡ ít nhất 1 ngày) nhưng còn lượt bảo vệ — tiêu 1 lượt,
+    // giữ nguyên chuỗi thay vì reset về 1.
+    nguoiDung.baoVeChuoiSoLuong -= 1;
+    daDungBaoVeChuoi = true;
+    chuoiMoi = (dd.chuoi_hien_tai || 0) + 1;
+  } else {
+    chuoiMoi = 1;
+  }
 
   const viTriThuong = (chuoiMoi - 1) % THUONG_DIEM_DANH.length;
   const soCoinCong = THUONG_DIEM_DANH[viTriThuong];
 
   await luuDiemDanh(env, uid, { chuoi_hien_tai: chuoiMoi, ngay_cuoi: homNay });
 
-  const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, tongDaKiem: 0 };
   nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
   congCoin(nguoiDung, soCoinCong);
   await luuNguoiDung(env, uid, nguoiDung);
@@ -1654,6 +1719,8 @@ async function xuLyDiemDanh(env, url) {
     coin_cong: soCoinCong,
     chuoi_hien_tai: chuoiMoi,
     thuong: THUONG_DIEM_DANH,
+    da_dung_bao_ve_chuoi: daDungBaoVeChuoi,
+    bao_ve_chuoi_con_lai: nguoiDung.baoVeChuoiSoLuong || 0,
   });
 }
 
@@ -1705,6 +1772,65 @@ async function xuLyTrangThaiDao(env, url) {
   }
 
   return Response.json(thongTinDaoDeTra(nguoiDung));
+}
+
+// ==================================================
+// 🛒 CỬA HÀNG — /shop-thong-tin (đọc trạng thái) và /shop-mua (mua vật phẩm)
+// ==================================================
+async function xuLyShopThongTin(env, url) {
+  const uid = url.searchParams.get("uid");
+  if (!uid) return Response.json({ loi: "thieu_uid" }, { status: 400 });
+
+  const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0 };
+
+  return Response.json({
+    thanh_cong: true,
+    coin: nguoiDung.coin || 0,
+    vat_pham: Object.values(SHOP_VAT_PHAM),
+    boost_dao: thongTinBoostDaoDeTra(nguoiDung),
+    bao_ve_chuoi_so_luong: nguoiDung.baoVeChuoiSoLuong || 0,
+    bao_ve_chuoi_toi_da: BAO_VE_CHUOI_TOI_DA,
+  });
+}
+
+async function xuLyShopMua(env, url) {
+  const uid = url.searchParams.get("uid");
+  const ma = url.searchParams.get("ma");
+  if (!uid || !ma) return Response.json({ thanh_cong: false, loi: "thieu_tham_so" }, { status: 400 });
+
+  const vatPham = SHOP_VAT_PHAM[ma];
+  if (!vatPham) return Response.json({ thanh_cong: false, loi: "vat_pham_khong_ton_tai" });
+
+  const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0 };
+  const coinHienCo = nguoiDung.coin || 0;
+
+  if (ma === "boost_dao_x2" && nguoiDung.boostDao && nguoiDung.boostDao.hetHanLuc > Date.now()) {
+    return Response.json({ thanh_cong: false, loi: "dang_co_hieu_luc" });
+  }
+  if (ma === "bao_ve_chuoi" && (nguoiDung.baoVeChuoiSoLuong || 0) >= BAO_VE_CHUOI_TOI_DA) {
+    return Response.json({ thanh_cong: false, loi: "da_dat_toi_da" });
+  }
+  if (coinHienCo < vatPham.gia) {
+    return Response.json({ thanh_cong: false, loi: "khong_du_coin" });
+  }
+
+  nguoiDung.coin = coinHienCo - vatPham.gia;
+
+  if (ma === "boost_dao_x2") {
+    nguoiDung.boostDao = { hetHanLuc: Date.now() + BOOST_DAO_THOI_GIAN_MS, heSo: BOOST_DAO_HE_SO };
+  } else if (ma === "bao_ve_chuoi") {
+    nguoiDung.baoVeChuoiSoLuong = (nguoiDung.baoVeChuoiSoLuong || 0) + 1;
+  }
+
+  await luuNguoiDung(env, uid, nguoiDung);
+
+  return Response.json({
+    thanh_cong: true,
+    coin: nguoiDung.coin,
+    ma,
+    boost_dao: thongTinBoostDaoDeTra(nguoiDung),
+    bao_ve_chuoi_so_luong: nguoiDung.baoVeChuoiSoLuong || 0,
+  });
 }
 
 // Reset mã — hủy nhiệm vụ đang chờ (CHƯA hoàn thành) để tạo lại link mới,
@@ -1998,11 +2124,12 @@ async function xuLyXacNhanNhiemVu(env, url) {
   await xoaNhiemVuHienTai(env, uid); // dọn con trỏ, nhiệm vụ này xong rồi
 
   // Cộng thưởng coin
-  const soCoinCong = Number(env.THUONG_COIN_NHIEM_VU || 2500); // nếu đã đặt biến môi trường THUONG_COIN_NHIEM_VU trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
+  const soCoinCong = Number(env.THUONG_COIN_NHIEM_VU || 10000); // nếu đã đặt biến môi trường THUONG_COIN_NHIEM_VU trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
   const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, tongDaKiem: 0 };
   nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
   congCoin(nguoiDung, soCoinCong);
   congXpDaoVaLenCap(nguoiDung, XP_MOI_LUOT_VUOT_LINK); // +15 XP đào/lượt vượt link
+  await congBxhMoiBanNeuDuDieuKien(env, uid, nguoiDung); // chỉ tính vào BXH Mời Bạn nếu vừa đạt Lv2 (KHÔNG cộng thêm coin)
   await luuNguoiDung(env, uid, nguoiDung);
   await congHoaHongGioiThieu(env, uid, soCoinCong);
   await tangBoDemToanCuc(env, KEY_TONG_LUOT_LINK4M); // thống kê cho /checknv
@@ -2100,15 +2227,36 @@ async function damBaoMocMuaGiai(env, uid, nguoiDung, soMuaHienTai) {
   return moc;
 }
 
+// Tương tự damBaoMocMuaGiai() nhưng cho BXH "Đua Top Mời Bạn" — mốc là số
+// bạn ĐÃ ĐẠT LV2 MÁY ĐÀO (soBanBeDatLv2) tại thời điểm mùa hiện tại bắt
+// đầu — KHÁC với soBanBeMoi (tổng đã mời, dùng cho thưởng 80 coin/tab Bạn
+// bè, không cần Lv2).
+async function damBaoMocMuaGiaiMoiBan(env, uid, nguoiDung, soMuaHienTai) {
+  let moc = nguoiDung.mocMuaGiaiMoiBan;
+  if (!moc || moc.so_mua !== soMuaHienTai) {
+    const soBanBeHienTai = nguoiDung.soBanBeDatLv2 || 0;
+    moc = { so_mua: soMuaHienTai, so_ban_be_goc: soBanBeHienTai };
+    nguoiDung.mocMuaGiaiMoiBan = moc;
+    await luuNguoiDung(env, uid, nguoiDung);
+  }
+  return moc;
+}
+
 // Trần AN TOÀN chỉ để chặn trường hợp cực đoan (app có hàng chục nghìn
 // user cùng lúc) — KHÔNG phải giới hạn "chỉ xét N user đầu" như biến
 // QUET_TOI_DA cũ. Với quy mô hiện tại, con số này gần như không bao giờ
 // chạm tới, nên MỌI user đủ điều kiện đều được xét vào BXH.
 const TRAN_AN_TOAN_QUET_BXH = 20000;
 
-async function tinhBangXepHangKiemXu(env, soMuaHienTai) {
-  const ketQua = [];
-  const canGhiMocMoi = []; // { uid, nguoiDung } — user vừa phát hiện đổi mùa, cần lưu mốc mới
+// Tính CẢ 2 bảng xếp hạng ("Đua Top Xu" + "Đua Top Mời Bạn") trong CÙNG 1
+// lượt quét D1 duy nhất — vì cả 2 đều cần duyệt toàn bộ user, gộp lại
+// tránh phải quét D1 2 lần (tiết kiệm read) và gộp việc ghi mốc mùa giải
+// của cả 2 bảng vào CHUNG 1 object user → CHUNG 1 lượt db.batch() (tiết
+// kiệm write), thay vì 2 vòng quét + 2 batch riêng biệt.
+async function tinhCaHaiBangXepHang(env, soMuaHienTai) {
+  const ketQuaKiemXu = [];
+  const ketQuaMoiBan = [];
+  const canGhiMocMoi = []; // { uid, nguoiDung } — user vừa phát hiện đổi mùa (ở ít nhất 1 trong 2 mốc), cần lưu mốc mới
 
   let hangDoi;
   try {
@@ -2131,7 +2279,7 @@ async function tinhBangXepHangKiemXu(env, soMuaHienTai) {
   } catch (e) {
     // Lỗi D1 (timeout, quá tải...) — trả về rỗng, không làm hỏng cache cũ
     // (xuLyBangXepHang vẫn giữ cache trước đó nếu lần làm mới này lỗi).
-    return [];
+    return { kiem_xu: [], moi_ban: [] };
   }
 
   for (const hang of hangDoi) {
@@ -2143,17 +2291,30 @@ async function tinhBangXepHangKiemXu(env, soMuaHienTai) {
       continue; // dữ liệu hỏng, bỏ qua user này
     }
 
+    let canGhi = false;
+
+    // ── Mốc "Đua Top Xu" ──
     const coinHienTai = nguoiDung.tongDaKiem != null ? nguoiDung.tongDaKiem : nguoiDung.coin || 0;
-
-    let moc = nguoiDung.mocMuaGiai;
-    if (!moc || moc.so_mua !== soMuaHienTai) {
-      moc = { so_mua: soMuaHienTai, coin_goc: coinHienTai };
-      nguoiDung.mocMuaGiai = moc;
-      canGhiMocMoi.push({ uid, nguoiDung });
+    let mocXu = nguoiDung.mocMuaGiai;
+    if (!mocXu || mocXu.so_mua !== soMuaHienTai) {
+      mocXu = { so_mua: soMuaHienTai, coin_goc: coinHienTai };
+      nguoiDung.mocMuaGiai = mocXu;
+      canGhi = true;
     }
+    const daKiemTrongMua = Math.max(0, coinHienTai - mocXu.coin_goc);
 
-    const daKiemTrongMua = Math.max(0, coinHienTai - moc.coin_goc);
-    if (daKiemTrongMua < MUC_TOI_THIEU_KIEM_XU) continue;
+    // ── Mốc "Đua Top Mời Bạn" ── (soBanBeDatLv2 CHỈ tính bạn đã đạt Lv2 máy
+    // đào — KHÁC soBanBeMoi là tổng đã mời dùng cho thưởng 80 coin/tab Bạn bè)
+    const soBanBeHienTai = nguoiDung.soBanBeDatLv2 || 0;
+    let mocMoiBan = nguoiDung.mocMuaGiaiMoiBan;
+    if (!mocMoiBan || mocMoiBan.so_mua !== soMuaHienTai) {
+      mocMoiBan = { so_mua: soMuaHienTai, so_ban_be_goc: soBanBeHienTai };
+      nguoiDung.mocMuaGiaiMoiBan = mocMoiBan;
+      canGhi = true;
+    }
+    const daMoiTrongMua = Math.max(0, soBanBeHienTai - mocMoiBan.so_ban_be_goc);
+
+    if (canGhi) canGhiMocMoi.push({ uid, nguoiDung });
 
     // Trước đây nếu user KHÔNG có cả `ten` lẫn `username` (vd tài khoản cũ
     // từ trước khi /start lưu đủ 2 trường này, hoặc dữ liệu import thiếu),
@@ -2166,13 +2327,18 @@ async function tinhBangXepHangKiemXu(env, soMuaHienTai) {
       (nguoiDung.username ? `@${nguoiDung.username}` : "") ||
       `Người chơi #${String(uid).slice(-4)}`;
 
-    ketQua.push({ uid, ten: tenHienThi, gia_tri: daKiemTrongMua });
+    if (daKiemTrongMua >= MUC_TOI_THIEU_KIEM_XU) {
+      ketQuaKiemXu.push({ uid, ten: tenHienThi, gia_tri: daKiemTrongMua });
+    }
+    if (daMoiTrongMua >= MUC_TOI_THIEU_MOI_BAN) {
+      ketQuaMoiBan.push({ uid, ten: tenHienThi, gia_tri: daMoiTrongMua });
+    }
   }
 
-  // Ghi lại mốc mùa giải mới (chỉ user vừa phát hiện đổi mùa) — gộp thành
-  // 1 lượt db.batch() DUY NHẤT thay vì N request riêng lẻ, để không đội
-  // số round-trip lên dù có hàng trăm user cần cập nhật cùng lúc (vd ngay
-  // sau khi mùa giải mới mở).
+  // Ghi lại mốc mùa giải mới (chỉ user vừa phát hiện đổi mùa, gộp CẢ 2 mốc
+  // vào CÙNG 1 object user) — gộp thành 1 lượt db.batch() DUY NHẤT thay vì
+  // N request riêng lẻ, để không đội số round-trip lên dù có hàng trăm
+  // user cần cập nhật cùng lúc (vd ngay sau khi mùa giải mới mở).
   if (canGhiMocMoi.length > 0) {
     try {
       const cacCauLenh = canGhiMocMoi.map(({ uid, nguoiDung }) =>
@@ -2184,15 +2350,18 @@ async function tinhBangXepHangKiemXu(env, soMuaHienTai) {
     }
   }
 
-  ketQua.sort((a, b) => b.gia_tri - a.gia_tri);
-  return ketQua.slice(0, 50);
+  ketQuaKiemXu.sort((a, b) => b.gia_tri - a.gia_tri);
+  ketQuaMoiBan.sort((a, b) => b.gia_tri - a.gia_tri);
+  return { kiem_xu: ketQuaKiemXu.slice(0, 50), moi_ban: ketQuaMoiBan.slice(0, 50) };
 }
 
-// Tính lại + ghi cache — được gọi bởi Cron Trigger mỗi 10 phút.
+// Tính lại + ghi cache — được gọi bởi Cron Trigger mỗi 10 phút. Tính CẢ 2
+// bảng ("Đua Top Xu" + "Đua Top Mời Bạn") trong CÙNG 1 lượt quét D1, lưu
+// chung 1 object cache — /bang-xep-hang chỉ đọc đúng field cần theo "loai".
 async function lamMoiCacheBangXepHang(env, muaGiai) {
   const mg = muaGiai || (await layHoacTaoMuaGiai(env));
-  const kiemXu = await tinhBangXepHangKiemXu(env, mg.so);
-  const duLieu = { so_mua: mg.so, kiem_xu: kiemXu, cap_nhat_luc: Date.now() };
+  const { kiem_xu, moi_ban } = await tinhCaHaiBangXepHang(env, mg.so);
+  const duLieu = { so_mua: mg.so, kiem_xu, moi_ban, cap_nhat_luc: Date.now() };
   try {
     await env.USERS.put(KEY_CACHE_BANG_XEP_HANG, JSON.stringify(duLieu));
   } catch (e) {
@@ -2231,25 +2400,44 @@ async function layHoacTaoMuaGiai(env) {
   return moi;
 }
 
-// Tính phần thưởng hiển thị cho 1 hạng của BXH Đua Top Xu.
-function tinhPhanThuong(hang) {
-  if (hang > TOP_NHAN_THUONG) return { coin: 0 };
-  return { coin: PHAN_THUONG_KIEM_XU[hang - 1] };
-}
-
 async function xuLyBangXepHang(env, url, ctx) {
-  const loai = "kiem_xu";
+  const loaiTho = url.searchParams.get("loai") || "kiem-xu";
+  const loai = loaiTho === "moi-ban" ? "moi_ban" : "kiem_xu"; // key trong object cache
   const uid = url.searchParams.get("uid");
+
+  const mucToiThieu = loai === "moi_ban" ? MUC_TOI_THIEU_MOI_BAN : MUC_TOI_THIEU_KIEM_XU;
+  const bangThuong = loai === "moi_ban" ? PHAN_THUONG_MOI_BAN : PHAN_THUONG_KIEM_XU;
+  const donViGiaTri = loai === "moi_ban" ? "bạn" : "xu";
 
   try {
     const muaGiai = await layHoacTaoMuaGiai(env);
 
+    // BXH Mời Bạn khóa trong suốt mùa giải #1 — chỉ mở từ mùa #2 trở đi
+    // (tức là ngay khi mùa #1 kết thúc). Trả sớm, không cần đọc cache.
+    if (loai === "moi_ban" && muaGiai.so < MOI_BAN_MO_TU_MUA) {
+      return Response.json({
+        mua_giai: muaGiai,
+        loai,
+        don_vi_gia_tri: donViGiaTri,
+        muc_toi_thieu_bxh: mucToiThieu,
+        top_nhan_thuong: TOP_NHAN_THUONG,
+        bang_thuong: [],
+        bang_xep_hang: [],
+        hang_cua_toi: null,
+        gia_tri_cua_toi: 0,
+        cap_nhat_luc: Date.now(),
+        chua_mo: true,
+        mo_tu_mua: MOI_BAN_MO_TU_MUA,
+      });
+    }
+
     const raw = await env.USERS.get(KEY_CACHE_BANG_XEP_HANG);
     let cache = raw ? JSON.parse(raw) : null;
 
-    if (!cache) {
-      // Chưa từng có cache (lần đầu deploy) — bắt buộc tính ngay 1 lần để
-      // không trả về rỗng mãi (giới hạn quét đã được hạ thấp ở 2 hàm tính
+    if (!cache || !Array.isArray(cache.moi_ban)) {
+      // Chưa từng có cache (lần đầu deploy), HOẶC cache cũ từ trước khi có
+      // BXH Mời bạn (thiếu field moi_ban) — bắt buộc tính ngay 1 lần để
+      // không trả về rỗng mãi (giới hạn quét đã được hạ thấp ở hàm tính
       // để tránh vượt subrequest ngay trong request đầu tiên này).
       cache = await lamMoiCacheBangXepHang(env, muaGiai);
     } else if (cache.so_mua !== muaGiai.so) {
@@ -2276,9 +2464,14 @@ async function xuLyBangXepHang(env, url, ctx) {
         try {
           const nd = await layNguoiDung(env, uid);
           if (nd) {
-            const moc = await damBaoMocMuaGiai(env, uid, nd, muaGiai.so);
-            const coinHienTai = nd.tongDaKiem != null ? nd.tongDaKiem : nd.coin || 0;
-            giaTriCuaToi = Math.max(0, coinHienTai - moc.coin_goc);
+            if (loai === "moi_ban") {
+              const moc = await damBaoMocMuaGiaiMoiBan(env, uid, nd, muaGiai.so);
+              giaTriCuaToi = Math.max(0, (nd.soBanBeDatLv2 || 0) - moc.so_ban_be_goc);
+            } else {
+              const moc = await damBaoMocMuaGiai(env, uid, nd, muaGiai.so);
+              const coinHienTai = nd.tongDaKiem != null ? nd.tongDaKiem : nd.coin || 0;
+              giaTriCuaToi = Math.max(0, coinHienTai - moc.coin_goc);
+            }
           }
         } catch (e) {
           // Không tính được hạng riêng của user (vd hết subrequest) — bỏ
@@ -2290,16 +2483,16 @@ async function xuLyBangXepHang(env, url, ctx) {
     return Response.json({
       mua_giai: muaGiai,
       loai,
-      don_vi_gia_tri: "xu",
-      muc_toi_thieu_bxh: MUC_TOI_THIEU_KIEM_XU,
+      don_vi_gia_tri: donViGiaTri,
+      muc_toi_thieu_bxh: mucToiThieu,
       top_nhan_thuong: TOP_NHAN_THUONG,
-      bang_thuong: Array.from({ length: TOP_NHAN_THUONG }, (_, i) => ({ hang: i + 1, coin: PHAN_THUONG_KIEM_XU[i] })),
+      bang_thuong: Array.from({ length: TOP_NHAN_THUONG }, (_, i) => ({ hang: i + 1, coin: bangThuong[i] })),
       bang_xep_hang: danhSach.map((nd, idx) => ({
         hang: idx + 1,
         uid: nd.uid,
         ten: nd.ten,
         gia_tri: nd.gia_tri,
-        phan_thuong: tinhPhanThuong(idx + 1),
+        phan_thuong: idx < TOP_NHAN_THUONG ? { coin: bangThuong[idx] } : { coin: 0 },
       })),
       hang_cua_toi: hangCuaToi,
       gia_tri_cua_toi: giaTriCuaToi,
@@ -2312,8 +2505,8 @@ async function xuLyBangXepHang(env, url, ctx) {
     return Response.json({
       mua_giai: { so: 0, bat_dau: Date.now(), ket_thuc: Date.now() },
       loai,
-      don_vi_gia_tri: "xu",
-      muc_toi_thieu_bxh: MUC_TOI_THIEU_KIEM_XU,
+      don_vi_gia_tri: donViGiaTri,
+      muc_toi_thieu_bxh: mucToiThieu,
       top_nhan_thuong: TOP_NHAN_THUONG,
       bang_thuong: [],
       bang_xep_hang: [],
@@ -2344,14 +2537,51 @@ async function ghiNhanBanBeMoi(env, refUid, banMoi) {
 }
 
 // +80 coin cho người mời khi mời được 1 người bạn mới tham gia thành công
-// (chỉ tính 1 lần/người được mời, do chỉ gọi khi laNguoiDungMoi === true)
+// — NHẬN NGAY, không cần điều kiện gì (chỉ tính 1 lần/người được mời, do
+// chỉ gọi khi laNguoiDungMoi === true). Lv2 máy đào KHÔNG ảnh hưởng tới
+// khoản thưởng này — chỉ ảnh hưởng tới việc có tính vào BXH Mời Bạn hay
+// không, xem congBxhMoiBanNeuDuDieuKien() bên dưới.
 async function congThuongMoiBanThanhCong(env, refUid) {
   const nguoiGioiThieu = await layNguoiDung(env, refUid);
   if (!nguoiGioiThieu) return;
   nguoiGioiThieu.coin = (nguoiGioiThieu.coin || 0) + THUONG_MOI_BAN_THANH_CONG;
   nguoiGioiThieu.tongDaKiem = (nguoiGioiThieu.tongDaKiem || 0) + THUONG_MOI_BAN_THANH_CONG;
   nguoiGioiThieu.coinTuBanBe = (nguoiGioiThieu.coinTuBanBe || 0) + THUONG_MOI_BAN_THANH_CONG; // cộng dồn riêng "coin kiếm được từ bạn bè", hiển thị ở tab Bạn bè
+  nguoiGioiThieu.soBanBeMoi = (nguoiGioiThieu.soBanBeMoi || 0) + 1; // tổng số bạn đã mời thành công — hiển thị ở tab Bạn bè, KHÔNG dùng cho BXH
   await luuNguoiDung(env, refUid, nguoiGioiThieu);
+}
+
+// Đánh dấu 1 người trong danh sách bạn bè của refUid là ĐÃ đạt Lv2 máy đào
+// — chỉ để HIỂN THỊ trạng thái trong tab Bạn bè, không liên quan tới coin.
+async function danhDauBanBeDatLv2(env, refUid, uidBanMoi) {
+  const key = TIEN_TO_BAN_BE + refUid;
+  const raw = await env.USERS.get(key);
+  if (!raw) return;
+  const danhSach = JSON.parse(raw);
+  const idx = danhSach.findIndex((nb) => String(nb.uid) === String(uidBanMoi));
+  if (idx === -1) return;
+  danhSach[idx].daDatLv2 = true;
+  await env.USERS.put(key, JSON.stringify(danhSach));
+}
+
+// CHỈ dùng cho BXH "Đua Top Mời Bạn" — KHÔNG cộng thêm coin (coin mời bạn
+// đã được cộng NGAY lúc /start ở congThuongMoiBanThanhCong rồi). Kiểm tra:
+// user này có phải được mời (gioiThieuBoi) không, đã đạt Lv2 máy đào chưa,
+// và CHƯA từng được tính vào BXH của người mời (refBxhDaTinh) — nếu đủ,
+// +1 vào soBanBeDatLv2 của người mời TRỰC TIẾP (chỉ tầng 1, không lan
+// xuống tầng 2/3). Gọi ở mọi nơi capDao có thể tăng, TRƯỚC khi
+// luuNguoiDung() người dùng hiện tại — vì hàm này mutate nguoiDung.refBxhDaTinh.
+async function congBxhMoiBanNeuDuDieuKien(env, uid, nguoiDung) {
+  if (!nguoiDung.gioiThieuBoi) return;
+  if (nguoiDung.refBxhDaTinh) return;
+  if ((nguoiDung.capDao || 1) < 2) return;
+  nguoiDung.refBxhDaTinh = true; // đánh dấu trước để không tính trùng, caller sẽ luuNguoiDung() sau
+
+  const nguoiGioiThieu = await layNguoiDung(env, nguoiDung.gioiThieuBoi);
+  if (!nguoiGioiThieu) return;
+  nguoiGioiThieu.soBanBeDatLv2 = (nguoiGioiThieu.soBanBeDatLv2 || 0) + 1; // CHỈ dùng để xếp hạng BXH Mời Bạn
+  await luuNguoiDung(env, nguoiDung.gioiThieuBoi, nguoiGioiThieu);
+  await danhDauBanBeDatLv2(env, nguoiDung.gioiThieuBoi, uid);
 }
 
 async function xuLyThongTinBanBe(env, url) {
@@ -2363,9 +2593,10 @@ async function xuLyThongTinBanBe(env, url) {
   const nguoiDung = await layNguoiDung(env, uid);
 
   return Response.json({
-    so_luong: danhSach.length,
+    so_luong: nguoiDung ? nguoiDung.soBanBeMoi || danhSach.length : danhSach.length, // tổng bạn đã mời thành công — ĐÃ nhận thưởng 80 coin, không cần Lv2
+    so_luong_dat_lv2: nguoiDung ? nguoiDung.soBanBeDatLv2 || 0 : 0, // trong số đó, bao nhiêu bạn đã đạt Lv2 máy đào — CHỈ dùng để tính BXH Mời Bạn
     coin_tu_ban_be: nguoiDung ? nguoiDung.coinTuBanBe || 0 : 0, // tổng coin kiếm được từ bạn bè (thưởng mời thành công + hoa hồng nhiều tầng)
-    danh_sach: danhSach.map((nb) => ({ ten: nb.ten, tham_gia_luc: nb.thamGiaLuc })),
+    danh_sach: danhSach.map((nb) => ({ ten: nb.ten, tham_gia_luc: nb.thamGiaLuc, da_dat_lv2: !!nb.daDatLv2 })),
   });
 }
 
@@ -2825,6 +3056,10 @@ export default {
           return xuLyBatDauDao(env, url);
         case "/trang-thai-dao":
           return xuLyTrangThaiDao(env, url);
+        case "/shop-thong-tin":
+          return xuLyShopThongTin(env, url);
+        case "/shop-mua":
+          return xuLyShopMua(env, url);
         case "/bang-xep-hang":
           return xuLyBangXepHang(env, url, ctx);
         case "/thong-tin-vi":

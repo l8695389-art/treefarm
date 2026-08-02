@@ -1984,7 +1984,7 @@
         AdController.show()
           .then(async () => {
             btn.classList.remove('loading');
-            successEl.textContent = '⏳ Đang chờ hệ thống xác nhận, coin sẽ cộng trong vài giây...';
+            successEl.textContent = '⏳ Đang Xác Nhận...';
             successEl.style.display = 'block';
 
             // Adsgram xác nhận thưởng qua callback phía SERVER (S2S), không
@@ -1996,7 +1996,7 @@
                 hienThiCoin(tt.coin);
                 capNhatUiAdsgram(tt.so_lan_adsgram_da_xem, tt.adsgram_gioi_han_ngay);
                 if (!adsgramHetLuotHomNay) batDauDemNguoc(tt.adsgram_cho_toi_thieu_giay || 300);
-                successEl.textContent = '✅ Đã nhận thưởng (nếu quảng cáo hiển thị đủ)!';
+                successEl.textContent = '✅ Đã nhận thưởng +5000 coin!';
               }
             }, 4000);
           })

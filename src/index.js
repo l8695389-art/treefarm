@@ -1469,7 +1469,7 @@ function coLinkLaTrongTinNhan(env, message) {
 // tiếp — thay vào đó chỉ nhắc tên app đối thủ, hoặc bảo nạn nhân "xem tiểu
 // sử" (bio Telegram) để lấy link, hoặc nhắc tới dịch vụ rút gọn link như
 // "tsu". Nên chặn thêm ở cấp độ TỪ, không cần chờ có URL mới xoá được.
-const DANH_SACH_TU_KHOA_CAM = ["bio", "tiểu sử", "trang cá nhân", "profile"]; // so khớp KHÔNG phân biệt hoa/thường, khớp NGUYÊN TỪ
+const DANH_SACH_TU_KHOA_CAM = ["bio", "tiểu sử", "trang cá nhân", "profile", "tieusu"]; // so khớp KHÔNG phân biệt hoa/thường, khớp NGUYÊN TỪ
 
 // Escape ký tự đặc biệt regex trong 1 từ khoá trước khi dựng RegExp động.
 function escapeRegex(chuoi) {

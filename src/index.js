@@ -1519,16 +1519,50 @@ function laGuiAnDanhBoiNhom(message) {
 // entrypoint cuối file) nên gọi AI ở đây KHÔNG làm chậm phản hồi webhook
 // cho Telegram — Telegram đã nhận "OK" ngay từ trước đó rồi.
 //
-// CẤU HÌNH: cần thêm secret ANTHROPIC_API_KEY trên Worker (Dashboard >
-// Settings > Variables and secrets, hoặc `wrangler secret put
-// ANTHROPIC_API_KEY`). Nếu CHƯA cấu hình hoặc gọi API lỗi (rate limit,
-// timeout, key sai...), hàm fail-safe trả về false (KHÔNG lôi kéo) để
-// không chặn nhầm tin nhắn bình thường khi có sự cố phía AI.
+// CẤU HÌNH (ƯU TIÊN — MIỄN PHÍ): thêm Cloudflare Workers AI binding vào
+// wrangler.toml, KHÔNG cần đăng ký/API key/thẻ gì thêm:
+//   [ai]
+//   binding = "AI"
+// Free 10.000 Neurons/ngày (reset 00:00 UTC) — với model nhỏ + max_tokens
+// thấp như ở đây, đủ dùng thoải mái cho 1 nhóm vài trăm thành viên.
+//
+// CẤU HÌNH (DỰ PHÒNG — TỐN PHÍ): nếu KHÔNG bind "AI" hoặc gọi Workers AI
+// lỗi, hàm sẽ rơi xuống thử Anthropic API — cần secret ANTHROPIC_API_KEY
+// (Dashboard > Settings > Variables and secrets, hoặc `wrangler secret put
+// ANTHROPIC_API_KEY`).
+//
+// Nếu CẢ HAI đều chưa cấu hình hoặc đều lỗi, hàm fail-safe trả về false
+// (KHÔNG lôi kéo) để không chặn nhầm tin nhắn bình thường.
 // ==================================================
 async function aiPhatHienLoiKeoXemBio(env, tenHienThi, noiDungTinNhan) {
-  if (!env.ANTHROPIC_API_KEY) return false; // chưa cấu hình — bỏ qua, không chặn nhầm
   const vanBan = (noiDungTinNhan || "").trim();
   if (vanBan.length < 4) return false; // tin quá ngắn, không đủ ngữ cảnh để AI xét chính xác
+
+  const loiHeThong =
+    "Bạn là bộ lọc spam cho 1 nhóm chat Telegram của game kiếm coin. Nhiệm vụ: xác định TÊN HIỂN THỊ và/hoặc NỘI DUNG TIN NHẮN của 1 user CÓ đang cố ý lôi kéo/mời gọi người khác vào xem BIO (tiểu sử, trang cá nhân, thông tin tài khoản Telegram) của họ hay không — đây là chiêu spam phổ biến để giấu link quảng cáo app đối thủ ở phần bio, né bộ lọc link trong tin nhắn thường. CHỈ trả lời ĐÚNG 1 từ, KHÔNG kèm giải thích, KHÔNG thêm dấu câu: 'CO' nếu có ý lôi kéo xem bio/tiểu sử/trang cá nhân, hoặc 'KHONG' nếu không liên quan (kể cả khi tin nhắn nói về đào coin, rút tiền, hỏi đáp game bình thường, hay chỉ chứa 1 URL không liên quan gì tới bio).";
+  const loiNguoiDung = `Tên hiển thị: ${tenHienThi || "(không có)"}\nNội dung tin nhắn: ${vanBan}`;
+
+  // ── ƯU TIÊN 1: Cloudflare Workers AI (MIỄN PHÍ, binding "AI") ──
+  if (env.AI) {
+    try {
+      const ketQua = await env.AI.run("@cf/meta/llama-3.2-3b-instruct", {
+        messages: [
+          { role: "system", content: loiHeThong },
+          { role: "user", content: loiNguoiDung },
+        ],
+        max_tokens: 5,
+      });
+      const traLoi = ((ketQua && ketQua.response) || "").trim().toUpperCase();
+      return traLoi.startsWith("CO");
+    } catch (e) {
+      console.error("Lỗi gọi Cloudflare Workers AI (miễn phí) kiểm tra lôi kéo bio, thử Anthropic nếu có:", e);
+      // KHÔNG return ở đây — rơi xuống thử phương án dự phòng Anthropic bên dưới
+    }
+  }
+
+  // ── DỰ PHÒNG: Anthropic API (TỐN PHÍ, chỉ chạy nếu Workers AI không có
+  // hoặc vừa lỗi ở trên) ──
+  if (!env.ANTHROPIC_API_KEY) return false; // không có phương án nào khả dụng — fail-safe
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -1541,14 +1575,8 @@ async function aiPhatHienLoiKeoXemBio(env, tenHienThi, noiDungTinNhan) {
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001", // model rẻ, nhanh — đủ cho tác vụ phân loại nhị phân đơn giản này
         max_tokens: 10,
-        system:
-          "Bạn là bộ lọc spam cho 1 nhóm chat Telegram của game kiếm coin. Nhiệm vụ: xác định TÊN HIỂN THỊ và/hoặc NỘI DUNG TIN NHẮN của 1 user CÓ đang cố ý lôi kéo/mời gọi người khác vào xem BIO (tiểu sử, trang cá nhân, thông tin tài khoản Telegram) của họ hay không — đây là chiêu spam phổ biến để giấu link quảng cáo app đối thủ ở phần bio, né bộ lọc link trong tin nhắn thường. CHỈ trả lời ĐÚNG 1 từ, KHÔNG kèm giải thích, KHÔNG thêm dấu câu: 'CO' nếu có ý lôi kéo xem bio/tiểu sử/trang cá nhân, hoặc 'KHONG' nếu không liên quan (kể cả khi tin nhắn nói về đào coin, rút tiền, hỏi đáp game bình thường, hay chỉ chứa 1 URL không liên quan gì tới bio).",
-        messages: [
-          {
-            role: "user",
-            content: `Tên hiển thị: ${tenHienThi || "(không có)"}\nNội dung tin nhắn: ${vanBan}`,
-          },
-        ],
+        system: loiHeThong,
+        messages: [{ role: "user", content: loiNguoiDung }],
       }),
       signal: AbortSignal.timeout(8000),
     });
@@ -1563,10 +1591,11 @@ async function aiPhatHienLoiKeoXemBio(env, tenHienThi, noiDungTinNhan) {
 
     return traLoi.startsWith("CO");
   } catch (e) {
-    console.error("Lỗi gọi AI kiểm tra lôi kéo xem bio:", e);
+    console.error("Lỗi gọi Anthropic API kiểm tra lôi kéo xem bio:", e);
     return false; // timeout/lỗi mạng — fail-safe, không chặn nhầm
   }
 }
+
 
 // Điều kiện tổng: CHỈ lọc trong nhóm/siêu nhóm (không áp dụng chat riêng
 // với bot), bỏ qua admin và tin gửi ẩn danh thay mặt nhóm. Xoá nếu tin

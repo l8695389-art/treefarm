@@ -341,6 +341,9 @@
     .bxh-header { padding: 2px 4px 0; }
     .bxh-title { font-size: 19px; font-weight: 800; color: var(--tg-text); letter-spacing: -0.01em; }
     .bxh-subtitle { font-size: 12px; font-weight: 600; color: var(--tg-muted); margin-top: 2px; }
+    .bxh-mode-row { display: flex; gap: 8px; }
+    .bxh-mode-btn { flex: 1; }
+    .bxh-mode-btn.active { background: rgba(34,158,217,0.22); color: var(--tg-text); font-weight: 700; border-color: var(--tg-blue); }
 
     .bxh-card { background: var(--tg-surface); border: 1px solid var(--tg-border); border-radius: 16px; padding: 18px; }
     .bxh-season-card { text-align: center; }
@@ -652,7 +655,7 @@
         <!-- Khối 1: Quảng cáo Monetag -->
         <div class="card highlight">
           <div class="task-title">🎬 Xem quảng cáo (Monetag)</div>
-          <div class="task-desc">Xem quảng cáo, nhận ngay +500 coin sau mỗi lần xem. Tối đa 20 lượt/ngày, cách nhau ít nhất 5 phút/lượt.</div>
+          <div class="task-desc">Xem quảng cáo, nhận ngay +5000 coin sau mỗi lần xem. Tối đa 20 lượt/ngày, cách nhau ít nhất 5 phút/lượt.</div>
           <button id="btn-xem-qc" class="primary-btn" type="button">
             <span class="spinner"></span>
             <span class="btn-label">Xem quảng cáo</span>
@@ -664,7 +667,7 @@
         <!-- Khối 1b: Quảng cáo Adsgram -->
         <div class="card highlight">
           <div class="task-title">🎥 Xem quảng cáo (Adsgram)</div>
-          <div class="task-desc">Xem quảng cáo, nhận ngay +500 coin sau mỗi lần xem hết. Tối đa 20 lượt/ngày, cách nhau ít nhất 5 phút/lượt.</div>
+          <div class="task-desc">Xem quảng cáo, nhận ngay +5000 coin sau mỗi lần xem hết. Tối đa 20 lượt/ngày, cách nhau ít nhất 5 phút/lượt.</div>
           <button id="btn-xem-adsgram" class="primary-btn" type="button">
             <span class="spinner"></span>
             <span class="btn-label">Xem quảng cáo</span>
@@ -676,7 +679,7 @@
         <!-- Khối 2: Vượt link Link4M -->
         <div class="card highlight">
           <div class="task-title">🔗 Vượt link nhận thưởng</div>
-          <div class="task-desc">Vượt link xong, nhập mã 6 số hiện ở trang đích để nhận +2500 coin. Giới hạn 3 lần/ngày, cách nhau ít nhất 5 phút/lượt.</div>
+          <div class="task-desc">Vượt link xong, nhập mã 6 số hiện ở trang đích để nhận +10000 coin. Giới hạn 3 lần/ngày, cách nhau ít nhất 5 phút/lượt.</div>
 
           <button id="btn-get-link" class="primary-btn" type="button">
             <span class="spinner"></span>
@@ -757,6 +760,7 @@
           <ul class="rule-list" style="margin-top:10px;">
             <li>Hoa hồng cộng thẳng vào coin, không giới hạn số tầng người tham gia</li>
             <li>Không giới hạn số lượng bạn bè mời được</li>
+            <li>🏆 Riêng <strong>BXH Đua Top Mời Bạn</strong>: chỉ tính những bạn đã đạt <strong>Lv2 máy đào</strong> — không ảnh hưởng tới thưởng 80 coin ở trên</li>
           </ul>
         </div>
 
@@ -780,7 +784,7 @@
           <div class="card-label">📋 Quy định rút tiền</div>
           <ul class="rule-list">
             <li>Có thể liên kết nhiều ngân hàng/ví khác nhau, nhưng chỉ được <strong>đổi tài khoản nhận tiền 1 lần mỗi 20 ngày</strong></li>
-            <li>Rút tối thiểu <strong>200.000 coin</strong> (~2.000đ)</li>
+            <li>Rút tối thiểu <strong>500.000 coin</strong> (~5.000đ)</li>
             <li>Tối đa <strong>1.800.000 coin/ngày</strong> (~18.000đ)</li>
             <li>Tối đa <strong>5.000.000 coin/tuần</strong> (~50.000đ)</li>
             <li>Phí giao dịch: <strong>10% mỗi lần rút</strong> (trừ vào số tiền quy đổi, không đổi số coin bị trừ khỏi ví)</li>
@@ -811,7 +815,7 @@
 
           <input id="input-so-tk" type="text" inputmode="numeric" class="text-input" placeholder="Số tài khoản / Số điện thoại" />
           <input id="input-ten-nhan" type="text" class="text-input" placeholder="Tên người nhận" />
-          <input id="input-so-tien" type="number" inputmode="numeric" class="text-input" placeholder="Số coin muốn rút (tối thiểu 200.000)" style="margin-bottom:14px;" />
+          <input id="input-so-tien" type="number" inputmode="numeric" class="text-input" placeholder="Số coin muốn rút (tối thiểu 500.000)" style="margin-bottom:14px;" />
           <button id="btn-xac-nhan-rut" class="primary-btn" type="button">
             <span class="spinner"></span>
             <span class="btn-label">Xác nhận rút coin</span>
@@ -846,6 +850,11 @@
           <div class="bxh-subtitle" id="bxh-phu-de">Xếp theo xu kiếm được trong mùa</div>
         </div>
 
+        <div class="bxh-mode-row">
+          <button class="secondary-btn bxh-mode-btn active" data-loai="kiem-xu" type="button">💰 Đua Top Xu</button>
+          <button class="secondary-btn bxh-mode-btn" data-loai="moi-ban" type="button">👥 Đua Top Mời Bạn</button>
+        </div>
+
         <div class="bxh-card bxh-season-card">
           <div class="bxh-season-label" id="bxh-mua-giai-so">Mùa giải #—</div>
           <div class="bxh-season-title">🏆 Đua top mùa</div>
@@ -873,6 +882,42 @@
         </div>
       </section>
 
+      <!-- TAB 7: SHOP -->
+      <section id="tab-shop" class="tab-panel">
+        <div class="eyebrow">Cửa hàng</div>
+
+        <div class="card highlight" style="text-align:center;padding:18px;">
+          <div class="card-label">Coin khả dụng</div>
+          <div class="dao-status-coin" id="shop-coin" style="font-size:26px;">0</div>
+        </div>
+
+        <!-- Tăng tốc đào x2 -->
+        <div class="card highlight">
+          <div class="task-title">⚡ Tăng Tốc Đào x2</div>
+          <div class="task-desc">Nhân đôi tốc độ đào coin trong 2 giờ liên tục kể từ lúc kích hoạt.</div>
+          <div id="shop-boost-status" class="status-text" style="margin-bottom:10px;"></div>
+          <button id="btn-mua-boost" class="primary-btn" type="button">
+            <span class="spinner"></span>
+            <span class="btn-label">⚡ Mua — 15.000 coin</span>
+          </button>
+          <div id="shop-boost-error" class="error-text"></div>
+          <div id="shop-boost-success" class="success-text"></div>
+        </div>
+
+        <!-- Bảo vệ chuỗi điểm danh -->
+        <div class="card highlight">
+          <div class="task-title">🛡️ Bảo Vệ Chuỗi Điểm Danh</div>
+          <div class="task-desc">Lỡ quên điểm danh 1 ngày cũng không mất chuỗi. Tự động dùng 1 lượt khi cần, có thể mua tích trữ nhiều lượt (tối đa 5).</div>
+          <div id="shop-baove-status" class="status-text" style="margin-bottom:10px;"></div>
+          <button id="btn-mua-baove" class="primary-btn" type="button">
+            <span class="spinner"></span>
+            <span class="btn-label">🛡️ Mua — 8.000 coin</span>
+          </button>
+          <div id="shop-baove-error" class="error-text"></div>
+          <div id="shop-baove-success" class="success-text"></div>
+        </div>
+      </section>
+
     </div>
 
     <!-- TAB BAR -->
@@ -896,6 +941,10 @@
       <button class="tab-btn" data-tab="tab-bang-xep-hang" type="button">
         <svg viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 5H5a3 3 0 0 0 3 5"/><path d="M16 5h3a3 3 0 0 1-3 5"/><path d="M12 13v3"/><path d="M9 20h6"/><path d="M10 16h4l.5 4h-5l.5-4z"/></svg>
         <span>BXH</span>
+      </button>
+      <button class="tab-btn" data-tab="tab-shop" type="button">
+        <svg viewBox="0 0 24 24"><path d="M3 9l1.5-5h15L21 9"/><path d="M3 9h18v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9z"/><path d="M9 13a3 3 0 0 0 6 0"/></svg>
+        <span>Shop</span>
       </button>
     </nav>
   </div>
@@ -1106,6 +1155,22 @@
       return await res.json();
     }
 
+    // Cửa hàng — đọc trạng thái (coin, boost đang hoạt động, số lượt bảo vệ
+    // chuỗi) và mua vật phẩm.
+    async function layThongTinShop(uid) {
+      const endpoint = `${LINK4M_CONFIG.linkGoc}/shop-thong-tin?uid=${encodeURIComponent(uid)}`;
+      const res = await fetch(endpoint);
+      if (!res.ok) return null;
+      return await res.json();
+    }
+
+    async function muaVatPhamShop(uid, ma) {
+      const endpoint = `${LINK4M_CONFIG.linkGoc}/shop-mua?uid=${encodeURIComponent(uid)}&ma=${encodeURIComponent(ma)}`;
+      const res = await fetch(endpoint);
+      if (!res.ok) return { thanh_cong: false, loi: 'network' };
+      return await res.json();
+    }
+
     // Tab Bạn bè — số lượng đã mời, link mời riêng theo uid, danh sách bạn bè.
     // Endpoint /thong-tin-ban-be cần được bổ sung phía Worker (index.js),
     // trả về { so_luong, danh_sach: [{ ten, tham_gia_luc }] }.
@@ -1145,6 +1210,8 @@
           await window.__lamMoiDiemDanh();
         } else if (tabDangMo.id === 'tab-trang-chu' && window.__lamMoiDao) {
           await window.__lamMoiDao();
+        } else if (tabDangMo.id === 'tab-shop' && window.__lamMoiShop) {
+          await window.__lamMoiShop();
         }
       } catch (err) {
         // lỗi mạng tạm thời — bỏ qua, vòng lặp sau sẽ tự thử lại
@@ -1175,13 +1242,16 @@
     // MÙA GIẢI hiện tại, chỉ Top 10 nhận thưởng, hiển thị hạng của người
     // chơi + đếm ngược mùa giải.
     // ────────────────────────────────────────────────────────────
-    const BXH_LOAI = 'kiem-xu';
-    const BXH_PHU_DE = 'Xếp theo xu kiếm được trong mùa';
+    let BXH_LOAI = 'kiem-xu';
     let bxhDemNguocTimer = null;
 
-    function dinhDangGiaTriBXH(giaTri) {
+    function layPhuDeBXH(loai) {
+      return loai === 'moi-ban' ? 'Xếp theo số bạn mời được (đạt Lv2) trong mùa' : 'Xếp theo xu kiếm được trong mùa';
+    }
+
+    function dinhDangGiaTriBXH(giaTri, donVi) {
       const so = (giaTri || 0).toLocaleString('vi-VN');
-      return `${so} xu`;
+      return `${so} ${donVi || 'xu'}`;
     }
 
     function dinhDangThuong(thuong) {
@@ -1209,13 +1279,13 @@
     }
 
     function renderHeaderMuaGiai(data) {
-      document.getElementById('bxh-phu-de').textContent = BXH_PHU_DE;
+      document.getElementById('bxh-phu-de').textContent = layPhuDeBXH(BXH_LOAI);
       document.getElementById('bxh-mua-giai-so').textContent = `Mùa giải #${data.mua_giai.so}`;
       batDauDemNguocMuaGiai(data.mua_giai.ket_thuc);
 
       const nguongEl = document.getElementById('bxh-nguong-toi-thieu');
       nguongEl.textContent = data.muc_toi_thieu_bxh
-        ? `tối thiểu ${data.muc_toi_thieu_bxh.toLocaleString('vi-VN')} xu kiếm để vào BXH`
+        ? `tối thiểu ${data.muc_toi_thieu_bxh.toLocaleString('vi-VN')} ${data.don_vi_gia_tri || 'xu'} để vào BXH`
         : 'mời càng nhiều, thưởng càng cao';
     }
 
@@ -1226,7 +1296,7 @@
       const trongTop10 = data.hang_cua_toi && data.hang_cua_toi <= (data.top_nhan_thuong || 10);
 
       badge.textContent = data.hang_cua_toi ? `#${data.hang_cua_toi}` : '—';
-      gia.textContent = `${dinhDangGiaTriBXH(data.gia_tri_cua_toi)} trong mùa này`;
+      gia.textContent = `${dinhDangGiaTriBXH(data.gia_tri_cua_toi, data.don_vi_gia_tri)} trong mùa này`;
 
       hint.classList.toggle('top10', !!trongTop10);
       if (trongTop10) {
@@ -1304,7 +1374,7 @@
 
         const amount = document.createElement('div');
         amount.className = 'rank-amount';
-        amount.textContent = dinhDangGiaTriBXH(nguoiDung.gia_tri);
+        amount.textContent = dinhDangGiaTriBXH(nguoiDung.gia_tri, data.don_vi_gia_tri);
         values.appendChild(amount);
 
         if (nguoiDung.phan_thuong && nguoiDung.phan_thuong.coin > 0) {
@@ -1321,6 +1391,25 @@
       });
     }
 
+    // Trạng thái "chưa mở" — BXH Mời Bạn khóa trong suốt mùa giải #1, hiện
+    // 1 màn hình khóa thay vì bảng rỗng gây hiểu nhầm là "chưa có ai".
+    function renderBxhChuaMo(data) {
+      document.getElementById('bxh-hang-badge').textContent = '🔒';
+      document.getElementById('bxh-gia-tri-cua-toi').textContent = `Mở khóa từ Mùa giải #${data.mo_tu_mua}`;
+      const hint = document.getElementById('bxh-hint');
+      hint.classList.remove('top10');
+      hint.textContent = '🔒 Đang khóa';
+
+      document.getElementById('bxh-thuong-list').innerHTML = '';
+      document.getElementById('bxh-reward-note').textContent =
+        `Bảng xếp hạng Mời Bạn sẽ mở ngay khi Mùa giải #1 kết thúc và Mùa giải #${data.mo_tu_mua} bắt đầu.`;
+
+      const container = document.getElementById('rank-list');
+      container.innerHTML =
+        '<div class="bxh-empty"><div class="bxh-empty-icon">🔒</div>' +
+        '<div class="bxh-empty-text">Bảng xếp hạng Mời Bạn chưa mở.<br/>Sẽ xuất hiện sau khi Mùa giải #1 kết thúc.</div></div>';
+    }
+
     async function taiBangXepHang(uid) {
       const container = document.getElementById('rank-list');
       const data = await layBangXepHang(BXH_LOAI, uid);
@@ -1329,6 +1418,10 @@
         return;
       }
       renderHeaderMuaGiai(data);
+      if (data.chua_mo) {
+        renderBxhChuaMo(data);
+        return;
+      }
       renderHangCuaToi(data);
       renderBangThuong(data);
       renderDanhSachBXH(data, uid);
@@ -1338,6 +1431,17 @@
       const uid = tg?.initDataUnsafe?.user?.id;
       window.__lamMoiBXH = () => taiBangXepHang(uid);
       taiBangXepHang(uid);
+
+      document.querySelectorAll('.bxh-mode-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (btn.dataset.loai === BXH_LOAI) return;
+          BXH_LOAI = btn.dataset.loai;
+          document.querySelectorAll('.bxh-mode-btn').forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+          document.getElementById('rank-list').innerHTML = '<div class="rank-loading">Đang tải...</div>';
+          taiBangXepHang(uid);
+        });
+      });
     }
 
     // ────────────────────────────────────────────────────────────
@@ -1368,6 +1472,9 @@
           }
           if (target === 'tab-trang-chu' && window.__lamMoiDao) {
             window.__lamMoiDao();
+          }
+          if (target === 'tab-shop' && window.__lamMoiShop) {
+            window.__lamMoiShop();
           }
         });
       });
@@ -1900,8 +2007,20 @@
         ten.className = 'giaodich-amount';
         ten.textContent = nb.ten || 'Người dùng';
 
+        const badge = document.createElement('div');
+        badge.className = 'giaodich-badge hoan_thanh';
+        badge.textContent = '✅ +80 coin';
+
         top.appendChild(ten);
+        top.appendChild(badge);
         row.appendChild(top);
+
+        const phu = document.createElement('div');
+        phu.className = 'giaodich-time';
+        phu.textContent = nb.da_dat_lv2
+          ? '🏆 Đã đạt Lv2 — tính vào BXH Mời Bạn'
+          : '⏳ Chưa đạt Lv2 — chưa tính vào BXH Mời Bạn';
+        row.appendChild(phu);
 
         if (nb.tham_gia_luc) {
           const time = document.createElement('div');
@@ -1912,6 +2031,146 @@
 
         container.appendChild(row);
       });
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // TAB SHOP — mua vật phẩm coin-sink: Tăng Tốc Đào x2, Bảo Vệ Chuỗi
+    // Điểm Danh. Trạng thái đọc lại từ /shop-thong-tin mỗi lần mở tab.
+    // ────────────────────────────────────────────────────────────
+    let shopBoostDemNguocTimer = null;
+
+    function setupShopTab(tg) {
+      const uid = tg?.initDataUnsafe?.user?.id;
+      const coinEl = document.getElementById('shop-coin');
+      let baoVeToiDaHienTai = 5;
+
+      const btnBoost = document.getElementById('btn-mua-boost');
+      const labelBoost = btnBoost.querySelector('.btn-label');
+      const boostStatusEl = document.getElementById('shop-boost-status');
+      const boostErrorEl = document.getElementById('shop-boost-error');
+      const boostSuccessEl = document.getElementById('shop-boost-success');
+
+      const btnBaoVe = document.getElementById('btn-mua-baove');
+      const labelBaoVe = btnBaoVe.querySelector('.btn-label');
+      const baoVeStatusEl = document.getElementById('shop-baove-status');
+      const baoVeErrorEl = document.getElementById('shop-baove-error');
+      const baoVeSuccessEl = document.getElementById('shop-baove-success');
+
+      function capNhatTrangThaiBoost(boostDao) {
+        clearInterval(shopBoostDemNguocTimer);
+        if (boostDao && boostDao.het_han_luc > Date.now()) {
+          btnBoost.disabled = true;
+          boostStatusEl.style.display = 'block';
+          const capNhat = () => {
+            const conLai = boostDao.het_han_luc - Date.now();
+            if (conLai <= 0) {
+              clearInterval(shopBoostDemNguocTimer);
+              btnBoost.disabled = false;
+              boostStatusEl.style.display = 'none';
+              labelBoost.textContent = '⚡ Mua — 15.000 coin';
+              return;
+            }
+            boostStatusEl.textContent = `⚡ Đang hoạt động x${boostDao.he_so} — còn ${dinhDangDemNguoc(conLai)}`;
+          };
+          capNhat();
+          shopBoostDemNguocTimer = setInterval(capNhat, 1000);
+        } else {
+          btnBoost.disabled = false;
+          boostStatusEl.style.display = 'none';
+          labelBoost.textContent = '⚡ Mua — 15.000 coin';
+        }
+      }
+
+      function capNhatTrangThaiBaoVe(soLuong, toiDa) {
+        if (toiDa) baoVeToiDaHienTai = toiDa;
+        baoVeStatusEl.style.display = 'block';
+        baoVeStatusEl.textContent = `🛡️ Đang có ${soLuong || 0}/${baoVeToiDaHienTai} lượt bảo vệ`;
+        btnBaoVe.disabled = (soLuong || 0) >= baoVeToiDaHienTai;
+        labelBaoVe.textContent = btnBaoVe.disabled ? '🛡️ Đã đạt tối đa' : '🛡️ Mua — 8.000 coin';
+      }
+
+      async function lamMoiShop() {
+        if (!uid) return;
+        const tt = await layThongTinShop(uid);
+        if (!tt || !tt.thanh_cong) return;
+        hienThiCoin(tt.coin);
+        if (coinEl) coinEl.textContent = (tt.coin || 0).toLocaleString('vi-VN');
+        capNhatTrangThaiBoost(tt.boost_dao);
+        capNhatTrangThaiBaoVe(tt.bao_ve_chuoi_so_luong, tt.bao_ve_chuoi_toi_da);
+      }
+      window.__lamMoiShop = lamMoiShop;
+
+      btnBoost.addEventListener('click', async () => {
+        if (!uid) return;
+        boostErrorEl.style.display = 'none';
+        boostSuccessEl.style.display = 'none';
+        btnBoost.disabled = true;
+        btnBoost.classList.add('loading');
+
+        try {
+          const kq = await muaVatPhamShop(uid, 'boost_dao_x2');
+          btnBoost.classList.remove('loading');
+
+          if (kq.thanh_cong) {
+            hienThiCoin(kq.coin);
+            if (coinEl) coinEl.textContent = (kq.coin || 0).toLocaleString('vi-VN');
+            boostSuccessEl.textContent = '✅ Đã kích hoạt Tăng Tốc Đào x2!';
+            boostSuccessEl.style.display = 'block';
+            capNhatTrangThaiBoost(kq.boost_dao);
+          } else {
+            const thongBao = {
+              dang_co_hieu_luc: '❌ Đang có 1 lượt tăng tốc còn hiệu lực rồi.',
+              khong_du_coin: '❌ Không đủ coin để mua.',
+            };
+            btnBoost.disabled = false;
+            boostErrorEl.textContent = thongBao[kq.loi] || '❌ Không mua được, thử lại sau.';
+            boostErrorEl.style.display = 'block';
+          }
+        } catch (err) {
+          console.error('Lỗi mua boost đào:', err);
+          btnBoost.disabled = false;
+          btnBoost.classList.remove('loading');
+          boostErrorEl.textContent = '❌ Lỗi kết nối, thử lại sau.';
+          boostErrorEl.style.display = 'block';
+        }
+      });
+
+      btnBaoVe.addEventListener('click', async () => {
+        if (!uid) return;
+        baoVeErrorEl.style.display = 'none';
+        baoVeSuccessEl.style.display = 'none';
+        btnBaoVe.disabled = true;
+        btnBaoVe.classList.add('loading');
+
+        try {
+          const kq = await muaVatPhamShop(uid, 'bao_ve_chuoi');
+          btnBaoVe.classList.remove('loading');
+
+          if (kq.thanh_cong) {
+            hienThiCoin(kq.coin);
+            if (coinEl) coinEl.textContent = (kq.coin || 0).toLocaleString('vi-VN');
+            baoVeSuccessEl.textContent = '✅ Đã mua thêm 1 lượt bảo vệ chuỗi!';
+            baoVeSuccessEl.style.display = 'block';
+            capNhatTrangThaiBaoVe(kq.bao_ve_chuoi_so_luong, baoVeToiDaHienTai);
+          } else {
+            const thongBao = {
+              da_dat_toi_da: '❌ Đã đạt tối đa số lượt bảo vệ có thể tích trữ.',
+              khong_du_coin: '❌ Không đủ coin để mua.',
+            };
+            btnBaoVe.disabled = false;
+            baoVeErrorEl.textContent = thongBao[kq.loi] || '❌ Không mua được, thử lại sau.';
+            baoVeErrorEl.style.display = 'block';
+          }
+        } catch (err) {
+          console.error('Lỗi mua bảo vệ chuỗi:', err);
+          btnBaoVe.disabled = false;
+          btnBaoVe.classList.remove('loading');
+          baoVeErrorEl.textContent = '❌ Lỗi kết nối, thử lại sau.';
+          baoVeErrorEl.style.display = 'block';
+        }
+      });
+
+      lamMoiShop();
     }
 
     function setupBanBeTab(tg) {
@@ -2142,11 +2401,11 @@
           } else {
             const thongBao = {
               thieu_tham_so: '❌ Vui lòng nhập đủ thông tin.',
-              duoi_toi_thieu: '❌ Số coin rút tối thiểu là 20.000 coin.',
+              duoi_toi_thieu: '❌ Số coin rút tối thiểu là 500.000 coin.',
               khong_du_coin: '❌ Số coin không đủ.',
               chua_du_ngay_de_doi_tai_khoan: `❌ Chưa đủ 20 ngày để đổi tài khoản nhận tiền (còn ${ketQua.so_ngay_con_lai_de_doi || '?'} ngày nữa).`,
-              vuot_han_muc_ngay: '❌ Vượt hạn mức rút trong ngày (tối đa 180.000 coin/ngày).',
-              vuot_han_muc_tuan: '❌ Vượt hạn mức rút trong tuần (tối đa 500.000 coin/tuần).',
+              vuot_han_muc_ngay: '❌ Vượt hạn mức rút trong ngày (tối đa 1.800.000 coin/ngày).',
+              vuot_han_muc_tuan: '❌ Vượt hạn mức rút trong tuần (tối đa 5.000.000 coin/tuần).',
             };
             errorEl.textContent = thongBao[ketQua.loi] || '❌ Không gửi được yêu cầu, thử lại sau.';
             errorEl.style.display = 'block';
@@ -2351,7 +2610,8 @@
       const label = btn.querySelector('.btn-label');
 
       capTxt.textContent = tt.da_max_cap ? `Cấp ${tt.cap_dao}/20 (Max)` : `Cấp ${tt.cap_dao}/20`;
-      tocDoTxt.innerHTML = `Tốc độ: <strong>${Math.round(tt.toc_do_dao_moi_gio).toLocaleString('vi-VN')}</strong> coin/giờ`;
+      const dongBoost = tt.boost_dao && tt.boost_dao.het_han_luc > Date.now() ? ` ⚡x${tt.boost_dao.he_so}` : '';
+      tocDoTxt.innerHTML = `Tốc độ: <strong>${Math.round(tt.toc_do_dao_moi_gio).toLocaleString('vi-VN')}</strong> coin/giờ${dongBoost}`;
 
       if (tt.da_max_cap) {
         xpFill.style.width = '100%';
@@ -2553,6 +2813,7 @@
         setupDiemDanhTab(tg);
         setupBangXepHangTab(tg);
         setupDaoTab(tg);
+        setupShopTab(tg);
 
         // Cập nhật định kỳ mỗi 20–30 giây (ngẫu nhiên mỗi vòng) — số dư, bảng xếp
         // hạng, ví. Dùng setTimeout tự lặp thay vì setInterval cố định để: (1)

@@ -402,10 +402,10 @@ const XP_MOI_LUOT_VUOT_LINK = 15; // mỗi lượt vượt link hoàn thành => 
 // thái vật phẩm lưu thẳng trong object user (nguoiDung.boostDao,
 // nguoiDung.baoVeChuoiSoLuong) — không cần bảng riêng.
 // ==================================================
-const BOOST_DAO_THOI_GIAN_MS = 2 * 60 * 60 * 1000; // hiệu lực 2 giờ / lần mua
+const BOOST_DAO_THOI_GIAN_MS = 24 * 60 * 60 * 1000; // hiệu lực 24 giờ / lần mua
 const BOOST_DAO_HE_SO = 2; // nhân đôi tốc độ đào trong lúc hiệu lực
-const BOOST_DAO_GIA = 15000; // coin
-const BAO_VE_CHUOI_GIA = 8000; // coin / lượt
+const BOOST_DAO_GIA = 7000; // coin
+const BAO_VE_CHUOI_GIA = 5000; // coin / lượt
 const BAO_VE_CHUOI_TOI_DA = 5; // tối đa tích trữ 5 lượt bảo vệ chuỗi cùng lúc
 
 const SHOP_VAT_PHAM = {
@@ -413,7 +413,7 @@ const SHOP_VAT_PHAM = {
     ma: "boost_dao_x2",
     ten: "Tăng Tốc Đào x2",
     icon: "⚡",
-    moTa: "Nhân đôi tốc độ đào coin trong 2 giờ liên tục kể từ lúc kích hoạt.",
+    moTa: "Nhân đôi tốc độ đào coin trong 24 giờ liên tục kể từ lúc kích hoạt.",
     gia: BOOST_DAO_GIA,
   },
   bao_ve_chuoi: {

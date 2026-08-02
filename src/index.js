@@ -291,15 +291,22 @@ function ngauNhienCoinTrongKhoang(min, max) {
 }
 
 // Dựng nội dung tin nhắn thông báo Gift Code mới — dùng chung cho broadcast
-// tự động ngay sau khi admin tạo mã bằng /taogifcode.
-function xayDungTinGifcode(giftcode) {
+// thủ công (/taogifcode) lẫn tự động (cron mỗi ngày). loiNhan là dòng tiêu
+// đề tùy chỉnh (VD "🧧 GIFT CODE TẾT 2026!") do admin nhập ở tham số cuối
+// cùng của /taogifcode — nếu không truyền/rỗng, mặc định "🎁 GIFT CODE NGẪU
+// NHIÊN!" (áp dụng khi admin tạo tay không đặt lời nhắn riêng). Cron tự
+// động mỗi ngày (taoGifcodeTuDong) luôn truyền tường minh "🎁 GIFT CODE MỖI
+// NGÀY!" nên không rơi vào default này.
+function xayDungTinGifcode(giftcode, loiNhan) {
   const dongThuong =
     giftcode.coinMin === giftcode.coinMax
       ? `${giftcode.coinMin.toLocaleString("vi-VN")} coin`
       : `${giftcode.coinMin.toLocaleString("vi-VN")} - ${giftcode.coinMax.toLocaleString("vi-VN")} coin (ngẫu nhiên)`;
 
+  const tieuDe = (loiNhan && loiNhan.trim()) || "🎁 GIFT CODE NGẪU NHIÊN!";
+
   return (
-    "🎁 GIFT CODE MỖI NGÀY!\n\n" +
+    `${tieuDe}\n\n` +
     "✨ Cách nhận:\n" +
     "1️⃣ Mở app → vào tab Nhiệm vụ\n" +
     '2️⃣ Kéo xuống khối "🎁 Nhập Gift Code"\n' +
@@ -334,7 +341,10 @@ async function taoGifcodeTuDong(env) {
   };
   await env.USERS.put(TIEN_TO_GIFCODE + ma, JSON.stringify(giftcodeMoi));
 
-  const tinNhan = xayDungTinGifcode(giftcodeMoi);
+  // Cron tự động luôn dùng tiêu đề "GIFT CODE MỖI NGÀY!" — khác với mặc
+  // định "GIFT CODE NGẪU NHIÊN!" áp dụng khi admin gõ /taogifcode tay mà
+  // không nhập loi_nhan.
+  const tinNhan = xayDungTinGifcode(giftcodeMoi, "🎁 GIFT CODE MỖI NGÀY!");
   const linkBot = env.LINK_BOT || "https://t.me/vuacaytien_bot";
 
   // Chỉ gửi vào NHÓM TRÒ CHUYỆN — không gửi vào kênh thông báo nữa.
@@ -951,7 +961,7 @@ const DANH_SACH_LENH_ADMIN = [
   { lenh: "/xoaadmin [ID]", moTa: "Xóa 1 admin (chỉ chủ sở hữu)" },
   { lenh: "/dsadmin", moTa: "Xem danh sách admin hiện tại" },
   { lenh: "/baotri [bat|tat]", moTa: "Bật/tắt chế độ bảo trì, hoặc xem trạng thái nếu không nhập tham số" },
-  { lenh: "/taogifcode [coin hoặc min-max] [code] [so_luot]", moTa: "Tạo gift code mới, tự thông báo vào kênh + nhóm" },
+  { lenh: "/taogifcode [coin hoặc min-max] [code] [so_luot] [loi_nhan]", moTa: "Tạo gift code mới, tự thông báo vào nhóm. loi_nhan tùy chọn — không nhập thì mặc định \"🎁 GIFT CODE NGẪU NHIÊN!\"" },
   { lenh: "/checkcode", moTa: "Xem danh sách các gift code đã tạo" },
   { lenh: "/checkcodesl [code]", moTa: "Xem chi tiết + số người đã nhập 1 gift code" },
   { lenh: "/gui", moTa: "Trả lời 1 tin nhắn kèm lệnh này để broadcast tới toàn bộ user" },
@@ -1026,29 +1036,38 @@ async function xuLyBaoTri(env, message) {
   });
 }
 
-// /taogifcode [so_coin hoặc min-max] [code] [so_luong_duoc_nhap] — tạo gift
-// code mới, dùng chung 1 mã cho nhiều người, mỗi người chỉ nhập được 1 lần.
-// so_coin có thể là số cố định ("5000") hoặc 1 khoảng ("4000-5000") — nếu
-// là khoảng, mỗi lượt nhập sẽ được random 1 số coin ngẫu nhiên trong đó.
+// /taogifcode [so_coin hoặc min-max] [code] [so_luong_duoc_nhap] [loi_nhan] —
+// tạo gift code mới, dùng chung 1 mã cho nhiều người, mỗi người chỉ nhập
+// được 1 lần. so_coin có thể là số cố định ("5000") hoặc 1 khoảng
+// ("4000-5000") — nếu là khoảng, mỗi lượt nhập sẽ được random 1 số coin
+// ngẫu nhiên trong đó. loi_nhan (TÙY CHỌN) là dòng tiêu đề đầu tin thông
+// báo, VD "🎁 GIFT CODE MỖI NGÀY!" — có thể chứa khoảng trắng/emoji, lấy
+// nguyên phần còn lại của tin nhắn sau so_luong. Nếu không nhập, mặc định
+// dùng "🎁 GIFT CODE NGẪU NHIÊN!" (xem xayDungTinGifcode).
 async function xuLyTaoGifcode(env, message) {
   if (!(await laAdmin(env, message.from.id))) {
     return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "❌ Bạn không có quyền!" });
   }
 
-  const phan = message.text.trim().split(/\s+/);
-  if (phan.length < 4) {
+  const vanBan = message.text.trim();
+  // 3 tham số đầu không chứa khoảng trắng; phần còn lại (nếu có) — kể cả
+  // khoảng trắng bên trong — được gom nguyên vẹn làm loi_nhan.
+  const khop = vanBan.match(/^\S+\s+(\S+)\s+(\S+)\s+(\S+)(?:\s+([\s\S]+))?$/);
+  if (!khop) {
     return telegramApi(env, "sendMessage", {
       chat_id: message.chat.id,
       text:
-        "⚠️ Dùng: /taogifcode [so_coin hoặc min-max] [code] [so_luong_duoc_nhap]\n" +
+        "⚠️ Dùng: /taogifcode [so_coin hoặc min-max] [code] [so_luong_duoc_nhap] [loi_nhan]\n" +
         "VD số cố định: /taogifcode 5000 TET2026 100\n" +
-        "VD khoảng random: /taogifcode 4000-5000 TET2026 100",
+        "VD khoảng random: /taogifcode 4000-5000 TET2026 100\n" +
+        "VD kèm lời nhắn riêng: /taogifcode 4000-5000 TET2026 100 🧧 GIFT CODE TẾT 2026!",
     });
   }
 
-  const khoangCoin = phanTichKhoangCoin(phan[1]);
-  const maGoc = phan[2];
-  const soLuong = Number(phan[3]);
+  const khoangCoin = phanTichKhoangCoin(khop[1]);
+  const maGoc = khop[2];
+  const soLuong = Number(khop[3]);
+  const loiNhan = khop[4] ? khop[4].trim() : null;
 
   if (!khoangCoin) {
     return telegramApi(env, "sendMessage", {
@@ -1081,6 +1100,7 @@ async function xuLyTaoGifcode(env, message) {
     soLuongDaDung: 0,
     taoLuc: Date.now(),
     taoBoi: String(message.from.id),
+    loiNhan, // lưu lại để tiện tra cứu sau này (không bắt buộc dùng ở đâu khác)
   };
   await env.USERS.put(TIEN_TO_GIFCODE + ma, JSON.stringify(giftcodeMoi));
 
@@ -1101,7 +1121,7 @@ async function xuLyTaoGifcode(env, message) {
   // phải chat riêng với bot), nút web_app KHÔNG dùng được ở đây (Telegram
   // chỉ cho phép web_app trong chat riêng 1-1 với bot) nên dùng nút "url"
   // trỏ về chat riêng với bot, từ đó user tự bấm nút mở miniapp ở /start.
-  const tinNhan = xayDungTinGifcode(giftcodeMoi);
+  const tinNhan = xayDungTinGifcode(giftcodeMoi, loiNhan);
   const linkBot = env.LINK_BOT || "https://t.me/vuacaytien_bot";
 
   const diaChiGui = [];

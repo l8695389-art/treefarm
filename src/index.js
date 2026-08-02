@@ -1329,15 +1329,15 @@ async function xuLyGuiThongBao(env, message) {
 }
 
 // ==================================================
-// 🚫 LỌC LINK LẠ + TỪ KHOÁ CẤM + AI TRONG NHÓM — tự động XOÁ tin nhắn nếu
-// khớp 1 trong 3 LỚP KIỂM TRA (chạy theo thứ tự rẻ → đắt, dừng ngay khi có
-// lớp nào khớp):
+// 🚫 LỌC LINK LẠ + TỪ KHOÁ CẤM TRONG NHÓM — tự động XOÁ tin nhắn nếu khớp
+// 1 trong 2 LỚP KIỂM TRA sau (dừng ngay khi có lớp nào khớp):
 //   1) Chứa link KHÔNG thuộc hệ sinh thái Vua Cày Tiền (coLinkLaTrongTinNhan)
 //   2) Chứa 1 trong các TỪ KHOÁ CẤM cố định, liên quan tới việc lôi kéo
 //      xem bio (coTuCamTrongTinNhan — xem DANH_SACH_TU_KHOA_CAM)
-//   3) (chỉ chạy khi 2 lớp trên KHÔNG khớp) AI (aiPhatHienLoiKeoXemBio) xét
-//      tên hiển thị + nội dung tin nhắn, bắt các trường hợp spammer diễn
-//      đạt khác đi để né đúng 2 lớp trên (vd không dùng nguyên chữ "bio")
+//
+// (Lớp thứ 3 trước đây dùng AI — Cloudflare Workers AI / Anthropic API —
+// để bắt các trường hợp spammer diễn đạt khác đi đã bị GỠ BỎ HOÀN TOÀN.
+// Không còn gọi env.AI hay ANTHROPIC_API_KEY ở đâu trong file này nữa.)
 //
 // Đây là chiêu spam phổ biến: đặt link quảng cáo app đối thủ ở phần BIO
 // (tiểu sử) tài khoản Telegram, rồi nhắn kiểu "vào bio tôi xem" để né bộ
@@ -1502,106 +1502,11 @@ function laGuiAnDanhBoiNhom(message) {
   return !!(message.sender_chat && message.chat && message.sender_chat.id === message.chat.id);
 }
 
-// ==================================================
-// 🤖 AI PHÁT HIỆN LÔI KÉO XEM BIO — LỚP PHÒNG VỆ THỨ 2, chỉ chạy KHI bộ
-// lọc link (coLinkLaTrongTinNhan) và bộ lọc từ khoá cố định
-// (coTuCamTrongTinNhan) đều KHÔNG phát hiện gì — vì 2 lớp đó rẻ, tức thời
-// (chạy local, không tốn round-trip mạng), nên luôn ưu tiên chạy trước để
-// hạn chế số lượt gọi AI thực tế xuống mức thấp nhất.
-//
-// Dùng khi spammer LÁCH bộ lọc từ khoá bằng cách diễn đạt khác đi (không
-// dùng đúng chữ "bio"/"tiểu sử"/"trang cá nhân"/"profile") — vd viết tắt,
-// chèn ký tự, hoặc nói vòng kiểu "vào chỗ tôi info nha", "xem info nick
-// mình có gì hay". Model được hỏi xét CẢ tên hiển thị (dễ gặp tên tài
-// khoản spam kiểu "Xem info kiếm tiền") LẪN nội dung tin nhắn.
-//
-// CHI PHÍ & ĐỘ TRỄ: toàn bộ xuLyUpdate() chạy trong ctx.waitUntil() (xem
-// entrypoint cuối file) nên gọi AI ở đây KHÔNG làm chậm phản hồi webhook
-// cho Telegram — Telegram đã nhận "OK" ngay từ trước đó rồi.
-//
-// CẤU HÌNH (ƯU TIÊN — MIỄN PHÍ): thêm Cloudflare Workers AI binding vào
-// wrangler.toml, KHÔNG cần đăng ký/API key/thẻ gì thêm:
-//   [ai]
-//   binding = "AI"
-// Free 10.000 Neurons/ngày (reset 00:00 UTC) — với model nhỏ + max_tokens
-// thấp như ở đây, đủ dùng thoải mái cho 1 nhóm vài trăm thành viên.
-//
-// CẤU HÌNH (DỰ PHÒNG — TỐN PHÍ): nếu KHÔNG bind "AI" hoặc gọi Workers AI
-// lỗi, hàm sẽ rơi xuống thử Anthropic API — cần secret ANTHROPIC_API_KEY
-// (Dashboard > Settings > Variables and secrets, hoặc `wrangler secret put
-// ANTHROPIC_API_KEY`).
-//
-// Nếu CẢ HAI đều chưa cấu hình hoặc đều lỗi, hàm fail-safe trả về false
-// (KHÔNG lôi kéo) để không chặn nhầm tin nhắn bình thường.
-// ==================================================
-async function aiPhatHienLoiKeoXemBio(env, tenHienThi, noiDungTinNhan) {
-  const vanBan = (noiDungTinNhan || "").trim();
-  if (vanBan.length < 4) return false; // tin quá ngắn, không đủ ngữ cảnh để AI xét chính xác
-
-  const loiHeThong =
-    "Bạn là bộ lọc spam cho 1 nhóm chat Telegram của game kiếm coin. Nhiệm vụ: xác định TÊN HIỂN THỊ và/hoặc NỘI DUNG TIN NHẮN của 1 user CÓ đang cố ý lôi kéo/mời gọi người khác vào xem BIO (tiểu sử, trang cá nhân, thông tin tài khoản Telegram) của họ hay không — đây là chiêu spam phổ biến để giấu link quảng cáo app đối thủ ở phần bio, né bộ lọc link trong tin nhắn thường. CHỈ trả lời ĐÚNG 1 từ, KHÔNG kèm giải thích, KHÔNG thêm dấu câu: 'CO' nếu có ý lôi kéo xem bio/tiểu sử/trang cá nhân, hoặc 'KHONG' nếu không liên quan (kể cả khi tin nhắn nói về đào coin, rút tiền, hỏi đáp game bình thường, hay chỉ chứa 1 URL không liên quan gì tới bio).";
-  const loiNguoiDung = `Tên hiển thị: ${tenHienThi || "(không có)"}\nNội dung tin nhắn: ${vanBan}`;
-
-  // ── ƯU TIÊN 1: Cloudflare Workers AI (MIỄN PHÍ, binding "AI") ──
-  if (env.AI) {
-    try {
-      const ketQua = await env.AI.run("@cf/meta/llama-3.2-3b-instruct", {
-        messages: [
-          { role: "system", content: loiHeThong },
-          { role: "user", content: loiNguoiDung },
-        ],
-        max_tokens: 5,
-      });
-      const traLoi = ((ketQua && ketQua.response) || "").trim().toUpperCase();
-      return traLoi.startsWith("CO");
-    } catch (e) {
-      console.error("Lỗi gọi Cloudflare Workers AI (miễn phí) kiểm tra lôi kéo bio, thử Anthropic nếu có:", e);
-      // KHÔNG return ở đây — rơi xuống thử phương án dự phòng Anthropic bên dưới
-    }
-  }
-
-  // ── DỰ PHÒNG: Anthropic API (TỐN PHÍ, chỉ chạy nếu Workers AI không có
-  // hoặc vừa lỗi ở trên) ──
-  if (!env.ANTHROPIC_API_KEY) return false; // không có phương án nào khả dụng — fail-safe
-
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001", // model rẻ, nhanh — đủ cho tác vụ phân loại nhị phân đơn giản này
-        max_tokens: 10,
-        system: loiHeThong,
-        messages: [{ role: "user", content: loiNguoiDung }],
-      }),
-      signal: AbortSignal.timeout(8000),
-    });
-
-    if (!res.ok) return false; // lỗi API (rate limit, sai key, quá tải...) — fail-safe
-    const data = await res.json();
-    const traLoi = (data.content || [])
-      .map((khoi) => (khoi.type === "text" ? khoi.text : ""))
-      .join("")
-      .trim()
-      .toUpperCase();
-
-    return traLoi.startsWith("CO");
-  } catch (e) {
-    console.error("Lỗi gọi Anthropic API kiểm tra lôi kéo xem bio:", e);
-    return false; // timeout/lỗi mạng — fail-safe, không chặn nhầm
-  }
-}
-
-
 // Điều kiện tổng: CHỈ lọc trong nhóm/siêu nhóm (không áp dụng chat riêng
 // với bot), bỏ qua admin và tin gửi ẩn danh thay mặt nhóm. Xoá nếu tin
 // chứa link lạ, HOẶC chứa từ khoá cấm cố định (bio / tiểu sử / trang cá
-// nhân / profile), HOẶC (khi 2 lớp trên không bắt được) AI xác định tên
-// hiển thị/nội dung tin nhắn có ý lôi kéo xem bio.
+// nhân / profile). (Lớp AI phát hiện lôi kéo xem bio đã bị GỠ BỎ hoàn
+// toàn — không còn gọi Cloudflare Workers AI hay Anthropic API ở đây nữa.)
 async function canXoaViLinkLa(env, message) {
   if (loaiChat(message) !== "👥 NHÓM") return false;
   if (laGuiAnDanhBoiNhom(message)) return false;
@@ -1611,15 +1516,7 @@ async function canXoaViLinkLa(env, message) {
   if (coLinkLaTrongTinNhan(env, message)) return true;
   if (coTuCamTrongTinNhan(message)) return true;
 
-  const tenHienThi = [
-    `${(message.from && message.from.first_name) || ""} ${(message.from && message.from.last_name) || ""}`.trim(),
-    message.from && message.from.username ? `@${message.from.username}` : "",
-  ]
-    .filter(Boolean)
-    .join(" | ");
-  const noiDung = message.text || message.caption || "";
-
-  return aiPhatHienLoiKeoXemBio(env, tenHienThi, noiDung);
+  return false;
 }
 
 // Lưu vết (forward nguyên văn) vào NHOM_LOG rồi xoá tin khỏi nhóm. Trả về

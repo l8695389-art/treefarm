@@ -969,7 +969,7 @@ const DANH_SACH_LENH_ADMIN = [
   { lenh: "/check [ID]", moTa: "Xem toàn bộ thông tin 1 người chơi (coin, cấp đào, điểm danh, xu BXH mùa hiện tại, ví, bạn bè...)" },
   { lenh: "/lammoibxh", moTa: "Ép tính lại + ghi cache BXH ngay lập tức, không cần chờ Cron Trigger" },
   { lenh: "/checknv", moTa: "Xem tổng số lượt QC (Monetag+Adsgram) và vượt link đã hoàn thành (all-time)" },
-  { lenh: "/id", moTa: "[Ai cũng dùng được] Trả về ID cuộc trò chuyện; trả lời 1 tin nhắn kèm lệnh này để lấy ID người được trả lời" },
+  { lenh: "/id", moTa: "(Ai cũng dùng được) Trả về ID cuộc trò chuyện; trả lời 1 tin nhắn kèm lệnh này để lấy ID người được trả lời" },
   { lenh: "/dslenh", moTa: "Xem danh sách lệnh admin này" },
 ];
 
@@ -1473,7 +1473,7 @@ function coLinkLaTrongTinNhan(env, message) {
 // trang cá nhân"... để dụ nạn nhân tự bấm vào profile lấy link. Nên chặn
 // thêm ở cấp độ TỪ nhắc tới bio/tiểu sử, không cần chờ có URL trong tin
 // nhắn mới xoá được.
-const DANH_SACH_TU_KHOA_CAM = ["bio", "tiểu sử", "trang cá nhân", "profile"]; // so khớp KHÔNG phân biệt hoa/thường, khớp NGUYÊN TỪ
+const DANH_SACH_TU_KHOA_CAM = ["bio", "tiểu sử", "trang cá nhân", "profile", "tieusu", "tsu"]; // so khớp KHÔNG phân biệt hoa/thường, khớp NGUYÊN TỪ
 
 // Escape ký tự đặc biệt regex trong 1 từ khoá trước khi dựng RegExp động.
 function escapeRegex(chuoi) {

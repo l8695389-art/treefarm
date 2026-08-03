@@ -1069,6 +1069,104 @@ async function xuLyLayId(env, message) {
 }
 
 
+// /mute [phut] — reply tin nhắn người cần mute, tắt quyền gửi tin của họ
+// trong nhóm hiện tại trong X phút (mặc định 30). Dùng restrictChatMember —
+// Telegram tự khôi phục quyền khi hết hạn, không cần lệnh /unmute riêng.
+async function xuLyMute(env, message) {
+  if (!(await laAdmin(env, message.from.id))) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "❌ Bạn không có quyền!" });
+  }
+  if (loaiChat(message) !== "👥 NHÓM") {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "⚠️ Lệnh này chỉ dùng được trong nhóm." });
+  }
+  const reply = message.reply_to_message;
+  if (!reply || !reply.from) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "⚠️ Trả lời (reply) tin nhắn người cần mute kèm lệnh /mute [so_phut]." });
+  }
+
+  const phan = message.text.trim().split(/\s+/);
+  const phut = phan[1] ? Number(phan[1]) : 30;
+  if (!Number.isFinite(phut) || !Number.isInteger(phut) || phut <= 0) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "⚠️ Số phút không hợp lệ. Dùng: /mute [so_phut] (mặc định 30)." });
+  }
+
+  const untilDate = Math.floor(Date.now() / 1000) + phut * 60;
+  const kq = await telegramApi(env, "restrictChatMember", {
+    chat_id: message.chat.id,
+    user_id: reply.from.id,
+    permissions: {
+      can_send_messages: false,
+      can_send_audios: false,
+      can_send_documents: false,
+      can_send_photos: false,
+      can_send_videos: false,
+      can_send_video_notes: false,
+      can_send_voice_notes: false,
+      can_send_polls: false,
+      can_send_other_messages: false,
+      can_add_web_page_previews: false,
+    },
+    until_date: untilDate,
+  });
+
+  if (!kq || !kq.ok) {
+    return telegramApi(env, "sendMessage", {
+      chat_id: message.chat.id,
+      text: `❌ Không mute được. Kiểm tra bot đã là admin nhóm kèm quyền "Restrict members" chưa.\n${kq && kq.description ? "Lỗi: " + kq.description : ""}`,
+    });
+  }
+
+  const ten = reply.from.first_name || reply.from.username || String(reply.from.id);
+  return telegramApi(env, "sendMessage", {
+    chat_id: message.chat.id,
+    text: `🔇 Đã mute ${ten} (ID: ${reply.from.id}) trong ${phut} phút.\nTự mở lại lúc: ${new Date(untilDate * 1000).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`,
+  });
+}
+
+// /ban [phut] — reply tin nhắn người cần ban, cấm vào nhóm trong X phút
+// (mặc định 30). Dùng banChatMember với until_date — Telegram Bot API yêu
+// cầu until_date tối thiểu ~30 giây kể từ hiện tại, dưới mức đó bị hiểu là
+// cấm vĩnh viễn, nên chặn số phút quá nhỏ.
+async function xuLyBan(env, message) {
+  if (!(await laAdmin(env, message.from.id))) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "❌ Bạn không có quyền!" });
+  }
+  if (loaiChat(message) !== "👥 NHÓM") {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "⚠️ Lệnh này chỉ dùng được trong nhóm." });
+  }
+  const reply = message.reply_to_message;
+  if (!reply || !reply.from) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "⚠️ Trả lời (reply) tin nhắn người cần ban kèm lệnh /ban [so_phut]." });
+  }
+
+  const phan = message.text.trim().split(/\s+/);
+  const phut = phan[1] ? Number(phan[1]) : 30;
+  if (!Number.isFinite(phut) || !Number.isInteger(phut) || phut <= 0) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "⚠️ Số phút không hợp lệ. Dùng: /ban [so_phut] (mặc định 30)." });
+  }
+
+  const untilDate = Math.floor(Date.now() / 1000) + Math.max(phut * 60, 31);
+  const kq = await telegramApi(env, "banChatMember", {
+    chat_id: message.chat.id,
+    user_id: reply.from.id,
+    until_date: untilDate,
+  });
+
+  if (!kq || !kq.ok) {
+    return telegramApi(env, "sendMessage", {
+      chat_id: message.chat.id,
+      text: `❌ Không ban được. Kiểm tra bot đã là admin nhóm kèm quyền "Ban users" chưa.\n${kq && kq.description ? "Lỗi: " + kq.description : ""}`,
+    });
+  }
+
+  const ten = reply.from.first_name || reply.from.username || String(reply.from.id);
+  return telegramApi(env, "sendMessage", {
+    chat_id: message.chat.id,
+    text: `🚫 Đã ban ${ten} (ID: ${reply.from.id}) trong ${phut} phút.\nCó thể vào lại (cần link mời) từ: ${new Date(untilDate * 1000).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`,
+  });
+}
+
+
 async function xuLyBaoTri(env, message) {
   if (!(await laAdmin(env, message.from.id))) {
     return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "❌ Bạn không có quyền!" });
@@ -1760,6 +1858,10 @@ async function xuLyUpdate(env, update) {
         return xuLyCheckCodeSoLuong(env, message);
       case "/gui":
         return xuLyGuiThongBao(env, message);
+      case "/mute":
+        return xuLyMute(env, message);
+      case "/ban":
+        return xuLyBan(env, message);
       default:
         return; // lệnh lạ, bỏ qua — giống bản Python
     }
@@ -3638,6 +3740,56 @@ async function xuLyLenhAdminWeb(env, request) {
 
   try {
     switch (lenh) {
+    	case "/mute": {
+  const uid = phan[1];
+  const phut = phan[2] ? Number(phan[2]) : 30;
+  if (!uid) return Response.json({ thanh_cong: false, text: "⚠️ Dùng: /mute [uid] [so_phut] (mặc định 30)." });
+  if (!Number.isFinite(phut) || !Number.isInteger(phut) || phut <= 0) {
+    return Response.json({ thanh_cong: false, text: "⚠️ Số phút không hợp lệ." });
+  }
+  if (!env.NHOM_CHAT) {
+    return Response.json({ thanh_cong: false, text: "⚠️ Chưa cấu hình biến môi trường NHOM_CHAT trên Worker." });
+  }
+  const untilDate = Math.floor(Date.now() / 1000) + phut * 60;
+  const kq = await telegramApi(env, "restrictChatMember", {
+    chat_id: env.NHOM_CHAT,
+    user_id: Number(uid),
+    permissions: {
+      can_send_messages: false,
+      can_send_audios: false,
+      can_send_documents: false,
+      can_send_photos: false,
+      can_send_videos: false,
+      can_send_video_notes: false,
+      can_send_voice_notes: false,
+      can_send_polls: false,
+      can_send_other_messages: false,
+      can_add_web_page_previews: false,
+    },
+    until_date: untilDate,
+    });
+    if (!kq || !kq.ok) {
+    return Response.json({ thanh_cong: false, text: `❌ Không mute được. ${kq && kq.description ? kq.description : "Kiểm tra bot đã là admin nhóm, quyền Restrict members."}` });
+  }
+    return Response.json({ thanh_cong: true, text: `🔇 Đã mute UID ${uid} trong ${phut} phút (tới ${new Date(untilDate * 1000).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}).` });
+    }
+    case "/ban": {
+      const uid = phan[1];
+      const phut = phan[2] ? Number(phan[2]) : 30;
+      if (!uid) return Response.json({ thanh_cong: false, text: "⚠️ Dùng: /ban [uid] [so_phut] (mặc định 30)." });
+      if (!Number.isFinite(phut) || !Number.isInteger(phut) || phut <= 0) {
+      return Response.json({ thanh_cong: false, text: "⚠️ Số phút không hợp lệ." });
+      }
+      if (!env.NHOM_CHAT) {
+      return Response.json({ thanh_cong: false, text: "⚠️ Chưa cấu hình biến môi     trường NHOM_CHAT trên Worker." });
+      }
+      const untilDate = Math.floor(Date.now() / 1000) + Math.max(phut * 60, 31);
+      const kq = await telegramApi(env, "banChatMember", { chat_id: env.NHOM_CHAT, user_id: Number(uid), until_date: untilDate });
+      if (!kq || !kq.ok) {
+      return Response.json({ thanh_cong: false, text: `❌ Không ban được. ${kq && kq.description ? kq.description : "Kiểm tra bot đã là admin nhóm, quyền Ban users."}` });
+      }
+      return Response.json({ thanh_cong: true, text: `🚫 Đã ban UID ${uid} trong ${phut} phút (tới ${new Date(untilDate * 1000).toLocaleString("vi-VN", { timeZone:       "Asia/Ho_Chi_Minh" })}).` });
+      }
       case "/check": {
         const uid = phan[1];
         if (!uid) return Response.json({ thanh_cong: false, text: "⚠️ Dùng: /check [ID_nguoi_dung]" });

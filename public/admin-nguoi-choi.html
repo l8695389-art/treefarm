@@ -83,6 +83,30 @@
   .goi-y { font-size: 12px; color: var(--tg-muted); margin-top: 8px; }
   .goi-y code { color: var(--tg-blue); cursor: pointer; }
   .top-info { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+
+  .btn-sua {
+    padding: 6px 12px; font-size: 12px; border-radius: 8px;
+    background: rgba(34,158,217,0.14); color: var(--tg-blue); border: 1px solid var(--tg-border);
+  }
+
+  /* Modal sửa thông tin người chơi */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; z-index: 300;
+    background: rgba(0,0,0,0.6); align-items: center; justify-content: center; padding: 16px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-sheet {
+    width: 100%; max-width: 440px; background: var(--tg-surface);
+    border: 1px solid var(--tg-border); border-radius: 16px; padding: 20px;
+    max-height: 90vh; overflow-y: auto;
+  }
+  .modal-title { font-size: 15px; font-weight: 800; margin-bottom: 4px; }
+  .modal-sub { font-size: 12px; color: var(--tg-muted); margin-bottom: 16px; }
+  .field-label { font-size: 12px; color: var(--tg-muted); margin: 10px 0 5px; font-weight: 600; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 18px; }
+  .modal-actions button { flex: 1; }
+  #modal-sua-loi { display: none; margin-top: 10px; }
+  #modal-sua-thanhcong { color: #3DDC7A; font-size: 13px; margin-top: 10px; display: none; }
 </style>
 </head>
 <body>
@@ -122,6 +146,9 @@
       <div class="goi-y" style="margin-top:2px;">
         Cú pháp /taogifcode: <code style="cursor:default;">/taogifcode [coin hoặc min-max] [code] [so_luong] [loi_nhan]</code>
       </div>
+      <div class="row" style="margin-top:12px;">
+        <button id="btn-don-giftcode" class="secondary" type="button" style="flex:0 0 auto;">🧹 Dọn gift code đã hết lượt</button>
+      </div>
       <div id="lenh-output">Chưa có lệnh nào được chạy.</div>
     </div>
 
@@ -149,12 +176,47 @@
               <th>Trạng thái đào</th>
               <th>Người giới thiệu</th>
               <th>Tham gia lúc</th>
+              <th>Thao tác</th>
             </tr>
           </thead>
           <tbody id="tbody-nguoi-choi">
-            <tr><td colspan="9" class="muted">Đang tải...</td></tr>
+            <tr><td colspan="10" class="muted">Đang tải...</td></tr>
           </tbody>
         </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL SỬA THÔNG TIN NGƯỜI CHƠI -->
+  <div id="modal-sua-overlay" class="modal-overlay">
+    <div class="modal-sheet">
+      <div class="modal-title">✏️ Sửa thông tin người chơi</div>
+      <div class="modal-sub">UID: <span id="modal-sua-uid" class="mono">—</span></div>
+
+      <div class="field-label">Tên</div>
+      <input type="text" id="modal-sua-ten" placeholder="Tên hiển thị" />
+
+      <div class="field-label">Username (không cần @)</div>
+      <input type="text" id="modal-sua-username" placeholder="username" />
+
+      <div class="field-label">Coin hiện có</div>
+      <input type="text" inputmode="numeric" id="modal-sua-coin" placeholder="0" />
+
+      <div class="field-label">Tổng đã kiếm (lũy kế)</div>
+      <input type="text" inputmode="numeric" id="modal-sua-tongdakiem" placeholder="0" />
+
+      <div class="field-label">Cấp đào (1-20)</div>
+      <input type="text" inputmode="numeric" id="modal-sua-capdao" placeholder="1" />
+
+      <div class="field-label">XP đào</div>
+      <input type="text" inputmode="numeric" id="modal-sua-xpdao" placeholder="0" />
+
+      <div id="modal-sua-loi" class="loi-text"></div>
+      <div id="modal-sua-thanhcong"></div>
+
+      <div class="modal-actions">
+        <button class="secondary" id="btn-dong-modal-sua" type="button">Hủy</button>
+        <button id="btn-luu-modal-sua" type="button">💾 Lưu thay đổi</button>
       </div>
     </div>
   </div>
@@ -181,11 +243,14 @@
 
   function dinhDangSo(n) { return (n || 0).toLocaleString('vi-VN'); }
 
+  let DANH_SACH_HIEN_TAI = []; // cache lần tải gần nhất — dùng để tra cứu nhanh khi mở modal sửa
+
   function renderBang(danhSach) {
+    DANH_SACH_HIEN_TAI = danhSach || [];
     const tbody = document.getElementById('tbody-nguoi-choi');
     tbody.innerHTML = '';
     if (!danhSach || !danhSach.length) {
-      tbody.innerHTML = '<tr><td colspan="9" class="muted">Không tìm thấy người chơi nào.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" class="muted">Không tìm thấy người chơi nào.</td></tr>';
       return;
     }
     danhSach.forEach((nd) => {
@@ -200,14 +265,101 @@
         <td>${nd.dang_dao ? '<span class="badge dao">⛏️ Đang đào</span>' : '<span class="muted">—</span>'}</td>
         <td class="mono">${nd.gioi_thieu_boi || '<span class="muted">—</span>'}</td>
         <td class="muted">${nd.ngay_tham_gia || '—'}</td>
+        <td><button type="button" class="btn-sua" data-uid="${nd.uid}">✏️ Sửa</button></td>
       `;
       tbody.appendChild(tr);
     });
+
+    tbody.querySelectorAll('.btn-sua').forEach((btn) => {
+      btn.addEventListener('click', () => moModalSua(btn.dataset.uid));
+    });
   }
+
+  // ── MODAL SỬA THÔNG TIN NGƯỜI CHƠI ──
+  function moModalSua(uid) {
+    const nd = DANH_SACH_HIEN_TAI.find((x) => String(x.uid) === String(uid));
+    if (!nd) return;
+
+    document.getElementById('modal-sua-uid').textContent = nd.uid;
+    document.getElementById('modal-sua-ten').value = nd.ten || '';
+    document.getElementById('modal-sua-username').value = nd.username || '';
+    document.getElementById('modal-sua-coin').value = nd.coin || 0;
+    document.getElementById('modal-sua-tongdakiem').value = nd.tong_da_kiem || 0;
+    document.getElementById('modal-sua-capdao').value = nd.cap_dao || 1;
+    document.getElementById('modal-sua-xpdao').value = nd.xp_dao || 0;
+
+    document.getElementById('modal-sua-loi').style.display = 'none';
+    document.getElementById('modal-sua-thanhcong').style.display = 'none';
+    document.getElementById('modal-sua-overlay').classList.add('open');
+    document.getElementById('btn-luu-modal-sua').dataset.uid = uid;
+  }
+
+  function dongModalSua() {
+    document.getElementById('modal-sua-overlay').classList.remove('open');
+  }
+
+  document.getElementById('btn-dong-modal-sua').addEventListener('click', dongModalSua);
+  document.getElementById('modal-sua-overlay').addEventListener('click', (e) => {
+    if (e.target.id === 'modal-sua-overlay') dongModalSua();
+  });
+
+  document.getElementById('btn-luu-modal-sua').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-luu-modal-sua');
+    const uid = btn.dataset.uid;
+    const loiEl = document.getElementById('modal-sua-loi');
+    const okEl = document.getElementById('modal-sua-thanhcong');
+    loiEl.style.display = 'none';
+    okEl.style.display = 'none';
+
+    const body = {
+      uid,
+      ten: document.getElementById('modal-sua-ten').value,
+      username: document.getElementById('modal-sua-username').value,
+      coin: Number(document.getElementById('modal-sua-coin').value),
+      tong_da_kiem: Number(document.getElementById('modal-sua-tongdakiem').value),
+      cap_dao: Number(document.getElementById('modal-sua-capdao').value),
+      xp_dao: Number(document.getElementById('modal-sua-xpdao').value),
+    };
+
+    btn.disabled = true;
+    btn.textContent = 'Đang lưu...';
+
+    const { ok, data } = await goiApi('/admin/nguoi-choi/sua', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    btn.disabled = false;
+    btn.textContent = '💾 Lưu thay đổi';
+
+    if (!ok) return hienThiCongSecret('❌ Secret sai hoặc đã hết hạn, nhập lại.');
+    if (!data || !data.thanh_cong) {
+      const thongBaoLoi = {
+        thieu_uid: 'Thiếu UID.',
+        khong_tim_thay: 'Không tìm thấy người chơi này.',
+        coin_khong_hop_le: 'Coin phải là số nguyên không âm.',
+        tong_da_kiem_khong_hop_le: 'Tổng đã kiếm phải là số nguyên không âm.',
+        cap_dao_khong_hop_le: 'Cấp đào phải từ 1 đến 20.',
+        xp_dao_khong_hop_le: 'XP đào phải là số nguyên không âm.',
+      };
+      loiEl.textContent = '❌ ' + (thongBaoLoi[data && data.loi] || 'Không lưu được, thử lại sau.');
+      loiEl.style.display = 'block';
+      return;
+    }
+
+    okEl.textContent = '✅ Đã lưu thay đổi thành công!';
+    okEl.style.display = 'block';
+    setTimeout(() => {
+      dongModalSua();
+      taiDanhSachNguoiChoi(document.getElementById('input-tim-kiem').value.trim());
+    }, 700);
+  });
+
 
   async function taiDanhSachNguoiChoi(tim) {
     const tbody = document.getElementById('tbody-nguoi-choi');
-    tbody.innerHTML = '<tr><td colspan="9" class="muted">Đang tải...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="muted">Đang tải...</td></tr>';
 
     const params = new URLSearchParams();
     if (tim) params.set('tim', tim);
@@ -215,7 +367,7 @@
 
     if (!ok) return hienThiCongSecret('❌ Secret sai hoặc đã hết hạn, nhập lại.');
     if (!data || data.loi) {
-      tbody.innerHTML = `<tr><td colspan="9" class="muted">❌ Lỗi tải dữ liệu: ${data ? data.loi : 'không rõ'}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="10" class="muted">❌ Lỗi tải dữ liệu: ${data ? data.loi : 'không rõ'}</td></tr>`;
       return;
     }
 
@@ -290,6 +442,15 @@
       document.getElementById('input-lenh').value = el.dataset.lenh;
       chayLenh(el.dataset.lenh);
     });
+  });
+
+  document.getElementById('btn-don-giftcode').addEventListener('click', () => {
+    const xacNhan = window.confirm(
+      'Thao tác này sẽ XÓA VĨNH VIỄN toàn bộ gift code đã hết lượt nhập (không thể hoàn tác).\n\nBạn có chắc chắn muốn tiếp tục?'
+    );
+    if (!xacNhan) return;
+    document.getElementById('input-lenh').value = '/xoagiftcodedayluot xacnhan';
+    chayLenh('/xoagiftcodedayluot xacnhan');
   });
 
   // Tự động vào thẳng nếu đã có secret lưu từ trước

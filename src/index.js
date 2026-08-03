@@ -3249,6 +3249,80 @@ async function xuLyDanhSachNguoiChoiAdmin(env, request, url) {
   return Response.json({ tong_so: danhSach.length, danh_sach: danhSach.slice(0, 2000) });
 }
 
+// Sửa trực tiếp thông tin 1 người chơi từ web admin (coin, tổng đã kiếm,
+// cấp đào, XP đào, tên, username). CHỈ ghi đè các field ĐƯỢC GỬI LÊN (field
+// nào không có trong body thì giữ nguyên giá trị cũ) — cho phép sửa 1 vài
+// trường mà không cần gửi lại toàn bộ object user. Validate số không âm,
+// nguyên vẹn (capDao tối đa CAP_DAO_TOI_DA) để tránh lỡ tay phá dữ liệu.
+async function xuLySuaNguoiChoiAdmin(env, request) {
+  if (!xacThucAdminWeb(env, request)) {
+    return Response.json({ thanh_cong: false, loi: "khong_co_quyen" }, { status: 401 });
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ thanh_cong: false, loi: "body_khong_hop_le" }, { status: 400 });
+  }
+
+  const uid = body && body.uid ? String(body.uid) : "";
+  if (!uid) return Response.json({ thanh_cong: false, loi: "thieu_uid" }, { status: 400 });
+
+  const nguoiDung = await layNguoiDung(env, uid);
+  if (!nguoiDung) return Response.json({ thanh_cong: false, loi: "khong_tim_thay" }, { status: 404 });
+
+  // Số nguyên không âm — dùng chung cho coin/tổng đã kiếm/XP.
+  function soNguyenKhongAmHopLe(v) {
+    return Number.isFinite(v) && Number.isInteger(v) && v >= 0;
+  }
+
+  if (body.coin !== undefined) {
+    const v = Number(body.coin);
+    if (!soNguyenKhongAmHopLe(v)) return Response.json({ thanh_cong: false, loi: "coin_khong_hop_le" });
+    nguoiDung.coin = v;
+  }
+  if (body.tong_da_kiem !== undefined) {
+    const v = Number(body.tong_da_kiem);
+    if (!soNguyenKhongAmHopLe(v)) return Response.json({ thanh_cong: false, loi: "tong_da_kiem_khong_hop_le" });
+    nguoiDung.tongDaKiem = v;
+  }
+  if (body.cap_dao !== undefined) {
+    const v = Number(body.cap_dao);
+    if (!soNguyenKhongAmHopLe(v) || v < 1 || v > CAP_DAO_TOI_DA) {
+      return Response.json({ thanh_cong: false, loi: "cap_dao_khong_hop_le" });
+    }
+    nguoiDung.capDao = v;
+  }
+  if (body.xp_dao !== undefined) {
+    const v = Number(body.xp_dao);
+    if (!soNguyenKhongAmHopLe(v)) return Response.json({ thanh_cong: false, loi: "xp_dao_khong_hop_le" });
+    nguoiDung.xpDao = v;
+  }
+  if (body.ten !== undefined) {
+    nguoiDung.ten = String(body.ten).slice(0, 100);
+  }
+  if (body.username !== undefined) {
+    const u = String(body.username).trim().replace(/^@/, "");
+    nguoiDung.username = u || null;
+  }
+
+  await luuNguoiDung(env, uid, nguoiDung);
+
+  return Response.json({
+    thanh_cong: true,
+    nguoi_dung: {
+      uid,
+      ten: nguoiDung.ten || "",
+      username: nguoiDung.username || null,
+      coin: nguoiDung.coin || 0,
+      tong_da_kiem: nguoiDung.tongDaKiem || 0,
+      cap_dao: nguoiDung.capDao || 1,
+      xp_dao: nguoiDung.xpDao || 0,
+    },
+  });
+}
+
 // Thực thi lệnh admin từ web — chỉ hỗ trợ tập lệnh KHÔNG cần reply message
 // Telegram (đọc dữ liệu / bật tắt cấu hình). Không cần laAdmin() vì đã xác
 // thực bằng ADMIN_WEB_SECRET ở tầng trên rồi.
@@ -3333,6 +3407,134 @@ async function xuLyLenhAdminWeb(env, request) {
           text: "👑 DANH SÁCH ADMIN:\n" + danhSach.map((ad, idx) => `${idx + 1}. ${ad}`).join("\n"),
         });
       }
+      case "/taogifcode": {
+        // Cú pháp giống hệt lệnh Telegram: /taogifcode [so_coin hoặc min-max] [code] [so_luong] [loi_nhan]
+        // Dùng `dong` (chuỗi GỐC, chưa lowercase) để giữ nguyên hoa/thường +
+        // khoảng trắng của loi_nhan (tham số cuối, có thể chứa emoji/dấu cách).
+        const khop = dong.match(/^\S+\s+(\S+)\s+(\S+)\s+(\S+)(?:\s+([\s\S]+))?$/);
+        if (!khop) {
+          return Response.json({
+            thanh_cong: false,
+            text:
+              "⚠️ Dùng: /taogifcode [so_coin hoặc min-max] [code] [so_luong] [loi_nhan]\n" +
+              "VD số cố định: /taogifcode 5000 TET2026 100\n" +
+              "VD khoảng random: /taogifcode 4000-5000 TET2026 100\n" +
+              "VD kèm lời nhắn riêng: /taogifcode 4000-5000 TET2026 100 🧧 GIFT CODE TẾT 2026!",
+          });
+        }
+
+        const khoangCoin = phanTichKhoangCoin(khop[1]);
+        const maGoc = khop[2];
+        const soLuong = Number(khop[3]);
+        const loiNhan = khop[4] ? khop[4].trim() : null;
+
+        if (!khoangCoin) {
+          return Response.json({ thanh_cong: false, text: "⚠️ Số coin không hợp lệ. Dùng 1 số dương (VD: 5000) hoặc 1 khoảng min-max (VD: 4000-5000)." });
+        }
+        if (!Number.isFinite(soLuong) || !Number.isInteger(soLuong) || soLuong <= 0) {
+          return Response.json({ thanh_cong: false, text: "⚠️ Số lượt nhập phải là số nguyên dương." });
+        }
+
+        const ma = maGoc.toUpperCase();
+        if (!/^[A-Z0-9_]{3,30}$/.test(ma)) {
+          return Response.json({ thanh_cong: false, text: "⚠️ Mã code chỉ gồm chữ, số, gạch dưới, dài 3-30 ký tự (không dùng dấu \"-\")." });
+        }
+
+        const daTonTai = await env.USERS.get(TIEN_TO_GIFCODE + ma);
+        if (daTonTai) {
+          return Response.json({ thanh_cong: false, text: `❌ Mã "${ma}" đã tồn tại rồi, chọn mã khác.` });
+        }
+
+        const giftcodeMoi = {
+          code: ma,
+          coinMin: khoangCoin.min,
+          coinMax: khoangCoin.max,
+          soLuongToiDa: soLuong,
+          soLuongDaDung: 0,
+          taoLuc: Date.now(),
+          taoBoi: "web-admin",
+          loiNhan,
+        };
+        await env.USERS.put(TIEN_TO_GIFCODE + ma, JSON.stringify(giftcodeMoi));
+
+        const dongThuong =
+          khoangCoin.min === khoangCoin.max
+            ? `${khoangCoin.min.toLocaleString("vi-VN")} coin/lượt`
+            : `${khoangCoin.min.toLocaleString("vi-VN")} - ${khoangCoin.max.toLocaleString("vi-VN")} coin/lượt (ngẫu nhiên)`;
+
+        // Gửi thông báo vào NHÓM TRÒ CHUYỆN, giống hệt lệnh Telegram /taogifcode.
+        let dongKetQuaGui = "⚠️ Chưa gửi được thông báo — chưa cấu hình biến môi trường NHOM_CHAT trên Worker.";
+        if (env.NHOM_CHAT) {
+          const tinNhan = xayDungTinGifcode(giftcodeMoi, loiNhan);
+          const linkBot = env.LINK_BOT || "https://t.me/vuacaytien_bot";
+          try {
+            const kq = await telegramApi(env, "sendMessage", {
+              chat_id: env.NHOM_CHAT,
+              text: tinNhan,
+              parse_mode: "Markdown",
+              reply_markup: { inline_keyboard: [[{ text: "🎁 Nhập ngay", url: linkBot }]] },
+            });
+            dongKetQuaGui = kq && kq.ok ? "📣 Đã gửi thông báo vào nhóm trò chuyện." : "❌ Gửi thông báo vào nhóm thất bại.";
+          } catch (e) {
+            dongKetQuaGui = `❌ Lỗi khi gửi thông báo: ${String(e)}`;
+          }
+        }
+
+        const text =
+          `✅ Đã tạo gift code!\n\n` +
+          `🎁 Mã: ${ma}\n` +
+          `🪙 Thưởng: ${dongThuong}\n` +
+          `👥 Số lượt tối đa: ${soLuong.toLocaleString("vi-VN")}\n\n` +
+          dongKetQuaGui;
+        return Response.json({ thanh_cong: true, text });
+      }
+      case "/xoagiftcodedayluot": {
+        // Xóa VĨNH VIỄN các gift code đã dùng hết lượt (soLuongDaDung >=
+        // soLuongToiDa) — giúp /checkcode và mọi thao tác list(prefix:
+        // "gifcode:") sau này đọc ít dòng hơn khi số mã tích lũy lên tới
+        // hàng nghìn (mỗi mã cũ hết lượt không còn tác dụng gì nữa, chỉ
+        // tổ làm dài thêm danh sách phải quét). Bắt buộc gõ thêm "xacnhan"
+        // để tránh xóa nhầm qua thao tác bấm nhanh/gợi ý lệnh.
+        if ((phan[1] || "").toLowerCase() !== "xacnhan") {
+          return Response.json({
+            thanh_cong: false,
+            text:
+              "⚠️ Đây là thao tác XÓA VĨNH VIỄN các gift code đã hết lượt nhập, không thể hoàn tác.\n" +
+              "Gõ: /xoagiftcodedayluot xacnhan để tiếp tục.",
+          });
+        }
+
+        let daXoa = 0;
+        let daGiu = 0;
+        let cursor;
+        for (;;) {
+          const trang = await env.USERS.list({ prefix: TIEN_TO_GIFCODE, cursor });
+          for (const key of trang.keys) {
+            const raw = await env.USERS.get(key.name);
+            if (!raw) continue;
+            let gc;
+            try {
+              gc = JSON.parse(raw);
+            } catch (e) {
+              continue; // dữ liệu hỏng, bỏ qua
+            }
+            if ((gc.soLuongDaDung || 0) >= (gc.soLuongToiDa || 0)) {
+              await env.USERS.delete(key.name);
+              daXoa += 1;
+            } else {
+              daGiu += 1;
+            }
+          }
+          if (trang.list_complete) break;
+          cursor = trang.cursor;
+        }
+
+        const text =
+          `🧹 Đã xóa ${daXoa.toLocaleString("vi-VN")} gift code đã hết lượt nhập.\n` +
+          `📦 Còn giữ lại ${daGiu.toLocaleString("vi-VN")} mã chưa hết lượt.\n\n` +
+          `ℹ️ Lưu ý: các bản ghi "đã nhập mã" của từng user (gifcode-da-dung:*) KHÔNG bị xóa — chúng không nằm trong bất kỳ vòng quét list() nào khác nên không tốn thêm read, giữ lại để không lỡ cho phép user nhập lại mã cũ nếu admin tạo lại đúng mã đó sau này.`;
+        return Response.json({ thanh_cong: true, text });
+      }
       case "/checkcode": {
         const danhSachMa = [];
         let cursor;
@@ -3367,8 +3569,10 @@ async function xuLyLenhAdminWeb(env, request) {
           "/checknv — thống kê nhiệm vụ all-time\n" +
           "/baotri [bat|tat] — bật/tắt/xem chế độ bảo trì\n" +
           "/dsadmin — danh sách admin\n" +
+          "/taogifcode [coin hoặc min-max] [code] [so_luong] [loi_nhan] — tạo gift code mới, tự thông báo vào nhóm\n" +
           "/checkcode — danh sách gift code\n" +
-          "/checkcodesl [code] — chi tiết 1 gift code";
+          "/checkcodesl [code] — chi tiết 1 gift code\n" +
+          "/xoagiftcodedayluot xacnhan — xóa các gift code đã hết lượt (giảm tải khi có hàng nghìn mã)";
         return Response.json({ thanh_cong: true, text });
       }
       default:
@@ -3468,6 +3672,9 @@ export default {
     if (request.method === "GET" && url.pathname === "/admin/nguoi-choi/danh-sach") {
       return xuLyDanhSachNguoiChoiAdmin(env, request, url);
     }
+    if (request.method === "POST" && url.pathname === "/admin/nguoi-choi/sua") {
+      return xuLySuaNguoiChoiAdmin(env, request);
+    }
     if (request.method === "POST" && url.pathname === "/admin/lenh") {
       return xuLyLenhAdminWeb(env, request);
     }
@@ -3480,6 +3687,7 @@ export default {
     if (
       url.pathname !== "/admin/rut-tien/danh-sach" &&
       url.pathname !== "/admin/nguoi-choi/danh-sach" &&
+      url.pathname !== "/admin/nguoi-choi/sua" &&
       url.pathname !== "/admin/lenh" &&
       url.pathname !== "/suc-khoe" &&
       (await dangBaoTri(env))

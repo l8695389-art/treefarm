@@ -3190,6 +3190,196 @@ async function xuLyXuLyRutTienAdmin(env, request) {
 }
 
 // ==================================================
+// 🖥️ WEB ADMIN — QUẢN LÝ NGƯỜI CHƠI + Ô LỆNH
+//   GET  /admin/nguoi-choi/danh-sach  → toàn bộ user (lọc theo ?tim=)
+//   POST /admin/lenh                  → thực thi 1 lệnh admin dạng text
+// Xác thực bằng header X-Admin-Secret, dùng chung xacThucAdminWeb().
+// ==================================================
+async function xuLyDanhSachNguoiChoiAdmin(env, request, url) {
+  if (!xacThucAdminWeb(env, request)) {
+    return Response.json({ loi: "khong_co_quyen" }, { status: 401 });
+  }
+
+  const tim = (url.searchParams.get("tim") || "").trim().toLowerCase();
+  const capTren = capTrenChoPrefix(TIEN_TO_USER);
+
+  let hangDoi;
+  try {
+    const { results } = await env.DB.prepare(
+      "SELECT key, value FROM kv WHERE ns = 'users' AND key >= ?1 AND key < ?2 ORDER BY key ASC LIMIT ?3"
+    ).bind(TIEN_TO_USER, capTren, 20000).all();
+    hangDoi = results;
+  } catch (e) {
+    return Response.json({ loi: "loi_truy_van_d1", chi_tiet: String(e) }, { status: 500 });
+  }
+
+  const danhSach = [];
+  for (const hang of hangDoi) {
+    const uid = hang.key.slice(TIEN_TO_USER.length);
+    let nd;
+    try {
+      nd = JSON.parse(hang.value);
+    } catch (e) {
+      continue; // dữ liệu hỏng, bỏ qua user này
+    }
+
+    if (tim) {
+      const khop =
+        uid.includes(tim) ||
+        (nd.ten || "").toLowerCase().includes(tim) ||
+        (nd.username || "").toLowerCase().includes(tim);
+      if (!khop) continue;
+    }
+
+    danhSach.push({
+      uid,
+      ten: nd.ten || "",
+      username: nd.username || null,
+      coin: nd.coin || 0,
+      tong_da_kiem: nd.tongDaKiem || 0,
+      cap_dao: nd.capDao || 1,
+      xp_dao: nd.xpDao || 0,
+      dang_dao: !!(nd.dao && nd.dao.dangDao),
+      ngay_tham_gia: nd.ngay_tham_gia || "",
+      gioi_thieu_boi: nd.gioiThieuBoi || null,
+    });
+  }
+
+  danhSach.sort((a, b) => b.tong_da_kiem - a.tong_da_kiem);
+  return Response.json({ tong_so: danhSach.length, danh_sach: danhSach.slice(0, 2000) });
+}
+
+// Thực thi lệnh admin từ web — chỉ hỗ trợ tập lệnh KHÔNG cần reply message
+// Telegram (đọc dữ liệu / bật tắt cấu hình). Không cần laAdmin() vì đã xác
+// thực bằng ADMIN_WEB_SECRET ở tầng trên rồi.
+async function xuLyLenhAdminWeb(env, request) {
+  if (!xacThucAdminWeb(env, request)) {
+    return Response.json({ thanh_cong: false, loi: "khong_co_quyen" }, { status: 401 });
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ thanh_cong: false, loi: "body_khong_hop_le" }, { status: 400 });
+  }
+
+  const dong = (body && body.lenh ? String(body.lenh) : "").trim();
+  if (!dong) return Response.json({ thanh_cong: false, loi: "thieu_lenh" }, { status: 400 });
+
+  const phan = dong.split(/\s+/);
+  const lenh = phan[0].toLowerCase();
+
+  try {
+    switch (lenh) {
+      case "/check": {
+        const uid = phan[1];
+        if (!uid) return Response.json({ thanh_cong: false, text: "⚠️ Dùng: /check [ID_nguoi_dung]" });
+        const nguoiDung = await layNguoiDung(env, uid);
+        if (!nguoiDung) return Response.json({ thanh_cong: false, text: `❌ Không tìm thấy user ID: ${uid}` });
+
+        const dd = await layDiemDanh(env, uid);
+        const muaGiai = await layHoacTaoMuaGiai(env);
+        const coinChoBXH = nguoiDung.tongDaKiem != null ? nguoiDung.tongDaKiem : nguoiDung.coin || 0;
+        const mocMuaGiai = await damBaoMocMuaGiai(env, uid, nguoiDung, muaGiai.so);
+        const daKiemTrongMua = Math.max(0, coinChoBXH - mocMuaGiai.coin_goc);
+
+        const text =
+          `👤 ID: ${uid} | Tên: ${nguoiDung.ten || "?"}\n` +
+          `🪙 Coin: ${(nguoiDung.coin || 0).toLocaleString("vi-VN")}\n` +
+          `📊 Tổng đã kiếm: ${(nguoiDung.tongDaKiem || 0).toLocaleString("vi-VN")}\n` +
+          `⛏️ Cấp đào: ${nguoiDung.capDao || 1}/${CAP_DAO_TOI_DA}\n` +
+          `🔥 Chuỗi điểm danh: ${dd.chuoi_hien_tai || 0} ngày\n` +
+          `🏆 Đã kiếm trong mùa #${muaGiai.so}: ${daKiemTrongMua.toLocaleString("vi-VN")} xu\n` +
+          `👤 Giới thiệu bởi: ${nguoiDung.gioiThieuBoi || "Không có"}`;
+        return Response.json({ thanh_cong: true, text });
+      }
+      case "/sluser": {
+        let tongSo = 0;
+        for await (const _uid of duyetTatCaNguoiDung(env)) tongSo += 1;
+        return Response.json({ thanh_cong: true, text: `👥 Tổng số user: ${tongSo.toLocaleString("vi-VN")}` });
+      }
+      case "/checknv": {
+        const tongQc = await layBoDemToanCuc(env, KEY_TONG_LUOT_QC);
+        const tongAdsgram = await layBoDemToanCuc(env, KEY_TONG_LUOT_ADSGRAM);
+        const tongLink4m = await layBoDemToanCuc(env, KEY_TONG_LUOT_LINK4M);
+        const text =
+          `📊 THỐNG KÊ NHIỆM VỤ (ALL-TIME)\n` +
+          `🎬 Quảng cáo Monetag: ${tongQc.toLocaleString("vi-VN")} lượt\n` +
+          `🎥 Quảng cáo Adsgram: ${tongAdsgram.toLocaleString("vi-VN")} lượt\n` +
+          `🔗 Vượt link Link4M: ${tongLink4m.toLocaleString("vi-VN")} lượt`;
+        return Response.json({ thanh_cong: true, text });
+      }
+      case "/baotri": {
+        const hanhDong = (phan[1] || "").toLowerCase();
+        if (hanhDong === "bat" || hanhDong === "on") {
+          await datCheDoBaoTri(env, true);
+          return Response.json({ thanh_cong: true, text: "🛠️ Đã BẬT chế độ bảo trì." });
+        }
+        if (hanhDong === "tat" || hanhDong === "off") {
+          await datCheDoBaoTri(env, false);
+          return Response.json({ thanh_cong: true, text: "✅ Đã TẮT chế độ bảo trì." });
+        }
+        const dangBat = await dangBaoTri(env);
+        return Response.json({
+          thanh_cong: true,
+          text: `ℹ️ Chế độ bảo trì hiện đang: ${dangBat ? "🛠️ BẬT" : "✅ TẮT"}\nDùng: /baotri bat hoặc /baotri tat`,
+        });
+      }
+      case "/dsadmin": {
+        const danhSach = await layDanhSachAdmin(env);
+        return Response.json({
+          thanh_cong: true,
+          text: "👑 DANH SÁCH ADMIN:\n" + danhSach.map((ad, idx) => `${idx + 1}. ${ad}`).join("\n"),
+        });
+      }
+      case "/checkcode": {
+        const danhSachMa = [];
+        let cursor;
+        for (;;) {
+          const trang = await env.USERS.list({ prefix: TIEN_TO_GIFCODE, cursor });
+          for (const key of trang.keys) danhSachMa.push(key.name.slice(TIEN_TO_GIFCODE.length));
+          if (trang.list_complete) break;
+          cursor = trang.cursor;
+        }
+        const chiTiet = [];
+        for (const ma of danhSachMa) {
+          const raw = await env.USERS.get(TIEN_TO_GIFCODE + ma);
+          if (raw) chiTiet.push(JSON.parse(raw));
+        }
+        chiTiet.sort((a, b) => b.taoLuc - a.taoLuc);
+        const dong2 = chiTiet.slice(0, 30).map((gc, idx) => `${idx + 1}. ${gc.code} | ${gc.soLuongDaDung}/${gc.soLuongToiDa} lượt`);
+        return Response.json({ thanh_cong: true, text: chiTiet.length ? dong2.join("\n") : "📭 Chưa có gift code nào." });
+      }
+      case "/checkcodesl": {
+        const ma = (phan[1] || "").toUpperCase();
+        if (!ma) return Response.json({ thanh_cong: false, text: "⚠️ Dùng: /checkcodesl [code]" });
+        const raw = await env.USERS.get(TIEN_TO_GIFCODE + ma);
+        if (!raw) return Response.json({ thanh_cong: false, text: `❌ Mã "${ma}" không tồn tại.` });
+        const gc = JSON.parse(raw);
+        return Response.json({ thanh_cong: true, text: `🎁 Mã: ${gc.code}\n👥 Đã dùng: ${gc.soLuongDaDung}/${gc.soLuongToiDa}` });
+      }
+      case "/dslenh": {
+        const text =
+          "🛠️ LỆNH HỖ TRỢ TRÊN WEB:\n" +
+          "/check [ID] — xem thông tin 1 người chơi\n" +
+          "/sluser — tổng số user\n" +
+          "/checknv — thống kê nhiệm vụ all-time\n" +
+          "/baotri [bat|tat] — bật/tắt/xem chế độ bảo trì\n" +
+          "/dsadmin — danh sách admin\n" +
+          "/checkcode — danh sách gift code\n" +
+          "/checkcodesl [code] — chi tiết 1 gift code";
+        return Response.json({ thanh_cong: true, text });
+      }
+      default:
+        return Response.json({ thanh_cong: false, text: `❌ Lệnh "${lenh}" không hỗ trợ trên web. Dùng /dslenh để xem danh sách.` });
+    }
+  } catch (e) {
+    return Response.json({ thanh_cong: false, text: `❌ Lỗi: ${String(e)}` }, { status: 500 });
+  }
+}
+
+// ==================================================
 // 🔁 DI CHUYỂN DỮ LIỆU KV → D1 — chạy 1 lần duy nhất lúc chuyển hạ tầng.
 // Yêu cầu giữ tạm 2 binding KV cũ trong wrangler.toml với tên khác
 // (USERS_KV_CU, ADMINS_KV_CU) trỏ vào đúng namespace KV đang dùng hiện tại
@@ -3274,12 +3464,23 @@ export default {
       return xuLyXuLyRutTienAdmin(env, request);
     }
 
+    // Web admin quản lý người chơi + ô lệnh — xác thực bằng header X-Admin-Secret
+    if (request.method === "GET" && url.pathname === "/admin/nguoi-choi/danh-sach") {
+      return xuLyDanhSachNguoiChoiAdmin(env, request, url);
+    }
+    if (request.method === "POST" && url.pathname === "/admin/lenh") {
+      return xuLyLenhAdminWeb(env, request);
+    }
+
     // 🛠️ Chế độ bảo trì — nếu đang BẬT (bật/tắt qua lệnh Telegram /baotri,
     // xem xuLyBaoTri), chặn TOÀN BỘ request còn lại (cả trang miniapp lẫn
-    // mọi API), CHỈ trừ trang quản lý rút tiền (để admin vẫn duyệt được)
-    // và /suc-khoe (để hệ thống giám sát uptime không báo động nhầm).
+    // mọi API), CHỈ trừ trang quản lý rút tiền + quản lý người chơi (để
+    // admin vẫn thao tác được) và /suc-khoe (để hệ thống giám sát uptime
+    // không báo động nhầm).
     if (
       url.pathname !== "/admin/rut-tien/danh-sach" &&
+      url.pathname !== "/admin/nguoi-choi/danh-sach" &&
+      url.pathname !== "/admin/lenh" &&
       url.pathname !== "/suc-khoe" &&
       (await dangBaoTri(env))
     ) {

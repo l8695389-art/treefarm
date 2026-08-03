@@ -3693,6 +3693,69 @@ async function xuLyLenhAdminWeb(env, request) {
           text: "👑 DANH SÁCH ADMIN:\n" + danhSach.map((ad, idx) => `${idx + 1}. ${ad}`).join("\n"),
         });
       }
+      case "/tucam": {
+        // Cú pháp giống hệt lệnh Telegram: /tucam [tu_khoa] | /tucam ds | /tucam xoa [tu_khoa]
+        const hanhDongTho = (phan[1] || "").toLowerCase();
+
+        if (!phan[1]) {
+          return Response.json({
+            thanh_cong: false,
+            text:
+              "⚠️ Dùng:\n" +
+              "/tucam [tu_khoa] — thêm từ khóa cấm mới\n" +
+              "/tucam ds — xem danh sách từ khóa cấm hiện tại\n" +
+              "/tucam xoa [tu_khoa] — xóa 1 từ khóa cấm đã thêm",
+          });
+        }
+
+        if (hanhDongTho === "ds") {
+          const tuyChinh = await layTuKhoaCamTuyChinh(env);
+          const text =
+            `🚫 TỪ KHOÁ CẤM CỐ ĐỊNH (${DANH_SACH_TU_KHOA_CAM.length}):\n` +
+            DANH_SACH_TU_KHOA_CAM.map((t, i) => `${i + 1}. ${t}`).join("\n") +
+            `\n\n➕ TỪ KHOÁ CẤM TÙY CHỈNH (${tuyChinh.length}):\n` +
+            (tuyChinh.length ? tuyChinh.map((t, i) => `${i + 1}. ${t}`).join("\n") : "(chưa có)");
+          return Response.json({ thanh_cong: true, text });
+        }
+
+        if (hanhDongTho === "xoa") {
+          // `phan` tách từ `dong` gốc (chưa bị lowercase) nên giữ nguyên hoa/thường
+          // của từ khóa cần xóa.
+          const tuXoa = phan.slice(2).join(" ").trim();
+          if (!tuXoa) {
+            return Response.json({ thanh_cong: false, text: "⚠️ Dùng: /tucam xoa [tu_khoa]" });
+          }
+          const tuyChinh = await layTuKhoaCamTuyChinh(env);
+          const idx = tuyChinh.findIndex((t) => t.toLowerCase() === tuXoa.toLowerCase());
+          if (idx === -1) {
+            return Response.json({
+              thanh_cong: false,
+              text: `❌ Không tìm thấy "${tuXoa}" trong danh sách tùy chỉnh (chỉ xóa được từ đã thêm qua /tucam).`,
+            });
+          }
+          tuyChinh.splice(idx, 1);
+          await luuTuKhoaCamTuyChinh(env, tuyChinh);
+          return Response.json({ thanh_cong: true, text: `✅ Đã xóa từ khóa cấm: "${tuXoa}"` });
+        }
+
+        // Mặc định: THÊM MỚI — lấy nguyên phần còn lại của tin nhắn GỐC (giữ hoa/
+        // thường + khoảng trắng bên trong, vd "Trang Cá Nhân") sau "/tucam".
+        const tuMoi = phan.slice(1).join(" ").trim();
+
+        const toanBo = await layToanBoTuKhoaCam(env);
+        if (toanBo.some((t) => t.toLowerCase() === tuMoi.toLowerCase())) {
+          return Response.json({ thanh_cong: false, text: `⚠️ Từ khóa "${tuMoi}" đã có trong danh sách cấm rồi.` });
+        }
+
+        const tuyChinh = await layTuKhoaCamTuyChinh(env);
+        tuyChinh.push(tuMoi);
+        await luuTuKhoaCamTuyChinh(env, tuyChinh);
+
+        return Response.json({
+          thanh_cong: true,
+          text: `✅ Đã thêm từ khóa cấm: "${tuMoi}"\nTừ giờ tin nhắn trong nhóm chứa từ này (khớp nguyên từ) sẽ tự động bị xóa.`,
+        });
+      }
       case "/taogifcode": {
         // Cú pháp giống hệt lệnh Telegram: /taogifcode [so_coin hoặc min-max] [code] [so_luong] [loi_nhan]
         // Dùng `dong` (chuỗi GỐC, chưa lowercase) để giữ nguyên hoa/thường +
@@ -3854,6 +3917,7 @@ async function xuLyLenhAdminWeb(env, request) {
           "/sluser — tổng số user\n" +
           "/checknv — thống kê nhiệm vụ theo từng ngày (7 ngày gần nhất)\n" +
           "/baotri [bat|tat] — bật/tắt/xem chế độ bảo trì\n" +
+          "/tucam [tu_khoa] — thêm từ khóa cấm để bot tự xóa tin trong nhóm. /tucam ds xem danh sách, /tucam xoa [tu_khoa] để xóa\n" +
           "/dsadmin — danh sách admin\n" +
           "/taogifcode [coin hoặc min-max] [code] [so_luong] [loi_nhan] — tạo gift code mới, tự thông báo vào nhóm\n" +
           "/checkcode — danh sách gift code\n" +

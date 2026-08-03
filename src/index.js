@@ -1019,6 +1019,7 @@ const DANH_SACH_LENH_ADMIN = [
   { lenh: "/xoaadmin [ID]", moTa: "Xóa 1 admin (chỉ chủ sở hữu)" },
   { lenh: "/dsadmin", moTa: "Xem danh sách admin hiện tại" },
   { lenh: "/baotri [bat|tat]", moTa: "Bật/tắt chế độ bảo trì, hoặc xem trạng thái nếu không nhập tham số" },
+  { lenh: "/tucam [tu_khoa]", moTa: "Thêm từ khóa cấm để bot tự động xóa tin chứa từ đó trong nhóm. /tucam ds xem danh sách, /tucam xoa [tu_khoa] để xóa" },
   { lenh: "/taogifcode [coin hoặc min-max] [code] [so_luot] [loi_nhan]", moTa: "Tạo gift code mới, tự thông báo vào nhóm. loi_nhan tùy chọn — không nhập thì mặc định \"🎁 GIFT CODE NGẪU NHIÊN!\"" },
   { lenh: "/checkcode", moTa: "Xem danh sách các gift code đã tạo" },
   { lenh: "/checkcodesl [code]", moTa: "Xem chi tiết + số người đã nhập 1 gift code" },
@@ -1091,6 +1092,78 @@ async function xuLyBaoTri(env, message) {
   return telegramApi(env, "sendMessage", {
     chat_id: message.chat.id,
     text: `ℹ️ Chế độ bảo trì hiện đang: ${dangBat ? "🛠️ BẬT" : "✅ TẮT"}\n\nDùng: /baotri bat  hoặc  /baotri tat`,
+  });
+}
+
+// /tucam [tu_khoa] — thêm từ khóa cấm mới (khớp NGUYÊN TỪ, không phân biệt
+// hoa/thường) vào danh sách TÙY CHỈNH, gộp thêm vào DANH_SACH_TU_KHOA_CAM cố
+// định trong code khi lọc tin nhắn nhóm (xem coTuCamTrongTinNhan).
+// /tucam ds — liệt kê toàn bộ từ khóa cấm hiện tại (cố định + tùy chỉnh).
+// /tucam xoa [tu_khoa] — xóa 1 từ khóa khỏi danh sách tùy chỉnh (không xóa
+// được từ khóa cố định viết sẵn trong code, chỉ xóa được từ đã thêm qua lệnh này).
+async function xuLyTuCam(env, message) {
+  if (!(await laAdmin(env, message.from.id))) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "❌ Bạn không có quyền!" });
+  }
+
+  const phan = message.text.trim().split(/\s+/);
+  const hanhDongTho = (phan[1] || "").toLowerCase();
+
+  if (!phan[1]) {
+    return telegramApi(env, "sendMessage", {
+      chat_id: message.chat.id,
+      text:
+        "⚠️ Dùng:\n" +
+        "/tucam [tu_khoa] — thêm từ khóa cấm mới\n" +
+        "/tucam ds — xem danh sách từ khóa cấm hiện tại\n" +
+        "/tucam xoa [tu_khoa] — xóa 1 từ khóa cấm đã thêm",
+    });
+  }
+
+  if (hanhDongTho === "ds") {
+    const tuyChinh = await layTuKhoaCamTuyChinh(env);
+    const text =
+      `🚫 TỪ KHOÁ CẤM CỐ ĐỊNH (${DANH_SACH_TU_KHOA_CAM.length}):\n` +
+      DANH_SACH_TU_KHOA_CAM.map((t, i) => `${i + 1}. ${t}`).join("\n") +
+      `\n\n➕ TỪ KHOÁ CẤM TÙY CHỈNH (${tuyChinh.length}):\n` +
+      (tuyChinh.length ? tuyChinh.map((t, i) => `${i + 1}. ${t}`).join("\n") : "(chưa có)");
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text });
+  }
+
+  if (hanhDongTho === "xoa") {
+    const tuXoa = phan.slice(2).join(" ").trim();
+    if (!tuXoa) {
+      return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "⚠️ Dùng: /tucam xoa [tu_khoa]" });
+    }
+    const tuyChinh = await layTuKhoaCamTuyChinh(env);
+    const idx = tuyChinh.findIndex((t) => t.toLowerCase() === tuXoa.toLowerCase());
+    if (idx === -1) {
+      return telegramApi(env, "sendMessage", {
+        chat_id: message.chat.id,
+        text: `❌ Không tìm thấy "${tuXoa}" trong danh sách tùy chỉnh (chỉ xóa được từ đã thêm qua /tucam).`,
+      });
+    }
+    tuyChinh.splice(idx, 1);
+    await luuTuKhoaCamTuyChinh(env, tuyChinh);
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: `✅ Đã xóa từ khóa cấm: "${tuXoa}"` });
+  }
+
+  // Mặc định: THÊM MỚI — lấy nguyên phần còn lại của tin nhắn sau /tucam
+  // (giữ được khoảng trắng bên trong, vd "trang cá nhân").
+  const tuMoi = phan.slice(1).join(" ").trim();
+
+  const toanBo = await layToanBoTuKhoaCam(env);
+  if (toanBo.some((t) => t.toLowerCase() === tuMoi.toLowerCase())) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: `⚠️ Từ khóa "${tuMoi}" đã có trong danh sách cấm rồi.` });
+  }
+
+  const tuyChinh = await layTuKhoaCamTuyChinh(env);
+  tuyChinh.push(tuMoi);
+  await luuTuKhoaCamTuyChinh(env, tuyChinh);
+
+  return telegramApi(env, "sendMessage", {
+    chat_id: message.chat.id,
+    text: `✅ Đã thêm từ khóa cấm: "${tuMoi}"\nTừ giờ tin nhắn trong nhóm chứa từ này (khớp nguyên từ) sẽ tự động bị xóa.`,
   });
 }
 
@@ -1533,6 +1606,28 @@ function coLinkLaTrongTinNhan(env, message) {
 // nhắn mới xoá được.
 const DANH_SACH_TU_KHOA_CAM = ["bio", "tiểu sử", "trang cá nhân", "profile", "tieusu", "trong tsu", "tặng lộc", "nhóm share app", "BI🅾️", "ib", "tsu"]; // so khớp KHÔNG phân biệt hoa/thường, khớp NGUYÊN TỪ
 
+// Danh sách từ khoá cấm TÙY CHỈNH — admin tự thêm/xóa qua lệnh Telegram
+// /tucam (không cần deploy lại code). Lưu ở namespace ADMINS (giống
+// KEY_BAO_TRI, KEY_DANH_SACH_ADMIN — cấu hình toàn hệ thống), GỘP THÊM vào
+// DANH_SACH_TU_KHOA_CAM cố định ở trên khi lọc tin nhắn — không thay thế.
+const KEY_TU_KHOA_CAM_TUY_CHINH = "tu-khoa-cam-tuy-chinh"; // JSON array các từ khóa cấm admin thêm qua /tucam
+
+async function layTuKhoaCamTuyChinh(env) {
+  const raw = await env.ADMINS.get(KEY_TU_KHOA_CAM_TUY_CHINH);
+  return raw ? JSON.parse(raw) : [];
+}
+
+async function luuTuKhoaCamTuyChinh(env, danhSach) {
+  await env.ADMINS.put(KEY_TU_KHOA_CAM_TUY_CHINH, JSON.stringify(danhSach));
+}
+
+// Gộp danh sách cố định (DANH_SACH_TU_KHOA_CAM) + tùy chỉnh (admin thêm qua
+// /tucam) — dùng thay DANH_SACH_TU_KHOA_CAM trực tiếp ở mọi nơi cần lọc.
+async function layToanBoTuKhoaCam(env) {
+  const tuyChinh = await layTuKhoaCamTuyChinh(env);
+  return [...DANH_SACH_TU_KHOA_CAM, ...tuyChinh];
+}
+
 // Escape ký tự đặc biệt regex trong 1 từ khoá trước khi dựng RegExp động.
 function escapeRegex(chuoi) {
   return chuoi.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -1543,11 +1638,12 @@ function escapeRegex(chuoi) {
 // "app" không được khớp nhầm bên trong "happy", "sapp"...). Dùng
 // \p{L}/\p{N} (chữ + số Unicode) làm ranh giới từ vì \b của JS không nhận
 // diện đúng ký tự có dấu tiếng Việt.
-function coTuCamTrongTinNhan(message) {
+async function coTuCamTrongTinNhan(env, message) {
   const vanBan = (message.text || message.caption || "").toLowerCase();
   if (!vanBan) return false;
 
-  return DANH_SACH_TU_KHOA_CAM.some((tu) => {
+  const danhSachTuCam = await layToanBoTuKhoaCam(env);
+  return danhSachTuCam.some((tu) => {
     const re = new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRegex(tu.toLowerCase())}(?![\\p{L}\\p{N}_])`, "u");
     return re.test(vanBan);
   });
@@ -1572,7 +1668,7 @@ async function canXoaViLinkLa(env, message) {
   if (nguoiGuiId && (await laAdmin(env, nguoiGuiId))) return false;
 
   if (coLinkLaTrongTinNhan(env, message)) return true;
-  if (coTuCamTrongTinNhan(message)) return true;
+  if (await coTuCamTrongTinNhan(env, message)) return true;
 
   return false;
 }
@@ -1654,6 +1750,8 @@ async function xuLyUpdate(env, update) {
         return xuLyDsLenh(env, message);
       case "/baotri":
         return xuLyBaoTri(env, message);
+      case "/tucam":
+        return xuLyTuCam(env, message);
       case "/taogifcode":
         return xuLyTaoGifcode(env, message);
       case "/checkcode":

@@ -203,6 +203,15 @@ async function xuLyKiemTraThanhVien(env, url) {
 const KEY_TONG_LUOT_QC = "tong-luot-qc-hoan-thanh"; // tổng lượt xem quảng cáo Monetag đã hoàn thành (mọi user, mọi thời điểm)
 const KEY_TONG_LUOT_ADSGRAM = "tong-luot-adsgram-hoan-thanh"; // tương tự, cho quảng cáo Adsgram
 const KEY_TONG_LUOT_LINK4M = "tong-luot-link4m-hoan-thanh"; // tương tự, cho lượt vượt link Link4M hoàn thành
+
+// Bộ đếm THEO TỪNG NGÀY (khác bộ đếm all-time ở trên) — dùng để /checknv
+// hiển thị 7 ngày gần nhất thay vì 1 con số tổng cộng dồn từ trước tới nay.
+// Key = tiền tố + "YYYY-MM-DD" (giờ VN), lưu ở namespace ADMINS giống các
+// bộ đếm toàn cục khác trong file này.
+const TIEN_TO_QC_NGAY_TK = "tong-luot-qc-ngay:";
+const TIEN_TO_ADSGRAM_NGAY_TK = "tong-luot-adsgram-ngay:";
+const TIEN_TO_LINK4M_NGAY_TK = "tong-luot-link4m-ngay:";
+const SO_NGAY_THONG_KE_NHIEM_VU = 7; // /checknv hiển thị tối đa 7 ngày gần nhất
 const TIEN_TO_USER = "user:";
 const TIEN_TO_QC_SO_LAN_NGAY = "qc-so-lan-ngay:";
 const QC_GIOI_HAN_NGAY = 10;
@@ -602,6 +611,59 @@ async function layBoDemToanCuc(env, key) {
   return Number((await env.ADMINS.get(key)) || 0);
 }
 
+// Tăng bộ đếm THEO NGÀY (khác tangBoDemToanCuc — bộ đếm đó cộng dồn mãi
+// mãi, còn bộ đếm này tách riêng theo từng ngày để /checknv có thể hiển
+// thị số liệu 7 ngày gần nhất thay vì 1 con số tổng all-time).
+async function tangBoDemNgay(env, tienTo, ngay) {
+  const key = tienTo + ngay;
+  const hienTai = Number((await env.ADMINS.get(key)) || 0);
+  await env.ADMINS.put(key, String(hienTai + 1));
+}
+
+async function layBoDemNgay(env, tienTo, ngay) {
+  return Number((await env.ADMINS.get(tienTo + ngay)) || 0);
+}
+
+// Gộp số liệu 3 bộ đếm ngày (QC Monetag, Adsgram, Link4M) cho
+// SO_NGAY_THONG_KE_NHIEM_VU ngày gần nhất — mới nhất (hôm nay) đứng đầu
+// mảng trả về. Dùng chung cho cả lệnh Telegram /checknv lẫn lệnh web admin.
+async function layThongKeNhiemVuNgay(env) {
+  const ketQua = [];
+  let ngay = ngayVnHomNay();
+  for (let i = 0; i < SO_NGAY_THONG_KE_NHIEM_VU; i++) {
+    const qc = await layBoDemNgay(env, TIEN_TO_QC_NGAY_TK, ngay);
+    const adsgram = await layBoDemNgay(env, TIEN_TO_ADSGRAM_NGAY_TK, ngay);
+    const link4m = await layBoDemNgay(env, TIEN_TO_LINK4M_NGAY_TK, ngay);
+    ketQua.push({ ngay, qc, adsgram, link4m });
+    ngay = ngayTruocVN(ngay);
+  }
+  return ketQua;
+}
+
+// Dựng nội dung text hiển thị bảng 7 ngày — dùng chung cho cả Telegram lẫn web admin.
+function dinhDangThongKeNhiemVuNgay(thongKe) {
+  const dong = thongKe.map((d) => {
+    const tongQcNgay = d.qc + d.adsgram;
+    return (
+      `📅 ${d.ngay}\n` +
+      `   🎬 Monetag: ${d.qc.toLocaleString("vi-VN")} | 🎥 Adsgram: ${d.adsgram.toLocaleString("vi-VN")} | 📺 Tổng QC: ${tongQcNgay.toLocaleString("vi-VN")}\n` +
+      `   🔗 Link4M: ${d.link4m.toLocaleString("vi-VN")}`
+    );
+  });
+
+  const tongQc7Ngay = thongKe.reduce((s, d) => s + d.qc, 0);
+  const tongAdsgram7Ngay = thongKe.reduce((s, d) => s + d.adsgram, 0);
+  const tongLink4m7Ngay = thongKe.reduce((s, d) => s + d.link4m, 0);
+
+  return (
+    `📊 THỐNG KÊ NHIỆM VỤ (${thongKe.length} NGÀY GẦN NHẤT)\n` +
+    `━━━━━━━━━━━━━━━━━━\n` +
+    dong.join("\n\n") +
+    `\n━━━━━━━━━━━━━━━━━━\n` +
+    `Σ ${thongKe.length} ngày — 🎬 ${tongQc7Ngay.toLocaleString("vi-VN")} | 🎥 ${tongAdsgram7Ngay.toLocaleString("vi-VN")} | 📺 ${(tongQc7Ngay + tongAdsgram7Ngay).toLocaleString("vi-VN")} | 🔗 ${tongLink4m7Ngay.toLocaleString("vi-VN")}`
+  );
+}
+
 // ==================================================
 // 👤 DỮ LIỆU NGƯỜI DÙNG — KV thay cho FILE_NGUOI_DUNG (json)
 // ==================================================
@@ -926,29 +988,19 @@ async function xuLyLamMoiBangXepHang(env, message) {
   }
 }
 
-// /checknv — xem NHANH tổng số lượt nhiệm vụ đã hoàn thành trên toàn hệ
-// thống (cộng dồn all-time, mọi user): quảng cáo Monetag, quảng cáo
-// Adsgram, và vượt link Link4M. Đọc thẳng 3 bộ đếm toàn cục
-// (KEY_TONG_LUOT_QC / KEY_TONG_LUOT_ADSGRAM / KEY_TONG_LUOT_LINK4M),
-// không cần quét lại toàn bộ user nên trả lời gần như tức thì.
+// /checknv — xem NHANH số lượt nhiệm vụ đã hoàn thành theo TỪNG NGÀY, tối
+// đa 7 ngày gần nhất (KHÔNG còn cộng dồn all-time như trước) — quảng cáo
+// Monetag, quảng cáo Adsgram, và vượt link Link4M. Đọc thẳng các bộ đếm
+// theo ngày (TIEN_TO_QC_NGAY_TK / TIEN_TO_ADSGRAM_NGAY_TK /
+// TIEN_TO_LINK4M_NGAY_TK), không cần quét lại toàn bộ user nên trả lời
+// gần như tức thì.
 async function xuLyCheckNhiemVu(env, message) {
   if (!(await laAdmin(env, message.from.id))) {
     return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "❌ Bạn không có quyền!" });
   }
 
-  const tongQc = await layBoDemToanCuc(env, KEY_TONG_LUOT_QC);
-  const tongAdsgram = await layBoDemToanCuc(env, KEY_TONG_LUOT_ADSGRAM);
-  const tongLink4m = await layBoDemToanCuc(env, KEY_TONG_LUOT_LINK4M);
-  const tongQuangCao = tongQc + tongAdsgram;
-
-  const text =
-    `📊 THỐNG KÊ NHIỆM VỤ (ALL-TIME)\n` +
-    `━━━━━━━━━━━━━━━━━━\n` +
-    `🎬 Quảng cáo Monetag: ${tongQc.toLocaleString("vi-VN")} lượt\n` +
-    `🎥 Quảng cáo Adsgram: ${tongAdsgram.toLocaleString("vi-VN")} lượt\n` +
-    `📺 Tổng quảng cáo (2 nguồn): ${tongQuangCao.toLocaleString("vi-VN")} lượt\n\n` +
-    `🔗 Vượt link Link4M thành công: ${tongLink4m.toLocaleString("vi-VN")} lượt\n\n` +
-    `ℹ️ Số liệu cộng dồn từ trước tới nay, tính trên toàn bộ user.`;
+  const thongKe = await layThongKeNhiemVuNgay(env);
+  const text = dinhDangThongKeNhiemVuNgay(thongKe);
 
   return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text });
 }
@@ -968,7 +1020,7 @@ const DANH_SACH_LENH_ADMIN = [
   { lenh: "/sluser", moTa: "Xem tổng số user đã /start với bot" },
   { lenh: "/check [ID]", moTa: "Xem toàn bộ thông tin 1 người chơi (coin, cấp đào, điểm danh, xu BXH mùa hiện tại, ví, bạn bè...)" },
   { lenh: "/lammoibxh", moTa: "Ép tính lại + ghi cache BXH ngay lập tức, không cần chờ Cron Trigger" },
-  { lenh: "/checknv", moTa: "Xem tổng số lượt QC (Monetag+Adsgram) và vượt link đã hoàn thành (all-time)" },
+  { lenh: "/checknv", moTa: "Xem số lượt QC (Monetag+Adsgram) và vượt link Link4M đã hoàn thành, theo TỪNG NGÀY (7 ngày gần nhất)" },
   { lenh: "/id", moTa: "(Ai cũng dùng được) Trả về ID cuộc trò chuyện; trả lời 1 tin nhắn kèm lệnh này để lấy ID người được trả lời" },
   { lenh: "/dslenh", moTa: "Xem danh sách lệnh admin này" },
 ];
@@ -1826,7 +1878,8 @@ async function xuLyXacNhanQuangCao(env, url) {
   await congBxhMoiBanNeuDuDieuKien(env, uid, nguoiDung); // chỉ tính vào BXH Mời Bạn nếu vừa đạt Lv2 (KHÔNG cộng thêm coin)
   await luuNguoiDung(env, uid, nguoiDung);
   await congHoaHongGioiThieu(env, uid, soCoinCong);
-  await tangBoDemToanCuc(env, KEY_TONG_LUOT_QC); // thống kê cho /checknv
+  await tangBoDemToanCuc(env, KEY_TONG_LUOT_QC); // thống kê all-time (không hiển thị nữa nhưng vẫn giữ để không mất dữ liệu)
+  await tangBoDemNgay(env, TIEN_TO_QC_NGAY_TK, homNay); // thống kê theo ngày cho /checknv (7 ngày gần nhất)
 
   return Response.json({
     thanh_cong: true,
@@ -1878,7 +1931,8 @@ async function xuLyAdsgramCallback(env, url) {
   await congBxhMoiBanNeuDuDieuKien(env, uid, nguoiDung); // chỉ tính vào BXH Mời Bạn nếu vừa đạt Lv2 (KHÔNG cộng thêm coin)
   await luuNguoiDung(env, uid, nguoiDung);
   await congHoaHongGioiThieu(env, uid, soCoinCong);
-  await tangBoDemToanCuc(env, KEY_TONG_LUOT_ADSGRAM); // thống kê cho /checknv
+  await tangBoDemToanCuc(env, KEY_TONG_LUOT_ADSGRAM); // thống kê all-time (không hiển thị nữa nhưng vẫn giữ để không mất dữ liệu)
+  await tangBoDemNgay(env, TIEN_TO_ADSGRAM_NGAY_TK, homNay); // thống kê theo ngày cho /checknv (7 ngày gần nhất)
 
   return Response.json({
     thanh_cong: true,
@@ -2386,7 +2440,8 @@ async function xuLyXacNhanNhiemVu(env, url) {
   await congBxhMoiBanNeuDuDieuKien(env, uid, nguoiDung); // chỉ tính vào BXH Mời Bạn nếu vừa đạt Lv2 (KHÔNG cộng thêm coin)
   await luuNguoiDung(env, uid, nguoiDung);
   await congHoaHongGioiThieu(env, uid, soCoinCong);
-  await tangBoDemToanCuc(env, KEY_TONG_LUOT_LINK4M); // thống kê cho /checknv
+  await tangBoDemToanCuc(env, KEY_TONG_LUOT_LINK4M); // thống kê all-time (không hiển thị nữa nhưng vẫn giữ để không mất dữ liệu)
+  await tangBoDemNgay(env, TIEN_TO_LINK4M_NGAY_TK, homNay); // thống kê theo ngày cho /checknv (7 ngày gần nhất)
 
   return Response.json({
     hoan_thanh: true,
@@ -3374,14 +3429,8 @@ async function xuLyLenhAdminWeb(env, request) {
         return Response.json({ thanh_cong: true, text: `👥 Tổng số user: ${tongSo.toLocaleString("vi-VN")}` });
       }
       case "/checknv": {
-        const tongQc = await layBoDemToanCuc(env, KEY_TONG_LUOT_QC);
-        const tongAdsgram = await layBoDemToanCuc(env, KEY_TONG_LUOT_ADSGRAM);
-        const tongLink4m = await layBoDemToanCuc(env, KEY_TONG_LUOT_LINK4M);
-        const text =
-          `📊 THỐNG KÊ NHIỆM VỤ (ALL-TIME)\n` +
-          `🎬 Quảng cáo Monetag: ${tongQc.toLocaleString("vi-VN")} lượt\n` +
-          `🎥 Quảng cáo Adsgram: ${tongAdsgram.toLocaleString("vi-VN")} lượt\n` +
-          `🔗 Vượt link Link4M: ${tongLink4m.toLocaleString("vi-VN")} lượt`;
+        const thongKe = await layThongKeNhiemVuNgay(env);
+        const text = dinhDangThongKeNhiemVuNgay(thongKe);
         return Response.json({ thanh_cong: true, text });
       }
       case "/baotri": {
@@ -3566,7 +3615,7 @@ async function xuLyLenhAdminWeb(env, request) {
           "🛠️ LỆNH HỖ TRỢ TRÊN WEB:\n" +
           "/check [ID] — xem thông tin 1 người chơi\n" +
           "/sluser — tổng số user\n" +
-          "/checknv — thống kê nhiệm vụ all-time\n" +
+          "/checknv — thống kê nhiệm vụ theo từng ngày (7 ngày gần nhất)\n" +
           "/baotri [bat|tat] — bật/tắt/xem chế độ bảo trì\n" +
           "/dsadmin — danh sách admin\n" +
           "/taogifcode [coin hoặc min-max] [code] [so_luong] [loi_nhan] — tạo gift code mới, tự thông báo vào nhóm\n" +

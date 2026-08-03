@@ -242,7 +242,8 @@ const LINK4M_CHO_TOI_THIEU_MS = 5 * 60 * 1000; // phải chờ tối thiểu 5 p
 const KEY_CACHE_BANG_XEP_HANG = "cache-bang-xep-hang"; // JSON { kiem_xu, cap_nhat_luc } — làm mới mỗi 10 phút qua Cron Trigger
 const KEY_MUA_GIAI = "mua-giai-bxh-hien-tai"; // JSON { bat_dau, ket_thuc } — mùa giải BXH hiện tại, tự mở mùa mới khi hết hạn
 const MUA_GIAI_SO_NGAY = 7; // độ dài 1 mùa giải BXH (ngày)
-const TOP_NHAN_THUONG = 10; // chỉ Top 10 mỗi bảng xếp hạng mới nhận thưởng khi kết thúc mùa giải (admin trao thủ công, giống quy trình duyệt rút tiền)
+const TOP_NHAN_THUONG = 10; // chỉ Top 10 mỗi bảng xếp hạng mới nhận thưởng khi kết thúc mùa giải — TỰ ĐỘNG trao ngay khi phát hiện mùa kết thúc, xem traoThuongMuaGiaiDaKetThucNeuCo()
+const KEY_MUA_DA_TRAO_THUONG = "mua-da-trao-thuong"; // JSON { kiem_xu, moi_ban } — số mùa CUỐI CÙNG đã trao thưởng cho mỗi bảng, chặn trao trùng lặp
 const PHAN_THUONG_KIEM_XU = [50000, 10000, 5000, 2000, 2000, 2000, 2000, 2000, 2000, 2000]; // coin thưởng hạng 1→10, BXH "Đua Top Xu"
 const PHAN_THUONG_MOI_BAN = [50000, 10000, 5000, 2000, 2000, 2000, 2000, 2000, 2000, 2000]; // coin thưởng hạng 1→10, BXH "Đua Top Mời Bạn"
 const MUC_TOI_THIEU_MOI_BAN = 3; // tối thiểu mời được 3 bạn (đã đạt Lv2 máy đào) TRONG MÙA mới lọt BXH
@@ -958,6 +959,11 @@ async function xuLyLamMoiBangXepHang(env, message) {
   await telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "⏳ Đang làm mới bảng xếp hạng..." });
 
   try {
+    // Kiểm tra + trao thưởng Top 10 TRƯỚC nếu cache hiện tại đang giữ bảng
+    // xếp hạng cuối cùng của 1 mùa vừa kết thúc — nếu làm mới cache trước,
+    // dữ liệu mùa cũ sẽ bị ghi đè mất, không còn gì để trao thưởng nữa.
+    await traoThuongMuaGiaiDaKetThucNeuCo(env);
+
     const muaGiai = await layHoacTaoMuaGiai(env);
     const ketQua = await lamMoiCacheBangXepHang(env, muaGiai);
     const danhSach = ketQua.kiem_xu || [];
@@ -2506,7 +2512,9 @@ async function xuLyNhapGifcode(env, url) {
 
 // ==================================================
 // 🏆 BẢNG XẾP HẠNG — "Đua Top Xu": xếp theo XU KIẾM ĐƯỢC TRONG MÙA GIẢI
-// hiện tại. Chỉ Top 10 mới nhận phần thưởng khi kết thúc mùa giải.
+// hiện tại. Chỉ Top 10 mới nhận phần thưởng khi kết thúc mùa giải — thưởng
+// được TỰ ĐỘNG cộng thẳng vào ví ngay khi phát hiện mùa kết thúc (không
+// cần admin thao tác gì), xem traoThuongMuaGiaiDaKetThucNeuCo() bên dưới.
 //
 // Điểm số tính THEO MÙA (không phải lũy kế toàn thời gian): mỗi user lưu 1
 // "mốc mùa giải" (mocMuaGiai) chụp lại tongDaKiem tại thời điểm mùa hiện
@@ -2681,9 +2689,10 @@ async function lamMoiCacheBangXepHang(env, muaGiai) {
 
 // Mùa giải BXH — lưu số mùa + mốc bắt đầu/kết thúc trong KV. Tự động mở
 // mùa mới ngay khi phát hiện mùa hiện tại đã hết hạn (đọc lazy, không cần
-// cron riêng). Khi kết thúc mùa, admin trao thưởng Top 10 thủ công (tương
-// tự quy trình duyệt rút tiền) rồi mùa mới tự mở ở lượt đọc kế tiếp —
-// điểm 2 bảng tự về 0 nhờ cơ chế mốc mùa giải ở trên.
+// cron riêng). Khi kết thúc mùa, Top 10 được TỰ ĐỘNG trao thưởng ngay
+// (xem traoThuongMuaGiaiDaKetThucNeuCo() bên dưới, gọi TRƯỚC khi hàm này
+// ghi đè sang số mùa mới) rồi mùa mới tự mở ở lượt đọc kế tiếp — điểm 2
+// bảng tự về 0 nhờ cơ chế mốc mùa giải ở trên.
 async function layHoacTaoMuaGiai(env) {
   const raw = await env.USERS.get(KEY_MUA_GIAI);
   const bayGio = Date.now();
@@ -2707,6 +2716,127 @@ async function layHoacTaoMuaGiai(env) {
   const moi = { so: 1, bat_dau: bayGio, ket_thuc: bayGio + doDaiToiDaHopLeMs };
   await env.USERS.put(KEY_MUA_GIAI, JSON.stringify(moi));
   return moi;
+}
+
+// Đọc mốc "đã trao thưởng tới mùa số mấy" cho mỗi bảng — { kiem_xu, moi_ban }.
+async function layMocDaTraoThuong(env) {
+  const raw = await env.USERS.get(KEY_MUA_DA_TRAO_THUONG);
+  return raw ? JSON.parse(raw) : { kiem_xu: 0, moi_ban: 0 };
+}
+
+// Cộng thẳng coin vào ví cho Top N người đứng đầu 1 danh sách xếp hạng đã
+// tính sẵn (kiem_xu hoặc moi_ban trong cache) — dùng bangThuong[hạng-1] làm
+// mức thưởng. Trả về danh sách người thắng thực sự nhận được thưởng (để
+// dựng tin thông báo) — bỏ qua an toàn nếu tài khoản không còn tồn tại.
+async function traoThuongTop10(env, danhSachXepHang, bangThuong) {
+  const nguoiThang = [];
+  const soNguoiTrao = Math.min(TOP_NHAN_THUONG, (danhSachXepHang || []).length);
+  for (let i = 0; i < soNguoiTrao; i++) {
+    const hang = danhSachXepHang[i];
+    const soCoinThuong = bangThuong[i] || 0;
+    if (soCoinThuong <= 0) continue;
+
+    const nguoiDung = await layNguoiDung(env, hang.uid);
+    if (!nguoiDung) continue; // tài khoản không còn tồn tại — bỏ qua, không làm hỏng cả lượt trao
+
+    congCoin(nguoiDung, soCoinThuong);
+    nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinThuong; // thưởng mùa giải cũng tính vào lũy kế (ảnh hưởng mốc mùa kế tiếp, hợp lý vì đây là coin thật kiếm được)
+    await luuNguoiDung(env, hang.uid, nguoiDung);
+    nguoiThang.push({ uid: hang.uid, ten: hang.ten, coin: soCoinThuong });
+  }
+  return nguoiThang;
+}
+
+// Dựng nội dung tin thông báo trao thưởng Top 10 khi 1 mùa giải kết thúc —
+// gửi vào NHÓM TRÒ CHUYỆN, cùng phong cách với thông báo gift code / thanh
+// toán rút tiền.
+function xayDungTinTraoThuongMuaGiai(soMuaVuaKetThuc, tenBang, nguoiThang) {
+  const dong = nguoiThang.map((nd, idx) => {
+    const huyChuong = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `#${idx + 1}`;
+    return `${huyChuong} ${nd.ten} — +${(nd.coin || 0).toLocaleString("vi-VN")} coin`;
+  });
+  return (
+    `🏆 KẾT THÚC MÙA GIẢI #${soMuaVuaKetThuc} — ${tenBang}\n\n` +
+    `Top ${nguoiThang.length} đã được TỰ ĐỘNG cộng thưởng thẳng vào ví:\n\n` +
+    dong.join("\n") +
+    `\n\n💸 Cày coin, đua top mùa mới ngay tại Vua Cày Tiền 💸`
+  );
+}
+
+// Kiểm tra + TỰ ĐỘNG trao thưởng Top 10 ngay khi phát hiện 1 mùa giải vừa
+// kết thúc — PHẢI được gọi TRƯỚC bất kỳ chỗ nào làm mới cache sang mùa mới
+// (lamMoiCacheBangXepHang), vì cơ chế này dựa vào cache HIỆN TẠI (vẫn còn
+// giữ đúng bảng xếp hạng CUỐI CÙNG của mùa vừa kết thúc — cache chỉ được
+// làm mới mỗi 10 phút nên gần như chắc chắn là bản chốt sổ) để biết ai
+// thắng, thay vì phải lưu snapshot riêng.
+//
+// Idempotent qua KEY_MUA_DA_TRAO_THUONG: mỗi mùa chỉ được trao đúng 1 lần
+// cho mỗi bảng (kiem_xu / moi_ban riêng biệt vì moi_ban có thể chưa mở ở
+// mùa đó) — đánh dấu "đã trao" NGAY SAU khi trao xong. Chấp nhận rủi ro
+// race cực nhỏ nếu 2 lượt gọi trùng khớp hoàn toàn cùng lúc, giống cách
+// các bộ đếm/gifcode khác trong file đang chấp nhận, để đổi lấy code đơn
+// giản (không cần lock phân tán).
+async function traoThuongMuaGiaiDaKetThucNeuCo(env) {
+  const muaHienTai = await layHoacTaoMuaGiai(env); // gọi để kích hoạt rollover nếu mùa cũ đã hết hạn
+  const rawCache = await env.USERS.get(KEY_CACHE_BANG_XEP_HANG);
+  if (!rawCache) return;
+
+  let cache;
+  try {
+    cache = JSON.parse(rawCache);
+  } catch (e) {
+    return; // cache hỏng — bỏ qua, lần làm mới cache kế tiếp sẽ tự ghi lại đúng
+  }
+
+  // Cache thuộc mùa CŨ HƠN mùa hiện tại → đây chính là bảng xếp hạng CUỐI
+  // CÙNG của mùa vừa kết thúc (chưa kịp làm mới sang mùa mới).
+  if (!cache.so_mua || cache.so_mua >= muaHienTai.so) return;
+
+  const soMuaVuaKetThuc = cache.so_mua;
+  const daTrao = await layMocDaTraoThuong(env);
+  let coThayDoi = false;
+
+  if ((daTrao.kiem_xu || 0) < soMuaVuaKetThuc) {
+    const nguoiThangXu = await traoThuongTop10(env, cache.kiem_xu, PHAN_THUONG_KIEM_XU);
+    daTrao.kiem_xu = soMuaVuaKetThuc;
+    coThayDoi = true;
+    if (nguoiThangXu.length > 0 && env.NHOM_CHAT) {
+      try {
+        await telegramApi(env, "sendMessage", {
+          chat_id: env.NHOM_CHAT,
+          text: xayDungTinTraoThuongMuaGiai(soMuaVuaKetThuc, "💰 Đua Top Xu", nguoiThangXu),
+        });
+      } catch (e) {
+        console.error("Lỗi gửi thông báo trao thưởng Đua Top Xu:", e);
+      }
+    }
+  }
+
+  // BXH Mời Bạn chỉ tồn tại từ mùa MOI_BAN_MO_TU_MUA trở đi — mùa trước đó
+  // không có gì để trao (cache.moi_ban rỗng vì board chưa mở trong mùa đó).
+  if (soMuaVuaKetThuc >= MOI_BAN_MO_TU_MUA && (daTrao.moi_ban || 0) < soMuaVuaKetThuc) {
+    const nguoiThangMoiBan = await traoThuongTop10(env, cache.moi_ban, PHAN_THUONG_MOI_BAN);
+    daTrao.moi_ban = soMuaVuaKetThuc;
+    coThayDoi = true;
+    if (nguoiThangMoiBan.length > 0 && env.NHOM_CHAT) {
+      try {
+        await telegramApi(env, "sendMessage", {
+          chat_id: env.NHOM_CHAT,
+          text: xayDungTinTraoThuongMuaGiai(soMuaVuaKetThuc, "👥 Đua Top Mời Bạn", nguoiThangMoiBan),
+        });
+      } catch (e) {
+        console.error("Lỗi gửi thông báo trao thưởng Đua Top Mời Bạn:", e);
+      }
+    }
+  }
+
+  if (coThayDoi) {
+    try {
+      await env.USERS.put(KEY_MUA_DA_TRAO_THUONG, JSON.stringify(daTrao));
+    } catch (e) {
+      console.error("Không ghi được mốc đã trao thưởng mùa giải:", e);
+    }
+  }
 }
 
 async function xuLyBangXepHang(env, url, ctx) {
@@ -2753,9 +2883,18 @@ async function xuLyBangXepHang(env, url, ctx) {
       // Cache thuộc mùa cũ — trả cache cũ ngay cho nhanh (không chặn user
       // chờ tính lại), rồi âm thầm làm mới ở nền qua waitUntil. Cache cũ
       // vẫn hiển thị được (chỉ hơi lệch số mùa 1 nhịp, sẽ tự đúng lại sau).
+      // LUÔN kiểm tra + trao thưởng Top 10 của mùa cũ TRƯỚC khi làm mới —
+      // đây là đường dẫn NHIỀU KHẢ NĂNG xảy ra nhất (chỉ cần 1 user mở tab
+      // BXH sau khi mùa kết thúc), nên không thể bỏ qua bước này.
       if (ctx && ctx.waitUntil) {
-        ctx.waitUntil(lamMoiCacheBangXepHang(env, muaGiai).catch(() => {}));
+        ctx.waitUntil(
+          (async () => {
+            await traoThuongMuaGiaiDaKetThucNeuCo(env);
+            await lamMoiCacheBangXepHang(env, muaGiai);
+          })().catch(() => {})
+        );
       } else {
+        await traoThuongMuaGiaiDaKetThucNeuCo(env);
         cache = await lamMoiCacheBangXepHang(env, muaGiai);
       }
     }
@@ -3799,7 +3938,9 @@ export default {
   },
 
   // Cron Trigger — 2 lịch chạy khai báo ở wrangler.toml ([triggers] crons):
-  //   "*/10 * * * *" (mỗi 10 phút)  → làm mới cache bảng xếp hạng
+  //   "*/10 * * * *" (mỗi 10 phút)  → kiểm tra + tự động trao thưởng mùa
+  //                                 giải vừa kết thúc (nếu có), rồi làm
+  //                                 mới cache bảng xếp hạng
   //   "0 14 * * *"   (14:00 UTC = 21:00 giờ VN mỗi ngày) → tự tạo gift code
   //                                 300-500 coin, 50 lượt nhập
   // Phân biệt bằng event.cron để mỗi lịch chỉ chạy đúng việc của nó.
@@ -3808,7 +3949,12 @@ export default {
     if (event.cron === "0 14 * * *") {
       ctx.waitUntil(taoGifcodeTuDong(env));
     } else {
-      ctx.waitUntil(lamMoiCacheBangXepHang(env));
+      ctx.waitUntil(
+        (async () => {
+          await traoThuongMuaGiaiDaKetThucNeuCo(env);
+          await lamMoiCacheBangXepHang(env);
+        })()
+      );
     }
   },
 };

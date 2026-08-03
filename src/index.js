@@ -1473,7 +1473,7 @@ function coLinkLaTrongTinNhan(env, message) {
 // trang cá nhân"... để dụ nạn nhân tự bấm vào profile lấy link. Nên chặn
 // thêm ở cấp độ TỪ nhắc tới bio/tiểu sử, không cần chờ có URL trong tin
 // nhắn mới xoá được.
-const DANH_SACH_TU_KHOA_CAM = ["bio", "tiểu sử", "trang cá nhân", "profile", "tieusu", "trong tsu", "tặng lộc", "nhóm share app", "BI🅾️", "ib"]; // so khớp KHÔNG phân biệt hoa/thường, khớp NGUYÊN TỪ
+const DANH_SACH_TU_KHOA_CAM = ["bio", "tiểu sử", "trang cá nhân", "profile", "tieusu", "trong tsu", "tặng lộc", "nhóm share app", "BI🅾️", "ib", "tsu"]; // so khớp KHÔNG phân biệt hoa/thường, khớp NGUYÊN TỪ
 
 // Escape ký tự đặc biệt regex trong 1 từ khoá trước khi dựng RegExp động.
 function escapeRegex(chuoi) {

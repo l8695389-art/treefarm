@@ -116,7 +116,11 @@
         <code data-lenh="/checknv">/checknv</code> ·
         <code data-lenh="/baotri">/baotri</code> ·
         <code data-lenh="/dsadmin">/dsadmin</code> ·
-        <code data-lenh="/checkcode">/checkcode</code>
+        <code data-lenh="/checkcode">/checkcode</code> ·
+        <code data-lenh="/taogifcode 4000-5000 TET2026 100">/taogifcode ...</code>
+      </div>
+      <div class="goi-y" style="margin-top:2px;">
+        Cú pháp /taogifcode: <code style="cursor:default;">/taogifcode [coin hoặc min-max] [code] [so_luong] [loi_nhan]</code>
       </div>
       <div id="lenh-output">Chưa có lệnh nào được chạy.</div>
     </div>
@@ -281,7 +285,7 @@
   document.getElementById('input-lenh').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') document.getElementById('btn-chay-lenh').click();
   });
-  document.querySelectorAll('.goi-y code').forEach((el) => {
+  document.querySelectorAll('.goi-y code[data-lenh]').forEach((el) => {
     el.addEventListener('click', () => {
       document.getElementById('input-lenh').value = el.dataset.lenh;
       chayLenh(el.dataset.lenh);

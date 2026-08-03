@@ -268,8 +268,8 @@ const TIEN_TO_GIFCODE_DA_DUNG = "gifcode-da-dung:"; // gifcode-da-dung:{MA}:{uid
 // (14:00 UTC, xem [triggers] trong wrangler.toml) tự sinh 1 mã mới, random
 // 300-500 coin/lượt, tối đa 50 lượt nhập, rồi thông báo vào kênh + nhóm
 // giống hệt khi admin gõ lệnh /taogifcode thủ công.
-const GIFCODE_TU_DONG_COIN_MIN = 300;
-const GIFCODE_TU_DONG_COIN_MAX = 500;
+const GIFCODE_TU_DONG_COIN_MIN = 700;
+const GIFCODE_TU_DONG_COIN_MAX = 1500;
 const GIFCODE_TU_DONG_SO_LUONG = 50;
 
 // Parse tham số số coin của gift code: chấp nhận 1 số cố định ("5000") hoặc

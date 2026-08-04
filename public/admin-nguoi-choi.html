@@ -176,6 +176,7 @@
         <input type="text" id="input-tim-kiem" placeholder="Tìm theo UID, tên hoặc username..." />
         <button id="btn-tim-kiem" style="flex:0 0 auto;">Tìm</button>
         <button id="btn-lam-moi" class="secondary" style="flex:0 0 auto;">🔄 Làm mới</button>
+        <button id="btn-xuat-txt" class="secondary" style="flex:0 0 auto;">📤 Xuất TXT</button>
       </div>
       <div class="table-wrap">
         <table>
@@ -451,6 +452,65 @@
     document.getElementById('input-tim-kiem').value = '';
     taiDanhSachNguoiChoi('');
   });
+
+  // ── XUẤT DANH SÁCH NGƯỜI CHƠI RA FILE .TXT ──
+  // Xuất đúng danh sách ĐANG HIỂN THỊ trên bảng (DANH_SACH_HIEN_TAI) — nếu
+  // đang lọc theo ô tìm kiếm thì file cũng chỉ chứa đúng những người đó.
+  // Muốn xuất toàn bộ: bấm "🔄 Làm mới" (xoá ô tìm kiếm) rồi mới xuất.
+  // Lưu ý: danh sách tải về từ server đã giới hạn tối đa 2000 người/lượt
+  // (xem xuLyDanhSachNguoiChoiAdmin trong index.js) — nếu tổng số user vượt
+  // mốc này, dùng ô tìm kiếm để xuất theo từng nhóm nhỏ hơn.
+  function dongVanBanNguoiChoi(nd, thuTu) {
+    return (
+      `#${thuTu} — UID: ${nd.uid}\n` +
+      `  Tên: ${nd.ten || '(không có)'}\n` +
+      `  Username: ${nd.username ? '@' + nd.username : '(không có)'}\n` +
+      `  Coin hiện có: ${dinhDangSo(nd.coin)}\n` +
+      `  Tổng đã kiếm: ${dinhDangSo(nd.tong_da_kiem)}\n` +
+      `  Cấp đào: ${nd.cap_dao}/20 (${nd.dang_dao ? 'đang đào' : 'không đào'})\n` +
+      `  Vé quay: ${dinhDangSo(nd.ve_quay)}\n` +
+      `  Người giới thiệu (UID): ${nd.gioi_thieu_boi || '(không có)'}\n` +
+      `  Tham gia lúc: ${nd.ngay_tham_gia || '(không rõ)'}\n`
+    );
+  }
+
+  function xuatDanhSachTxt() {
+    if (!DANH_SACH_HIEN_TAI.length) {
+      window.alert('Chưa có dữ liệu người chơi nào để xuất — tải lại danh sách trước.');
+      return;
+    }
+
+    const baygio = new Date();
+    const thoiGianXuat = baygio.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+    const tuKhoaDangLoc = document.getElementById('input-tim-kiem').value.trim();
+
+    const dongDau =
+      `DANH SÁCH NGƯỜI CHƠI — VUA CÀY TIỀN\n` +
+      `Xuất lúc: ${thoiGianXuat}\n` +
+      `Tổng số trong file: ${DANH_SACH_HIEN_TAI.length}${tuKhoaDangLoc ? ` (đang lọc theo: "${tuKhoaDangLoc}")` : ''}\n` +
+      `${'='.repeat(48)}\n\n`;
+
+    const noiDung = dongDau + DANH_SACH_HIEN_TAI.map((nd, idx) => dongVanBanNguoiChoi(nd, idx + 1)).join('\n');
+
+    // Thêm BOM (\ufeff) để Notepad/Excel trên Windows nhận đúng UTF-8, hiển
+    // thị chữ tiếng Việt có dấu không bị lỗi font khi mở file.
+    const blob = new Blob(['\ufeff' + noiDung], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+
+    const ngayFile = baygio.toISOString().slice(0, 10); // YYYY-MM-DD
+    const gioFile = baygio.toTimeString().slice(0, 8).replace(/:/g, '-'); // HH-MM-SS
+    const tenFile = `nguoi-choi_${ngayFile}_${gioFile}.txt`;
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = tenFile;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  document.getElementById('btn-xuat-txt').addEventListener('click', xuatDanhSachTxt);
 
   document.getElementById('btn-chay-lenh').addEventListener('click', () => {
     const lenh = document.getElementById('input-lenh').value.trim();

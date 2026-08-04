@@ -216,13 +216,15 @@ const TIEN_TO_USER = "user:";
 const TIEN_TO_QC_SO_LAN_NGAY = "qc-so-lan-ngay:";
 const QC_GIOI_HAN_NGAY = 10;
 const TIEN_TO_QC_LAN_CUOI = "qc-lan-cuoi:"; // mốc thời gian lần xem quảng cáo gần nhất — chặn spam
-const QC_CHO_TOI_THIEU_MS = 5 * 60 * 1000; // phải chờ tối thiểu 5 phút giữa 2 lần xem quảng cáo
+const QC_CHO_TOI_THIEU_MS = 15 * 60 * 1000; // phải chờ tối thiểu 15 phút giữa 2 lần xem quảng cáo
 const TIEN_TO_ADSGRAM_SO_LAN_NGAY = "adsgram-so-lan-ngay:"; // số lần được cộng thưởng Adsgram hôm nay
 const ADSGRAM_GIOI_HAN_NGAY = 10;
 const TIEN_TO_ADSGRAM_LAN_CUOI = "adsgram-lan-cuoi:"; // mốc thời gian lần cộng thưởng Adsgram gần nhất — chặn callback dồn dập
-const ADSGRAM_CHO_TOI_THIEU_MS = 5 * 60 * 1000; // phải chờ tối thiểu 5 phút giữa 2 lần được cộng thưởng Adsgram
+const ADSGRAM_CHO_TOI_THIEU_MS = 15 * 60 * 1000; // phải chờ tối thiểu 15 phút giữa 2 lần được cộng thưởng Adsgram
 const TIEN_TO_TAI_KHOAN_NHAN = "tai-khoan-nhan:";
 const TIEN_TO_BAN_BE = "ban-be:"; // ban-be:{uid_nguoi_moi} — JSON array các bạn đã mời qua link ref_
+const TIEN_TO_LICH_SU_QUAY = "lich-su-quay:"; // lich-su-quay:{uid} — JSON array các lượt quay vòng quay may mắn gần nhất
+const SO_LUOT_LICH_SU_QUAY_LUU = 15; // chỉ giữ 15 lượt gần nhất/user, mới nhất lên đầu
 const SO_NGAY_DOI_TAI_KHOAN = 20; // chỉ cho đổi tài khoản nhận tiền 20 ngày / 1 lần
 const TIEN_TO_GIAO_DICH_RUT = "giao-dich-rut:"; // giao-dich-rut:{uid}:{id} — lịch sử + trạng thái duyệt
 const TIEN_TO_CHO_DUYET_RUT = "cho-duyet-rut:"; // cho-duyet-rut:{uid}:{id} — index riêng các giao dịch CHƯA xử lý, để web admin quét nhanh không phải duyệt toàn bộ lịch sử
@@ -238,7 +240,7 @@ const RUT_TOI_DA_TUAN = 5000000; // coin / tuần (~50.000đ)
 const TIEN_TO_LINK4M_SO_LAN_NGAY = "link4m-so-lan-ngay:"; // số lần hoàn thành nhiệm vụ link4m hôm nay
 const LINK4M_GIOI_HAN_NGAY = 2; // tăng từ 2 lên 3 lần/ngày
 const TIEN_TO_LINK4M_LAN_CUOI = "link4m-lan-cuoi:"; // mốc thời gian hoàn thành nhiệm vụ link4m gần nhất — chặn vượt liên tục
-const LINK4M_CHO_TOI_THIEU_MS = 5 * 60 * 1000; // phải chờ tối thiểu 5 phút giữa 2 lần vượt link
+const LINK4M_CHO_TOI_THIEU_MS = 0; // ĐÃ BỎ cooldown giữa 2 lần vượt link — chỉ còn giới hạn LINK4M_GIOI_HAN_NGAY lượt/ngày
 const KEY_CACHE_BANG_XEP_HANG = "cache-bang-xep-hang"; // JSON { kiem_xu, cap_nhat_luc } — làm mới mỗi 10 phút qua Cron Trigger
 const KEY_MUA_GIAI = "mua-giai-bxh-hien-tai"; // JSON { bat_dau, ket_thuc } — mùa giải BXH hiện tại, tự mở mùa mới khi hết hạn
 const MUA_GIAI_SO_NGAY = 7; // độ dài 1 mùa giải BXH (ngày)
@@ -381,7 +383,7 @@ async function taoGifcodeTuDong(env) {
 // sẽ được credit phần coin phát sinh kể từ lần poll trước). Tốc độ đào cơ
 // bản 500 coin/giờ, tăng 10%/cấp theo hệ thống cấp độ (tối đa cấp 20).
 // ==================================================
-const COIN_DAO_MOI_GIO = 300; // coin/giờ ở cấp 1 (chưa cộng bonus)
+const COIN_DAO_MOI_GIO = 250; // coin/giờ ở cấp 1 (chưa cộng bonus)
 const THOI_GIAN_DAO_MS = 4 * 60 * 60 * 1000; // 1 phiên đào tối đa 4 giờ liên tục
 // "Người chơi gánh hộ 1 phần": client tự nội suy hiển thị coin tăng mượt mỗi
 // giây (xem index.html — daoUocTinhTimer), nên server KHÔNG cần chốt sổ
@@ -434,6 +436,42 @@ const SHOP_VAT_PHAM = {
     gia: BAO_VE_CHUOI_GIA,
   },
 };
+
+// ==================================================
+// 🎡 VÒNG QUAY MAY MẮN — tab "Làm thêm". Người chơi tiêu 1 "vé quay"
+// (nguoiDung.veQuay) mỗi lần quay, random có trọng số 1 trong các ô thưởng
+// coin bên dưới. Vé quay được TẶNG (không bán) — cứ hoàn thành đủ
+// LINK4M_GIOI_HAN_NGAY (2) lượt "Nhiệm vụ thêm — Vượt link" trong ngày là
+// được +1 vé, xem chỗ cộng trong xuLyXacNhanNhiemVu() bên dưới.
+// ==================================================
+// 10 ô: ô 1-7 và ô 10 (8 ô) cộng lại chiếm 80% tỷ lệ trúng, ô 8-9 (2 ô,
+// phần thưởng lớn) cộng lại chiếm 20% — trongSo không hiển thị ra frontend
+// nên tỷ lệ thật không lộ cho người chơi.
+const CAU_HINH_VONG_QUAY = [
+  { coin: 100, trongSo: 10 }, // ô 1
+  { coin: 200, trongSo: 10 }, // ô 2
+  { coin: 300, trongSo: 10 }, // ô 3
+  { coin: 500, trongSo: 10 }, // ô 4
+  { coin: 700, trongSo: 10 }, // ô 5
+  { coin: 900, trongSo: 10 }, // ô 6
+  { coin: 1000, trongSo: 10 }, // ô 7
+  { coin: 5000, trongSo: 10 }, // ô 8 — nhóm 20%
+  { coin: 10000, trongSo: 10 }, // ô 9 — nhóm 20%
+  { coin: 0, trongSo: 10, nhan: "Chúc may mắn" }, // ô 10
+];
+
+// Random 1 chỉ số trong CAU_HINH_VONG_QUAY theo trọng số (trongSo càng cao
+// càng dễ trúng) — trả về index (0-based), khớp thứ tự hiển thị trên
+// vòng quay phía frontend để animation dừng đúng ô đã trúng.
+function quayNgauNhienChiSo(cauHinh) {
+  const tongTrongSo = cauHinh.reduce((s, o) => s + o.trongSo, 0);
+  let r = Math.random() * tongTrongSo;
+  for (let i = 0; i < cauHinh.length; i++) {
+    r -= cauHinh[i].trongSo;
+    if (r <= 0) return i;
+  }
+  return cauHinh.length - 1;
+}
 
 // XP cần để lên tiếp 1 cấp, tính từ cấp hiện tại: cấp 1→2 cần 500, cấp 2→3
 // cần 1.000, cấp 3→4 cần 1.500, v.v. (mỗi cấp sau tăng thêm 500 XP).
@@ -551,6 +589,7 @@ function thongTinDaoDeTra(nguoiDung) {
     bat_dau_luc: dangDao ? dao.batDauLuc : null,
     ket_thuc_luc: dangDao ? dao.ketThucLuc : null,
     boost_dao: thongTinBoostDaoDeTra(nguoiDung),
+    ve_quay: nguoiDung.veQuay || 0, // số vé quay hiện có — hiển thị ở balo cạnh coin trên header
   };
 }
 
@@ -2112,17 +2151,8 @@ async function xuLyTaoNhiemVu(env, url, goc) {
     return Response.json({ thanh_cong: false, loi: "da_vuot_hom_nay" });
   }
 
-  // Chặn vượt liên tục — phải cách lần hoàn thành trước tối thiểu
-  // LINK4M_CHO_TOI_THIEU_MS (5 phút), tương tự cơ chế chặn spam quảng cáo.
-  const lanCuoiXong = Number((await env.USERS.get(TIEN_TO_LINK4M_LAN_CUOI + uid)) || 0);
-  const daTroiTuLanCuoi = Date.now() - lanCuoiXong;
-  if (lanCuoiXong && daTroiTuLanCuoi < LINK4M_CHO_TOI_THIEU_MS) {
-    return Response.json({
-      thanh_cong: false,
-      loi: "cho_qua_nhanh",
-      cho_con_lai_giay: Math.ceil((LINK4M_CHO_TOI_THIEU_MS - daTroiTuLanCuoi) / 1000),
-    });
-  }
+  // (ĐÃ BỎ cooldown giữa 2 lần vượt link — chỉ còn chặn bởi
+  // LINK4M_GIOI_HAN_NGAY lượt/ngày ở trên.)
 
   // Còn nhiệm vụ đang chờ, chưa hoàn thành, chưa hết hạn → trả lại ĐÚNG
   // link cũ, không tạo mới. Đây là cơ chế giữ link khi thoát app rồi mở
@@ -2237,7 +2267,7 @@ async function xuLyXacNhanQuangCao(env, url) {
   await env.USERS.put(key, String(soLanMoi));
   await env.USERS.put(keyLanCuoi, String(now));
 
-  const soCoinCong = Number(env.THUONG_COIN_QUANG_CAO || 5000); // nếu đã đặt biến môi trường THUONG_COIN_QUANG_CAO trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
+  const soCoinCong = Number(env.THUONG_COIN_QUANG_CAO || 4500); // nếu đã đặt biến môi trường THUONG_COIN_QUANG_CAO trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
   const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, tongDaKiem: 0 };
   nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
   congCoin(nguoiDung, soCoinCong);
@@ -2290,7 +2320,7 @@ async function xuLyAdsgramCallback(env, url) {
   await env.USERS.put(key, String(soLanMoi));
   await env.USERS.put(keyLanCuoi, String(now));
 
-  const soCoinCong = Number(env.THUONG_COIN_ADSGRAM || 5000); // nếu đã đặt biến môi trường THUONG_COIN_ADSGRAM trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
+  const soCoinCong = Number(env.THUONG_COIN_ADSGRAM || 4500); // nếu đã đặt biến môi trường THUONG_COIN_ADSGRAM trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
   const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, tongDaKiem: 0 };
   nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
   congCoin(nguoiDung, soCoinCong);
@@ -2505,6 +2535,104 @@ async function xuLyShopMua(env, url) {
     ma,
     boost_dao: thongTinBoostDaoDeTra(nguoiDung),
     bao_ve_chuoi_so_luong: nguoiDung.baoVeChuoiSoLuong || 0,
+  });
+}
+
+// ==================================================
+// 💼 TAB "LÀM THÊM" — gộp thông tin cho cả 4 ô: (1) nút điều hướng sang
+// Nhiệm vụ chỉ cần link tĩnh nên không cần API riêng, (2) vòng quay may
+// mắn (số vé quay + cấu hình phần thưởng), (3) trạng thái "Nhiệm vụ thêm —
+// Vượt link" (đã tách khỏi tab Nhiệm vụ), (4) trạng thái Shop (boost đào,
+// bảo vệ chuỗi). Gộp vào 1 endpoint để tab mở lên chỉ cần 1 lượt gọi.
+// ==================================================
+async function xuLyLamThemThongTin(env, url) {
+  const uid = url.searchParams.get("uid");
+  if (!uid) return Response.json({ thanh_cong: false, loi: "thieu_uid" }, { status: 400 });
+
+  const homNay = ngayVnHomNay();
+  const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0 };
+
+  const soLanLink4mDaXong = Number((await env.USERS.get(TIEN_TO_LINK4M_SO_LAN_NGAY + uid + ":" + homNay)) || 0);
+  const link4mLanCuoi = Number((await env.USERS.get(TIEN_TO_LINK4M_LAN_CUOI + uid)) || 0);
+  const lichSuQuay = await layLichSuQuay(env, uid);
+
+  return Response.json({
+    thanh_cong: true,
+    coin: nguoiDung.coin || 0,
+    ve_quay: nguoiDung.veQuay || 0,
+    danh_sach_phan_thuong: CAU_HINH_VONG_QUAY,
+    lich_su_quay: lichSuQuay,
+    // Trạng thái "Nhiệm vụ thêm — Vượt link" (Link4M) — để ô 3 hiển thị
+    // đúng số lượt còn lại / cooldown ngay khi vừa mở tab, không cần chờ
+    // vòng lặp poll 45-60s sau đó.
+    so_lan_link4m_da_xong: soLanLink4mDaXong,
+    link4m_gioi_han_ngay: LINK4M_GIOI_HAN_NGAY,
+    link4m_lan_cuoi: link4mLanCuoi,
+    link4m_cho_toi_thieu_giay: LINK4M_CHO_TOI_THIEU_MS / 1000,
+    // Trạng thái Shop (ô 4)
+    vat_pham: Object.values(SHOP_VAT_PHAM),
+    boost_dao: thongTinBoostDaoDeTra(nguoiDung),
+    bao_ve_chuoi_so_luong: nguoiDung.baoVeChuoiSoLuong || 0,
+    bao_ve_chuoi_toi_da: BAO_VE_CHUOI_TOI_DA,
+  });
+}
+
+// Lịch sử quay — mảng { chi_so, coin, nhan, luc }, mới nhất lên đầu, tối đa
+// SO_LUOT_LICH_SU_QUAY_LUU bản ghi/user. Dùng cho khối "Lịch sử quay" ngay
+// dưới vòng quay ở tab Làm thêm.
+async function layLichSuQuay(env, uid) {
+  const raw = await env.USERS.get(TIEN_TO_LICH_SU_QUAY + uid);
+  return raw ? JSON.parse(raw) : [];
+}
+
+async function themLichSuQuay(env, uid, banGhi) {
+  const danhSach = await layLichSuQuay(env, uid);
+  danhSach.unshift(banGhi);
+  await env.USERS.put(TIEN_TO_LICH_SU_QUAY + uid, JSON.stringify(danhSach.slice(0, SO_LUOT_LICH_SU_QUAY_LUU)));
+  return danhSach.slice(0, SO_LUOT_LICH_SU_QUAY_LUU);
+}
+
+// Quay 1 lượt vòng quay may mắn — tiêu 1 vé quay (nguoiDung.veQuay), random
+// có trọng số 1 ô thưởng trong CAU_HINH_VONG_QUAY, cộng thẳng coin vào ví.
+// Trả về chi_so_trung để frontend animate bánh xe dừng đúng ô đã trúng, và
+// lich_su_quay (đã cập nhật bản ghi mới nhất) để frontend hiển thị ngay,
+// không cần gọi thêm request nào khác.
+async function xuLyQuayThuong(env, url) {
+  const uid = url.searchParams.get("uid");
+  if (!uid) return Response.json({ thanh_cong: false, loi: "thieu_uid" }, { status: 400 });
+
+  const nguoiDung = await layNguoiDung(env, uid);
+  if (!nguoiDung) return Response.json({ thanh_cong: false, loi: "khong_tim_thay_nguoi_dung" });
+
+  const veHienCo = nguoiDung.veQuay || 0;
+  if (veHienCo <= 0) {
+    return Response.json({ thanh_cong: false, loi: "khong_du_ve_quay", ve_quay: veHienCo });
+  }
+
+  const chiSoTrung = quayNgauNhienChiSo(CAU_HINH_VONG_QUAY);
+  const phanThuong = CAU_HINH_VONG_QUAY[chiSoTrung];
+
+  nguoiDung.veQuay = veHienCo - 1;
+  nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + phanThuong.coin;
+  congCoin(nguoiDung, phanThuong.coin);
+  await luuNguoiDung(env, uid, nguoiDung);
+  await congHoaHongGioiThieu(env, uid, phanThuong.coin);
+
+  const lichSuMoi = await themLichSuQuay(env, uid, {
+    chi_so: chiSoTrung,
+    coin: phanThuong.coin,
+    nhan: phanThuong.nhan || null,
+    luc: Date.now(),
+  });
+
+  return Response.json({
+    thanh_cong: true,
+    chi_so_trung: chiSoTrung,
+    coin_cong: phanThuong.coin,
+    nhan_trung: phanThuong.nhan || null,
+    coin: nguoiDung.coin,
+    ve_quay: nguoiDung.veQuay,
+    lich_su_quay: lichSuMoi,
   });
 }
 
@@ -2804,6 +2932,17 @@ async function xuLyXacNhanNhiemVu(env, url) {
   nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
   congCoin(nguoiDung, soCoinCong);
   congXpDaoVaLenCap(nguoiDung, XP_MOI_LUOT_VUOT_LINK); // +15 XP đào/lượt vượt link
+
+  // 🎒 Cứ hoàn thành ĐỦ soLanMoi chẵn (mỗi 2 lượt/ngày, khớp đúng
+  // LINK4M_GIOI_HAN_NGAY hiện tại) thì tặng thêm 2 vé quay — dùng ở tab
+  // "Làm thêm" (ô Quay thưởng). soLanMoi % 2 === 0 nghĩa là user vừa hoàn
+  // thành lượt thứ 2, thứ 4, ... trong ngày.
+  let veQuayMoiNhan = false;
+  if (soLanMoi % 2 === 0) {
+    nguoiDung.veQuay = (nguoiDung.veQuay || 0) + 2;
+    veQuayMoiNhan = true;
+  }
+
   await congBxhMoiBanNeuDuDieuKien(env, uid, nguoiDung); // chỉ tính vào BXH Mời Bạn nếu vừa đạt Lv2 (KHÔNG cộng thêm coin)
   await luuNguoiDung(env, uid, nguoiDung);
   await congHoaHongGioiThieu(env, uid, soCoinCong);
@@ -2819,6 +2958,8 @@ async function xuLyXacNhanNhiemVu(env, url) {
     cho_toi_thieu_giay: LINK4M_CHO_TOI_THIEU_MS / 1000,
     cap_dao: nguoiDung.capDao || 1,
     xp_dao: nguoiDung.xpDao || 0,
+    ve_quay: nguoiDung.veQuay || 0,
+    ve_quay_moi_nhan: veQuayMoiNhan,
   });
 }
 
@@ -4430,6 +4571,10 @@ export default {
           return xuLyShopThongTin(env, url);
         case "/shop-mua":
           return xuLyShopMua(env, url);
+        case "/lam-them-thong-tin":
+          return xuLyLamThemThongTin(env, url);
+        case "/quay-thuong":
+          return xuLyQuayThuong(env, url);
         case "/bang-xep-hang":
           return xuLyBangXepHang(env, url, ctx);
         case "/thong-tin-vi":

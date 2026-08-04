@@ -1063,6 +1063,7 @@ const DANH_SACH_LENH_ADMIN = [
   { lenh: "/dsadmin", moTa: "Xem danh sách admin hiện tại" },
   { lenh: "/baotri [bat|tat]", moTa: "Bật/tắt chế độ bảo trì, hoặc xem trạng thái nếu không nhập tham số" },
   { lenh: "/tucam [tu_khoa]", moTa: "Thêm từ khóa cấm để bot tự động xóa tin chứa từ đó trong nhóm. /tucam ds xem danh sách, /tucam xoa [tu_khoa] để xóa" },
+  { lenh: "/tucam18 [tu_khoa]", moTa: "Thêm từ khóa 18+ để bot tự động xóa tin (kể cả chữ trong ảnh) — tự bắt được biến thể không dấu/chèn ký tự/teencode/lặp chữ. /tucam18 ds xem danh sách, /tucam18 xoa [tu_khoa] để xóa" },
   { lenh: "/mute [so_phut]", moTa: "Trả lời (reply) tin nhắn người cần mute, tắt quyền gửi tin trong nhóm X phút (mặc định 30)" },
   { lenh: "/unmute", moTa: "Trả lời (reply) tin nhắn người cần gỡ mute, hoặc /unmute [uid] — mở lại quyền gửi tin ngay, không cần chờ hết hạn" },
   { lenh: "/ban [so_phut]", moTa: "Trả lời (reply) tin nhắn người cần ban, cấm vào nhóm X phút (mặc định 30)" },
@@ -1462,6 +1463,77 @@ async function xuLyTuCam(env, message) {
   return telegramApi(env, "sendMessage", {
     chat_id: message.chat.id,
     text: `✅ Đã thêm từ khóa cấm: "${tuMoi}"\nTừ giờ tin nhắn trong nhóm chứa từ này (khớp nguyên từ) sẽ tự động bị xóa.`,
+  });
+}
+
+// /tucam18 [tu_khoa] — thêm từ khóa 18+ mới vào danh sách kiểm duyệt nội
+// dung nhạy cảm. KHÁC /tucam ở chỗ: so khớp qua chuanHoaChongNeLoc() (bỏ
+// dấu, gộp teencode số→chữ, xoá ký tự chèn xen, rút gọn lặp) rồi so
+// SUBSTRING — nên 1 từ khoá bắt được luôn các biến thể né lọc thường gặp
+// (không dấu, chèn dấu chấm/gạch dưới, teencode s3x/d4m, lặp ký tự) mà
+// không cần admin liệt kê từng biến thể riêng.
+// /tucam18 ds — liệt kê danh sách từ khoá 18+ hiện tại.
+// /tucam18 xoa [tu_khoa] — xóa 1 từ khoá khỏi danh sách.
+// Danh sách mặc định TRỐNG (env sạch tới khi admin tự cấu hình) — xem
+// giải thích ở KEY_TU_KHOA_18_TUY_CHINH.
+async function xuLyTuCam18(env, message) {
+  if (!(await laAdmin(env, message.from.id))) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "❌ Bạn không có quyền!" });
+  }
+
+  const phan = message.text.trim().split(/\s+/);
+  const hanhDongTho = (phan[1] || "").toLowerCase();
+
+  if (!phan[1]) {
+    return telegramApi(env, "sendMessage", {
+      chat_id: message.chat.id,
+      text:
+        "⚠️ Dùng:\n" +
+        "/tucam18 [tu_khoa] — thêm từ khóa 18+ mới (tự chịu được biến thể không dấu / chèn ký tự / teencode / lặp chữ)\n" +
+        "/tucam18 ds — xem danh sách từ khóa 18+ hiện tại\n" +
+        "/tucam18 xoa [tu_khoa] — xóa 1 từ khóa 18+ đã thêm",
+    });
+  }
+
+  if (hanhDongTho === "ds") {
+    const danhSach = await layTuKhoa18(env);
+    const text =
+      `🔞 TỪ KHOÁ 18+ ĐANG LỌC (${danhSach.length}):\n` +
+      (danhSach.length ? danhSach.map((t, i) => `${i + 1}. ${t}`).join("\n") : "(chưa cấu hình từ khoá nào — lớp lọc 18+ hiện KHÔNG chặn gì)");
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text });
+  }
+
+  if (hanhDongTho === "xoa") {
+    const tuXoa = phan.slice(2).join(" ").trim();
+    if (!tuXoa) {
+      return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "⚠️ Dùng: /tucam18 xoa [tu_khoa]" });
+    }
+    const danhSach = await layTuKhoa18(env);
+    const idx = danhSach.findIndex((t) => t.toLowerCase() === tuXoa.toLowerCase());
+    if (idx === -1) {
+      return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: `❌ Không tìm thấy "${tuXoa}" trong danh sách 18+.` });
+    }
+    danhSach.splice(idx, 1);
+    await luuTuKhoa18(env, danhSach);
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: `✅ Đã xóa từ khoá 18+: "${tuXoa}"` });
+  }
+
+  // Mặc định: THÊM MỚI — lấy nguyên phần còn lại tin nhắn sau /tucam18.
+  const tuMoi = phan.slice(1).join(" ").trim();
+
+  const danhSach = await layTuKhoa18(env);
+  if (danhSach.some((t) => t.toLowerCase() === tuMoi.toLowerCase())) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: `⚠️ Từ khoá "${tuMoi}" đã có trong danh sách 18+ rồi.` });
+  }
+
+  danhSach.push(tuMoi);
+  await luuTuKhoa18(env, danhSach);
+
+  return telegramApi(env, "sendMessage", {
+    chat_id: message.chat.id,
+    text:
+      `✅ Đã thêm từ khoá 18+: "${tuMoi}"\n` +
+      "Tin nhắn (kể cả chữ trong ảnh) chứa cụm này — hoặc biến thể không dấu / chèn ký tự / teencode / lặp chữ của nó — sẽ tự động bị xoá.",
   });
 }
 
@@ -1954,6 +2026,156 @@ async function coTuCamTrongTinNhan(env, message) {
   });
 }
 
+// ── LỌC NỘI DUNG 18+ (CHUẨN HOÁ CHỐNG NÉ LỌC) ──────────────────────────
+// Khác với DANH_SACH_TU_KHOA_CAM (khớp nguyên văn, không dấu-hoá), spammer/
+// người dùng né bộ lọc nội dung nhạy cảm bằng rất nhiều biến thể tiếng Việt:
+//   - Viết không dấu / gõ sai dấu: "sục" → "suc", "đụ" → "du"
+//   - Chèn ký tự đặc biệt hoặc khoảng trắng xen giữa: "s.e.x", "s_e x", "đ.ụ"
+//   - Teencode thay số cho chữ: "s3x", "d4m", "l0n" (0→o, 1→i, 3→e, 4→a, 5→s)
+//   - Lặp ký tự để nhấn/né: "sexxx", "diiit"
+// Hàm chuanHoaChongNeLoc() gộp cả 4 kiểu né lọc trên vào 1 bước chuẩn hoá
+// DUY NHẤT trước khi so khớp, để 1 từ khoá trong danh sách bắt được TẤT CẢ
+// biến thể cùng lúc mà không cần liệt kê từng biến thể riêng trong danh sách.
+//
+// Danh sách từ khoá 18+ KHÔNG được viết cứng trong code (khác với
+// DANH_SACH_TU_KHOA_CAM) — admin tự quản lý qua lệnh Telegram /tucam18 (và
+// tương đương trên web admin), lưu ở namespace ADMINS giống các danh sách
+// cấu hình khác trong file. Lý do tách khỏi /tucam: nội dung 18+ nhạy cảm
+// hơn nên cần a) danh sách trống mặc định (không cấu hình sẵn từ ngữ), b)
+// action riêng khi khớp (xem duyetVi18) để dễ audit/điều chỉnh độc lập với
+// bộ lọc bio/spam thông thường.
+const KEY_TU_KHOA_18_TUY_CHINH = "tu-khoa-18-tuy-chinh"; // JSON array từ khoá 18+ admin thêm qua /tucam18
+
+async function layTuKhoa18(env) {
+  const raw = await env.ADMINS.get(KEY_TU_KHOA_18_TUY_CHINH);
+  return raw ? JSON.parse(raw) : [];
+}
+
+async function luuTuKhoa18(env, danhSach) {
+  await env.ADMINS.put(KEY_TU_KHOA_18_TUY_CHINH, JSON.stringify(danhSach));
+}
+
+// Bảng thay thế teencode số→chữ phổ biến khi né lọc tiếng Việt/tiếng Anh.
+// Chỉ áp dụng SAU khi đã bỏ dấu tiếng Việt, nên không đụng tới số thật
+// trong câu (vd giá tiền) vì hàm này chỉ dùng cho bản sao ĐÃ chuẩn hoá
+// riêng để so khớp, không thay thế văn bản gốc hiển thị cho người dùng.
+const BANG_TEENCODE_SO_SANG_CHU = { 0: "o", 1: "i", 3: "e", 4: "a", 5: "s", 7: "t", 8: "b" };
+
+// Chuẩn hoá 1 chuỗi để so khớp từ khoá 18+, chịu được các kiểu né lọc nêu
+// trên: bỏ dấu tiếng Việt → hạ thường → quy đổi teencode số→chữ → xoá mọi
+// ký tự phân tách (khoảng trắng, dấu câu, ký tự đặc biệt) chèn xen giữa
+// các chữ cái → rút gọn chuỗi ký tự lặp liên tiếp (>=3 lần) về còn 2 lần
+// (đủ để diệt kiểu né "sexxx", "diiit" mà không làm hỏng từ có lặp tự
+// nhiên như "xuất").
+function chuanHoaChongNeLoc(chuoi) {
+  let s = (chuoi || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // bỏ dấu thanh (dùng chung Unicode combining marks)
+    .replace(/đ/g, "d");
+
+  s = s.replace(/[0-9]/g, (c) => BANG_TEENCODE_SO_SANG_CHU[c] || c);
+  s = s.replace(/[^a-z]/g, ""); // xoá khoảng trắng/dấu câu/emoji chèn xen giữa chữ cái
+  s = s.replace(/(.)\1{2,}/g, "$1$1"); // rút gọn ký tự lặp >=3 về 2
+
+  return s;
+}
+
+// So khớp 1 chuỗi văn bản (đã chuẩn hoá) với danh sách từ khoá 18+ (cũng
+// chuẩn hoá) — hàm THUẦN, không tự đọc KV, dùng chung cho mọi nguồn văn bản
+// (tin nhắn, caption, emoji/tên bộ sticker, tên file GIF, chữ OCR từ ảnh).
+function khopTu18(vanBanGoc, danhSachTu18) {
+  if (!vanBanGoc) return false;
+  const vanBanChuan = chuanHoaChongNeLoc(vanBanGoc);
+  if (!vanBanChuan) return false;
+  return danhSachTu18.some((tu) => {
+    const tuChuan = chuanHoaChongNeLoc(tu);
+    return tuChuan.length > 0 && vanBanChuan.includes(tuChuan);
+  });
+}
+
+// true nếu tin nhắn (text/caption) chứa ÍT NHẤT 1 từ khoá 18+ sau khi ĐÃ
+// chuẩn hoá cả từ khoá lẫn văn bản qua chuanHoaChongNeLoc() — dùng khớp
+// SUBSTRING (không khớp nguyên từ như coTuCamTrongTinNhan) vì sau bước xoá
+// ký tự phân tách, ranh giới từ đã mất, nên so khớp theo cụm ký tự liền
+// nhau là cách duy nhất còn bắt được biến thể chèn ký tự lạ.
+async function coNoiDung18TrongTinNhan(env, message) {
+  const vanBanGoc = message.text || message.caption || "";
+  if (!vanBanGoc) return false;
+
+  const danhSachTu18 = await layTuKhoa18(env);
+  if (danhSachTu18.length === 0) return false; // chưa cấu hình từ khoá nào — bỏ qua, không chặn oan
+
+  return khopTu18(vanBanGoc, danhSachTu18);
+}
+
+// OCR 1 file_id bất kỳ (ảnh, sticker tĩnh, thumbnail của GIF...) qua
+// trichVanBanTuAnh() rồi so khớp với danh sách từ khoá 18+ — gộp lại thành
+// 1 hàm dùng chung cho mọi loại media, thay vì lặp lại logic OCR+so khớp ở
+// từng nơi gọi riêng lẻ.
+async function coNoiDung18QuaOcrFileId(env, fileId) {
+  const danhSachTu18 = await layTuKhoa18(env);
+  if (danhSachTu18.length === 0) return false;
+
+  const vanBanTrichDuoc = await trichVanBanTuAnh(env, fileId);
+  if (!vanBanTrichDuoc) return false;
+
+  return khopTu18(vanBanTrichDuoc, danhSachTu18);
+}
+
+// Bản dùng cho chữ trong ẢNH thường (photo) — dùng độ phân giải cao nhất
+// Telegram trả về (size cuối cùng trong mảng) để OCR chính xác hơn.
+async function anhCoNoiDung18TrongTinNhan(env, message) {
+  if (!message.photo || !message.photo.length) return false;
+  const anhDoPhanGiaiCaoNhat = message.photo[message.photo.length - 1];
+  return coNoiDung18QuaOcrFileId(env, anhDoPhanGiaiCaoNhat.file_id);
+}
+
+// Bản dùng cho STICKER — 2 lớp kiểm tra:
+//   1) Text: emoji gắn với sticker + tên bộ sticker (set_name) — soi được
+//      cả sticker do người dùng tự đặt tên bộ theo từ 18+.
+//   2) OCR: CHỈ áp dụng cho sticker TĨNH (định dạng webp, is_animated=false
+//      và is_video=false) — vì đây là ảnh raster đọc được bằng model
+//      vision. Sticker động (.tgs, Lottie) hoặc sticker video (.webm)
+//      KHÔNG phải ảnh tĩnh nên bỏ qua bước OCR, tránh gọi Workers AI vô ích
+//      (model vision không đọc được các định dạng này).
+async function stickerCoNoiDung18TrongTinNhan(env, message) {
+  const sticker = message.sticker;
+  if (!sticker) return false;
+
+  const danhSachTu18 = await layTuKhoa18(env);
+  if (danhSachTu18.length === 0) return false;
+
+  const moTaSticker = `${sticker.emoji || ""} ${sticker.set_name || ""}`.trim();
+  if (khopTu18(moTaSticker, danhSachTu18)) return true;
+
+  if (!sticker.is_animated && !sticker.is_video && sticker.file_id) {
+    return coNoiDung18QuaOcrFileId(env, sticker.file_id);
+  }
+  return false;
+}
+
+// Bản dùng cho ANIMATION (GIF) — 2 lớp kiểm tra:
+//   1) Text: tên file GIF gốc (file_name) — vd file quảng cáo lỡ giữ
+//      nguyên tên file nhạy cảm lúc tải lên.
+//   2) OCR: bản thân GIF là video ngắn nên KHÔNG OCR trực tiếp được, nhưng
+//      Telegram luôn kèm 1 ẢNH THUMBNAIL (jpg) đại diện cho GIF đó — dùng
+//      đúng ảnh này để đọc chữ, giống hệt cách xử lý ảnh thường.
+async function animationCoNoiDung18TrongTinNhan(env, message) {
+  const animation = message.animation;
+  if (!animation) return false;
+
+  const danhSachTu18 = await layTuKhoa18(env);
+  if (danhSachTu18.length === 0) return false;
+
+  if (khopTu18(animation.file_name || "", danhSachTu18)) return true;
+
+  if (animation.thumbnail && animation.thumbnail.file_id) {
+    return coNoiDung18QuaOcrFileId(env, animation.thumbnail.file_id);
+  }
+  return false;
+}
+
 // ── LỌC THEO CHỮ TRONG ẢNH ─────────────────────────────────────────────
 // Spammer né được cả bộ lọc link lẫn bộ lọc từ khoá cấm bằng cách nhét chữ
 // vào ẢNH thay vì gõ trực tiếp (banner quảng cáo, ảnh chụp màn hình có
@@ -2056,9 +2278,14 @@ function laGuiAnDanhBoiNhom(message) {
 
 // Điều kiện tổng: CHỈ lọc trong nhóm/siêu nhóm (không áp dụng chat riêng
 // với bot), bỏ qua admin và tin gửi ẩn danh thay mặt nhóm. Xoá nếu tin
-// chứa link lạ, HOẶC chứa từ khoá cấm cố định (bio / tiểu sử / trang cá
-// nhân / profile). (Lớp AI phát hiện lôi kéo xem bio đã bị GỠ BỎ hoàn
-// toàn — không còn gọi Cloudflare Workers AI hay Anthropic API ở đây nữa.)
+// chứa link lạ, từ khoá cấm (bio/spam), HOẶC nội dung 18+ — lớp 18+ quét
+// CẢ text/caption, ẢNH (OCR), STICKER (emoji + tên bộ, cộng OCR nếu là
+// sticker tĩnh webp) và ANIMATION/GIF (tên file, cộng OCR ảnh thumbnail).
+// Ghi chú giới hạn: sticker ĐỘNG (.tgs Lottie) và sticker VIDEO (.webm)
+// không OCR được vì không phải ảnh raster; custom emoji Premium (icon do
+// user tự upload, gắn qua entity "custom_emoji") cũng chưa được quét vì
+// cần thêm 1 lượt gọi getCustomEmojiStickers/user mới lấy được file để
+// OCR — có thể bổ sung sau nếu cần.
 async function canXoaViLinkLa(env, message) {
   if (loaiChat(message) !== "👥 NHÓM") return false;
   if (laGuiAnDanhBoiNhom(message)) return false;
@@ -2068,6 +2295,10 @@ async function canXoaViLinkLa(env, message) {
   if (coLinkLaTrongTinNhan(env, message)) return true;
   if (await coTuCamTrongTinNhan(env, message)) return true;
   if (await anhCoTuCamTrongTinNhan(env, message)) return true;
+  if (await coNoiDung18TrongTinNhan(env, message)) return true; // text/caption
+  if (await anhCoNoiDung18TrongTinNhan(env, message)) return true; // ảnh (OCR)
+  if (await stickerCoNoiDung18TrongTinNhan(env, message)) return true; // sticker (emoji/tên bộ + OCR nếu tĩnh)
+  if (await animationCoNoiDung18TrongTinNhan(env, message)) return true; // GIF (tên file + OCR thumbnail)
 
   return false;
 }
@@ -2151,6 +2382,8 @@ async function xuLyUpdate(env, update) {
         return xuLyBaoTri(env, message);
       case "/tucam":
         return xuLyTuCam(env, message);
+      case "/tucam18":
+        return xuLyTuCam18(env, message);
       case "/taogifcode":
         return xuLyTaoGifcode(env, message);
       case "/checkcode":
@@ -4356,6 +4589,57 @@ async function xuLyLenhAdminWeb(env, request) {
           text: `✅ Đã thêm từ khóa cấm: "${tuMoi}"\nTừ giờ tin nhắn trong nhóm chứa từ này (khớp nguyên từ) sẽ tự động bị xóa.`,
         });
       }
+      case "/tucam18": {
+        // Cú pháp giống hệt lệnh Telegram: /tucam18 [tu_khoa] | /tucam18 ds | /tucam18 xoa [tu_khoa]
+        const hanhDongTho = (phan[1] || "").toLowerCase();
+
+        if (!phan[1]) {
+          return Response.json({
+            thanh_cong: false,
+            text:
+              "⚠️ Dùng:\n" +
+              "/tucam18 [tu_khoa] — thêm từ khóa 18+ mới (tự bắt biến thể không dấu/chèn ký tự/teencode/lặp chữ)\n" +
+              "/tucam18 ds — xem danh sách từ khóa 18+ hiện tại\n" +
+              "/tucam18 xoa [tu_khoa] — xóa 1 từ khóa 18+ đã thêm",
+          });
+        }
+
+        if (hanhDongTho === "ds") {
+          const danhSach = await layTuKhoa18(env);
+          const text =
+            `🔞 TỪ KHOÁ 18+ ĐANG LỌC (${danhSach.length}):\n` +
+            (danhSach.length ? danhSach.map((t, i) => `${i + 1}. ${t}`).join("\n") : "(chưa cấu hình từ khoá nào)");
+          return Response.json({ thanh_cong: true, text });
+        }
+
+        if (hanhDongTho === "xoa") {
+          const tuXoa = phan.slice(2).join(" ").trim();
+          if (!tuXoa) {
+            return Response.json({ thanh_cong: false, text: "⚠️ Dùng: /tucam18 xoa [tu_khoa]" });
+          }
+          const danhSach = await layTuKhoa18(env);
+          const idx = danhSach.findIndex((t) => t.toLowerCase() === tuXoa.toLowerCase());
+          if (idx === -1) {
+            return Response.json({ thanh_cong: false, text: `❌ Không tìm thấy "${tuXoa}" trong danh sách 18+.` });
+          }
+          danhSach.splice(idx, 1);
+          await luuTuKhoa18(env, danhSach);
+          return Response.json({ thanh_cong: true, text: `✅ Đã xóa từ khoá 18+: "${tuXoa}"` });
+        }
+
+        const tuMoi = phan.slice(1).join(" ").trim();
+        const danhSach = await layTuKhoa18(env);
+        if (danhSach.some((t) => t.toLowerCase() === tuMoi.toLowerCase())) {
+          return Response.json({ thanh_cong: false, text: `⚠️ Từ khoá "${tuMoi}" đã có trong danh sách 18+ rồi.` });
+        }
+        danhSach.push(tuMoi);
+        await luuTuKhoa18(env, danhSach);
+
+        return Response.json({
+          thanh_cong: true,
+          text: `✅ Đã thêm từ khoá 18+: "${tuMoi}"\nTin nhắn (kể cả chữ trong ảnh) chứa cụm này hoặc biến thể né lọc của nó sẽ tự động bị xoá.`,
+        });
+      }
       case "/taogifcode": {
         // Cú pháp giống hệt lệnh Telegram: /taogifcode [so_coin hoặc min-max] [code] [so_luong] [veN] [loi_nhan]
         // veN (VD "ve5") TÙY CHỌN — tặng kèm N vé quay mỗi lượt nhập mã.
@@ -4523,6 +4807,7 @@ async function xuLyLenhAdminWeb(env, request) {
           "/checknv — thống kê nhiệm vụ theo từng ngày (7 ngày gần nhất)\n" +
           "/baotri [bat|tat] — bật/tắt/xem chế độ bảo trì\n" +
           "/tucam [tu_khoa] — thêm từ khóa cấm để bot tự xóa tin trong nhóm. /tucam ds xem danh sách, /tucam xoa [tu_khoa] để xóa\n" +
+          "/tucam18 [tu_khoa] — thêm từ khóa 18+ để bot tự xóa tin (kể cả chữ trong ảnh), tự bắt biến thể không dấu/chèn ký tự/teencode/lặp chữ. /tucam18 ds, /tucam18 xoa [tu_khoa]\n" +
           "/mute [uid] [so_phut] — tắt quyền gửi tin của 1 UID trong nhóm (mặc định 30 phút)\n" +
           "/unmute [uid] — gỡ mute sớm cho 1 UID, không cần chờ hết hạn\n" +
           "/ban [uid] [so_phut] — cấm 1 UID vào nhóm (mặc định 30 phút)\n" +

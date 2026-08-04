@@ -3935,6 +3935,7 @@ async function xuLyDanhSachNguoiChoiAdmin(env, request, url) {
       tong_da_kiem: nd.tongDaKiem || 0,
       cap_dao: nd.capDao || 1,
       xp_dao: nd.xpDao || 0,
+      ve_quay: nd.veQuay || 0,
       dang_dao: !!(nd.dao && nd.dao.dangDao),
       ngay_tham_gia: nd.ngay_tham_gia || "",
       gioi_thieu_boi: nd.gioiThieuBoi || null,
@@ -3995,6 +3996,11 @@ async function xuLySuaNguoiChoiAdmin(env, request) {
     if (!soNguyenKhongAmHopLe(v)) return Response.json({ thanh_cong: false, loi: "xp_dao_khong_hop_le" });
     nguoiDung.xpDao = v;
   }
+  if (body.ve_quay !== undefined) {
+    const v = Number(body.ve_quay);
+    if (!soNguyenKhongAmHopLe(v)) return Response.json({ thanh_cong: false, loi: "ve_quay_khong_hop_le" });
+    nguoiDung.veQuay = v;
+  }
   if (body.ten !== undefined) {
     nguoiDung.ten = String(body.ten).slice(0, 100);
   }
@@ -4015,6 +4021,7 @@ async function xuLySuaNguoiChoiAdmin(env, request) {
       tong_da_kiem: nguoiDung.tongDaKiem || 0,
       cap_dao: nguoiDung.capDao || 1,
       xp_dao: nguoiDung.xpDao || 0,
+      ve_quay: nguoiDung.veQuay || 0,
     },
   });
 }

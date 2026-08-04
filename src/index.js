@@ -317,6 +317,8 @@ function xayDungTinGifcode(giftcode, loiNhan) {
 
   const tieuDe = (loiNhan && loiNhan.trim()) || "🎁 GIFT CODE NGẪU NHIÊN!";
 
+  const dongVeQuay = giftcode.veQuayThuong > 0 ? `\n🎫 Kèm theo: +${giftcode.veQuayThuong.toLocaleString("vi-VN")} vé quay` : "";
+
   return (
     `${tieuDe}\n\n` +
     "✨ Cách nhận:\n" +
@@ -324,7 +326,7 @@ function xayDungTinGifcode(giftcode, loiNhan) {
     '2️⃣ Kéo xuống khối "🎁 Nhập Gift Code"\n' +
     "3️⃣ Bấm vào mã bên dưới để copy, rồi dán vào ô nhập mã\n\n" +
     `🎟️ Mã: \`${giftcode.code}\`\n` +
-    `🪙 Thưởng: ${dongThuong}\n` +
+    `🪙 Thưởng: ${dongThuong}${dongVeQuay}\n` +
     `👥 Giới hạn: ${giftcode.soLuongToiDa.toLocaleString("vi-VN")} người nhanh tay nhất\n\n` +
     "⚠️ Mỗi tài khoản chỉ nhập được 1 lần, hết lượt là hết — nhanh tay kẻo lỡ!\n\n" +
     "💸 Cày coin, đổi thưởng ngay hôm nay tại Vua Cày Tiền 💸"
@@ -444,20 +446,22 @@ const SHOP_VAT_PHAM = {
 // LINK4M_GIOI_HAN_NGAY (2) lượt "Nhiệm vụ thêm — Vượt link" trong ngày là
 // được +1 vé, xem chỗ cộng trong xuLyXacNhanNhiemVu() bên dưới.
 // ==================================================
-// 10 ô: ô 1-7 và ô 10 (8 ô) cộng lại chiếm 80% tỷ lệ trúng, ô 8-9 (2 ô,
-// phần thưởng lớn) cộng lại chiếm 20% — trongSo không hiển thị ra frontend
-// nên tỷ lệ thật không lộ cho người chơi.
+// 10 ô, tổng trọng số = 100 (dễ đọc = %):
+//   - Ô "Chúc may mắn"          → trongSo 50  → 50%
+//   - 7 ô coin 100-1000         → tổng 40     → 40% (chia không đều cho lẻ)
+//   - 2 ô coin 5000/10000       → tổng 10     → 10%
+// trongSo không hiển thị ra frontend nên tỷ lệ thật không lộ cho người chơi.
 const CAU_HINH_VONG_QUAY = [
-  { coin: 100, trongSo: 10 }, // ô 1
-  { coin: 200, trongSo: 10 }, // ô 2
-  { coin: 300, trongSo: 10 }, // ô 3
-  { coin: 500, trongSo: 10 }, // ô 4
-  { coin: 700, trongSo: 10 }, // ô 5
-  { coin: 900, trongSo: 10 }, // ô 6
-  { coin: 1000, trongSo: 10 }, // ô 7
-  { coin: 5000, trongSo: 10 }, // ô 8 — nhóm 20%
-  { coin: 10000, trongSo: 10 }, // ô 9 — nhóm 20%
-  { coin: 0, trongSo: 10, nhan: "Chúc may mắn" }, // ô 10
+  { coin: 100, trongSo: 6 }, // ô 1 — nhóm 40%
+  { coin: 200, trongSo: 6 }, // ô 2 — nhóm 40%
+  { coin: 300, trongSo: 6 }, // ô 3 — nhóm 40%
+  { coin: 500, trongSo: 6 }, // ô 4 — nhóm 40%
+  { coin: 700, trongSo: 6 }, // ô 5 — nhóm 40%
+  { coin: 900, trongSo: 5 }, // ô 6 — nhóm 40%
+  { coin: 1000, trongSo: 5 }, // ô 7 — nhóm 40%
+  { coin: 5000, trongSo: 5 }, // ô 8 — nhóm 10%
+  { coin: 10000, trongSo: 5 }, // ô 9 — nhóm 10%
+  { coin: 0, trongSo: 50, nhan: "Chúc may mắn" }, // ô 10 — 50%
 ];
 
 // Random 1 chỉ số trong CAU_HINH_VONG_QUAY theo trọng số (trongSo càng cao
@@ -1063,7 +1067,7 @@ const DANH_SACH_LENH_ADMIN = [
   { lenh: "/unmute", moTa: "Trả lời (reply) tin nhắn người cần gỡ mute, hoặc /unmute [uid] — mở lại quyền gửi tin ngay, không cần chờ hết hạn" },
   { lenh: "/ban [so_phut]", moTa: "Trả lời (reply) tin nhắn người cần ban, cấm vào nhóm X phút (mặc định 30)" },
   { lenh: "/unban", moTa: "Trả lời (reply) tin nhắn người cần gỡ ban, hoặc /unban [uid] — cho vào lại nhóm ngay qua link mời" },
-  { lenh: "/taogifcode [coin hoặc min-max] [code] [so_luot] [loi_nhan]", moTa: "Tạo gift code mới, tự thông báo vào nhóm. loi_nhan tùy chọn — không nhập thì mặc định \"🎁 GIFT CODE NGẪU NHIÊN!\"" },
+  { lenh: "/taogifcode [coin hoặc min-max] [code] [so_luot] [veN] [loi_nhan]", moTa: "Tạo gift code mới, tự thông báo vào nhóm. veN (VD ve5) tuỳ chọn — tặng kèm N vé quay/lượt nhập. loi_nhan tùy chọn — không nhập thì mặc định \"🎁 GIFT CODE NGẪU NHIÊN!\"" },
   { lenh: "/checkcode", moTa: "Xem danh sách các gift code đã tạo" },
   { lenh: "/checkcodesl [code]", moTa: "Xem chi tiết + số người đã nhập 1 gift code" },
   { lenh: "/gui", moTa: "Trả lời 1 tin nhắn kèm lệnh này để broadcast tới toàn bộ user" },
@@ -1475,24 +1479,29 @@ async function xuLyTaoGifcode(env, message) {
   }
 
   const vanBan = message.text.trim();
-  // 3 tham số đầu không chứa khoảng trắng; phần còn lại (nếu có) — kể cả
-  // khoảng trắng bên trong — được gom nguyên vẹn làm loi_nhan.
-  const khop = vanBan.match(/^\S+\s+(\S+)\s+(\S+)\s+(\S+)(?:\s+([\s\S]+))?$/);
+  // 3 tham số đầu không chứa khoảng trắng; tiếp theo có thể có 1 tham số
+  // TÙY CHỌN dạng "veN" (VD "ve5") để tặng kèm N vé quay cho mỗi lượt nhập
+  // mã — không bắt buộc, giữ tương thích ngược với cú pháp cũ. Phần còn
+  // lại (nếu có) — kể cả khoảng trắng bên trong — được gom nguyên vẹn làm
+  // loi_nhan.
+  const khop = vanBan.match(/^\S+\s+(\S+)\s+(\S+)\s+(\S+)(?:\s+(ve\d+))?(?:\s+([\s\S]+))?$/i);
   if (!khop) {
     return telegramApi(env, "sendMessage", {
       chat_id: message.chat.id,
       text:
-        "⚠️ Dùng: /taogifcode [so_coin hoặc min-max] [code] [so_luong_duoc_nhap] [loi_nhan]\n" +
+        "⚠️ Dùng: /taogifcode [so_coin hoặc min-max] [code] [so_luong_duoc_nhap] [veN (tuỳ chọn)] [loi_nhan]\n" +
         "VD số cố định: /taogifcode 5000 TET2026 100\n" +
         "VD khoảng random: /taogifcode 4000-5000 TET2026 100\n" +
-        "VD kèm lời nhắn riêng: /taogifcode 4000-5000 TET2026 100 🧧 GIFT CODE TẾT 2026!",
+        "VD kèm vé quay: /taogifcode 4000-5000 TET2026 100 ve5\n" +
+        "VD kèm vé quay + lời nhắn riêng: /taogifcode 4000-5000 TET2026 100 ve5 🧧 GIFT CODE TẾT 2026!",
     });
   }
 
   const khoangCoin = phanTichKhoangCoin(khop[1]);
   const maGoc = khop[2];
   const soLuong = Number(khop[3]);
-  const loiNhan = khop[4] ? khop[4].trim() : null;
+  const veQuayThuong = khop[4] ? Number(khop[4].slice(2)) : 0; // "ve5" → 5
+  const loiNhan = khop[5] ? khop[5].trim() : null;
 
   if (!khoangCoin) {
     return telegramApi(env, "sendMessage", {
@@ -1521,6 +1530,7 @@ async function xuLyTaoGifcode(env, message) {
     code: ma,
     coinMin: khoangCoin.min,
     coinMax: khoangCoin.max,
+    veQuayThuong, // số vé quay tặng kèm mỗi lượt nhập mã (0 nếu không dùng tham số veN)
     soLuongToiDa: soLuong,
     soLuongDaDung: 0,
     taoLuc: Date.now(),
@@ -1533,10 +1543,11 @@ async function xuLyTaoGifcode(env, message) {
     khoangCoin.min === khoangCoin.max
       ? `${khoangCoin.min.toLocaleString("vi-VN")} coin/lượt`
       : `${khoangCoin.min.toLocaleString("vi-VN")} - ${khoangCoin.max.toLocaleString("vi-VN")} coin/lượt (ngẫu nhiên)`;
+  const dongVeQuayXacNhan = veQuayThuong > 0 ? `\n🎫 Vé quay/lượt: ${veQuayThuong.toLocaleString("vi-VN")}` : "";
 
   await telegramApi(env, "sendMessage", {
     chat_id: message.chat.id,
-    text: `✅ Đã tạo gift code!\n\n🎁 Mã: \`${ma}\`\n🪙 Thưởng: ${dongThuong}\n👥 Số lượt tối đa: ${soLuong.toLocaleString("vi-VN")}\n\n📣 Đang gửi thông báo tới nhóm...`,
+    text: `✅ Đã tạo gift code!\n\n🎁 Mã: \`${ma}\`\n🪙 Thưởng: ${dongThuong}${dongVeQuayXacNhan}\n👥 Số lượt tối đa: ${soLuong.toLocaleString("vi-VN")}\n\n📣 Đang gửi thông báo tới nhóm...`,
     parse_mode: "Markdown",
   });
 
@@ -1943,6 +1954,99 @@ async function coTuCamTrongTinNhan(env, message) {
   });
 }
 
+// ── LỌC THEO CHỮ TRONG ẢNH ─────────────────────────────────────────────
+// Spammer né được cả bộ lọc link lẫn bộ lọc từ khoá cấm bằng cách nhét chữ
+// vào ẢNH thay vì gõ trực tiếp (banner quảng cáo, ảnh chụp màn hình có
+// chữ...). Lớp này trích chữ hiển thị trong ảnh bằng Cloudflare Workers AI
+// (model vision, đọc được cả tiếng Việt có dấu ở mức tương đối), rồi ÁP LẠI
+// đúng logic khớp NGUYÊN TỪ đã dùng cho text (layToanBoTuKhoaCam +
+// escapeRegex) lên phần chữ trích được — không có danh sách từ khoá riêng
+// cho ảnh, dùng chung 1 nguồn với /tucam để admin chỉ cần quản lý 1 chỗ.
+//
+// YÊU CẦU: binding "AI" trong wrangler.toml, ví dụ:
+//   [ai]
+//   binding = "AI"
+// Nếu chưa cấu hình (env.AI không tồn tại), hàm tự bỏ qua — KHÔNG chặn oan
+// tin nhắn, giống cách các lớp lọc khác trong file xử lý khi thiếu cấu hình.
+//
+// LƯU Ý CHI PHÍ: mỗi ảnh gửi trong nhóm sẽ tốn 1 lượt gọi Workers AI (có
+// giới hạn theo gói Cloudflare) — chỉ chạy cho tin có ảnh, không chạy cho
+// mọi tin nhắn, và chỉ trong nhóm/siêu nhóm (không áp dụng chat riêng).
+const MODEL_AI_DOC_ANH = "@cf/meta/llama-3.2-11b-vision-instruct";
+
+// Lấy đường dẫn file thật trên server Telegram từ file_id, qua API getFile.
+async function layDuongDanFileTelegram(env, fileId) {
+  try {
+    const kq = await telegramApi(env, "getFile", { file_id: fileId });
+    if (!kq || !kq.ok || !kq.result || !kq.result.file_path) return null;
+    return kq.result.file_path;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Tải nguyên byte ảnh từ server Telegram — dùng chung BOT_TOKEN mà
+// telegramApi() đang dùng nội bộ. Nếu tên biến môi trường thực tế trong
+// telegram.js khác "BOT_TOKEN", đổi lại cho khớp.
+async function taiByteFileTelegram(env, filePath) {
+  try {
+    const url = `https://api.telegram.org/file/bot${env.BOT_TOKEN}/${filePath}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!res.ok) return null;
+    return new Uint8Array(await res.arrayBuffer());
+  } catch (e) {
+    return null;
+  }
+}
+
+// Trích văn bản hiển thị trong 1 ảnh (file_id) bằng Workers AI. Trả về
+// chuỗi rỗng nếu không đọc được / chưa cấu hình / ảnh không có chữ —
+// KHÔNG throw, để không làm hỏng cả luồng kiểm duyệt vì 1 lượt lỗi mạng.
+async function trichVanBanTuAnh(env, fileId) {
+  if (!env.AI) return ""; // chưa bật Workers AI binding — bỏ qua, không chặn oan
+  try {
+    const filePath = await layDuongDanFileTelegram(env, fileId);
+    if (!filePath) return "";
+    const bytes = await taiByteFileTelegram(env, filePath);
+    if (!bytes || !bytes.length) return "";
+
+    const ketQua = await env.AI.run(MODEL_AI_DOC_ANH, {
+      image: Array.from(bytes),
+      prompt:
+        "Liệt kê CHÍNH XÁC toàn bộ chữ và số nhìn thấy được trong ảnh này, kể cả chữ nhỏ, chữ mờ, " +
+        "chữ trong logo hay watermark. Giữ nguyên ngôn ngữ gốc, không dịch, không thêm giải thích. " +
+        "Nếu ảnh không có chữ nào, trả lời đúng 1 từ: KHONGCOCHU.",
+      max_tokens: 512,
+    });
+
+    const vanBan = (ketQua && (ketQua.response || ketQua.description)) || "";
+    return /^\s*khongcochu\s*$/i.test(vanBan) ? "" : vanBan;
+  } catch (e) {
+    console.error("Lỗi trích văn bản từ ảnh (Workers AI):", e);
+    return "";
+  }
+}
+
+// true nếu ẢNH trong tin nhắn (nếu có) chứa chữ khớp NGUYÊN TỪ với 1 trong
+// các từ khoá cấm (cố định + tùy chỉnh qua /tucam) — dùng chung hàm khớp từ
+// với coTuCamTrongTinNhan() để không lệch logic giữa lọc text và lọc ảnh.
+async function anhCoTuCamTrongTinNhan(env, message) {
+  if (!message.photo || !message.photo.length) return false;
+
+  // Telegram trả nhiều size cùng 1 ảnh, size cuối cùng là lớn nhất — đọc
+  // chữ chính xác hơn ở ảnh độ phân giải cao.
+  const anhDoPhanGiaiCaoNhat = message.photo[message.photo.length - 1];
+  const vanBanTrichDuoc = await trichVanBanTuAnh(env, anhDoPhanGiaiCaoNhat.file_id);
+  if (!vanBanTrichDuoc) return false;
+
+  const vanBanChuan = vanBanTrichDuoc.toLowerCase();
+  const danhSachTuCam = await layToanBoTuKhoaCam(env);
+  return danhSachTuCam.some((tu) => {
+    const re = new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRegex(tu.toLowerCase())}(?![\\p{L}\\p{N}_])`, "u");
+    return re.test(vanBanChuan);
+  });
+}
+
 // Tin gửi "ẩn danh" THAY MẶT nhóm/kênh (tính năng dành cho quản trị viên)
 // — Bot API trả sender_chat trùng với chat.id trong trường hợp này. Coi
 // như admin, KHÔNG lọc, để không tự khoá tay quản trị viên nhóm.
@@ -1963,6 +2067,7 @@ async function canXoaViLinkLa(env, message) {
 
   if (coLinkLaTrongTinNhan(env, message)) return true;
   if (await coTuCamTrongTinNhan(env, message)) return true;
+  if (await anhCoTuCamTrongTinNhan(env, message)) return true;
 
   return false;
 }
@@ -1974,7 +2079,7 @@ async function xuLyXoaTinNhanLinkLa(env, message) {
   try {
     await telegramApi(env, "sendMessage", {
       chat_id: env.NHOM_LOG,
-      text: `🚫 Tự động xoá tin nhắn chứa link lạ hoặc từ khoá cấm trong nhóm "${message.chat.title || message.chat.id}"`,
+      text: `🚫 Tự động xoá tin nhắn chứa link lạ, từ khoá cấm (text hoặc trong ảnh) trong nhóm "${message.chat.title || message.chat.id}"`,
     });
     await telegramApi(env, "forwardMessage", {
       chat_id: env.NHOM_LOG,
@@ -2994,10 +3099,12 @@ async function xuLyNhapGifcode(env, url) {
   // Random số coin nhận được trong khoảng [coinMin, coinMax] của mã — nếu
   // admin tạo mã với số cố định thì coinMin === coinMax, luôn ra đúng số đó.
   const soCoinNhanDuoc = ngauNhienCoinTrongKhoang(giftcode.coinMin, giftcode.coinMax);
+  const soVeQuayNhanDuoc = giftcode.veQuayThuong || 0; // 0 nếu mã không tặng vé quay (gift code cũ hoặc admin không dùng tham số veN)
 
   const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, tongDaKiem: 0 };
   nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinNhanDuoc;
   congCoin(nguoiDung, soCoinNhanDuoc);
+  if (soVeQuayNhanDuoc > 0) nguoiDung.veQuay = (nguoiDung.veQuay || 0) + soVeQuayNhanDuoc;
   await luuNguoiDung(env, uid, nguoiDung);
   await congHoaHongGioiThieu(env, uid, soCoinNhanDuoc);
 
@@ -3005,6 +3112,8 @@ async function xuLyNhapGifcode(env, url) {
     thanh_cong: true,
     coin: nguoiDung.coin,
     coin_cong: soCoinNhanDuoc,
+    ve_quay: nguoiDung.veQuay || 0,
+    ve_quay_cong: soVeQuayNhanDuoc,
     ma,
   });
 }
@@ -4248,25 +4357,28 @@ async function xuLyLenhAdminWeb(env, request) {
         });
       }
       case "/taogifcode": {
-        // Cú pháp giống hệt lệnh Telegram: /taogifcode [so_coin hoặc min-max] [code] [so_luong] [loi_nhan]
+        // Cú pháp giống hệt lệnh Telegram: /taogifcode [so_coin hoặc min-max] [code] [so_luong] [veN] [loi_nhan]
+        // veN (VD "ve5") TÙY CHỌN — tặng kèm N vé quay mỗi lượt nhập mã.
         // Dùng `dong` (chuỗi GỐC, chưa lowercase) để giữ nguyên hoa/thường +
         // khoảng trắng của loi_nhan (tham số cuối, có thể chứa emoji/dấu cách).
-        const khop = dong.match(/^\S+\s+(\S+)\s+(\S+)\s+(\S+)(?:\s+([\s\S]+))?$/);
+        const khop = dong.match(/^\S+\s+(\S+)\s+(\S+)\s+(\S+)(?:\s+(ve\d+))?(?:\s+([\s\S]+))?$/i);
         if (!khop) {
           return Response.json({
             thanh_cong: false,
             text:
-              "⚠️ Dùng: /taogifcode [so_coin hoặc min-max] [code] [so_luong] [loi_nhan]\n" +
+              "⚠️ Dùng: /taogifcode [so_coin hoặc min-max] [code] [so_luong] [veN (tuỳ chọn)] [loi_nhan]\n" +
               "VD số cố định: /taogifcode 5000 TET2026 100\n" +
               "VD khoảng random: /taogifcode 4000-5000 TET2026 100\n" +
-              "VD kèm lời nhắn riêng: /taogifcode 4000-5000 TET2026 100 🧧 GIFT CODE TẾT 2026!",
+              "VD kèm vé quay: /taogifcode 4000-5000 TET2026 100 ve5\n" +
+              "VD kèm vé quay + lời nhắn riêng: /taogifcode 4000-5000 TET2026 100 ve5 🧧 GIFT CODE TẾT 2026!",
           });
         }
 
         const khoangCoin = phanTichKhoangCoin(khop[1]);
         const maGoc = khop[2];
         const soLuong = Number(khop[3]);
-        const loiNhan = khop[4] ? khop[4].trim() : null;
+        const veQuayThuong = khop[4] ? Number(khop[4].slice(2)) : 0;
+        const loiNhan = khop[5] ? khop[5].trim() : null;
 
         if (!khoangCoin) {
           return Response.json({ thanh_cong: false, text: "⚠️ Số coin không hợp lệ. Dùng 1 số dương (VD: 5000) hoặc 1 khoảng min-max (VD: 4000-5000)." });
@@ -4289,6 +4401,7 @@ async function xuLyLenhAdminWeb(env, request) {
           code: ma,
           coinMin: khoangCoin.min,
           coinMax: khoangCoin.max,
+          veQuayThuong,
           soLuongToiDa: soLuong,
           soLuongDaDung: 0,
           taoLuc: Date.now(),
@@ -4301,6 +4414,7 @@ async function xuLyLenhAdminWeb(env, request) {
           khoangCoin.min === khoangCoin.max
             ? `${khoangCoin.min.toLocaleString("vi-VN")} coin/lượt`
             : `${khoangCoin.min.toLocaleString("vi-VN")} - ${khoangCoin.max.toLocaleString("vi-VN")} coin/lượt (ngẫu nhiên)`;
+        const dongVeQuayXacNhanWeb = veQuayThuong > 0 ? `\n🎫 Vé quay/lượt: ${veQuayThuong.toLocaleString("vi-VN")}` : "";
 
         // Gửi thông báo vào NHÓM TRÒ CHUYỆN, giống hệt lệnh Telegram /taogifcode.
         let dongKetQuaGui = "⚠️ Chưa gửi được thông báo — chưa cấu hình biến môi trường NHOM_CHAT trên Worker.";
@@ -4323,7 +4437,7 @@ async function xuLyLenhAdminWeb(env, request) {
         const text =
           `✅ Đã tạo gift code!\n\n` +
           `🎁 Mã: ${ma}\n` +
-          `🪙 Thưởng: ${dongThuong}\n` +
+          `🪙 Thưởng: ${dongThuong}${dongVeQuayXacNhanWeb}\n` +
           `👥 Số lượt tối đa: ${soLuong.toLocaleString("vi-VN")}\n\n` +
           dongKetQuaGui;
         return Response.json({ thanh_cong: true, text });
@@ -4414,7 +4528,7 @@ async function xuLyLenhAdminWeb(env, request) {
           "/ban [uid] [so_phut] — cấm 1 UID vào nhóm (mặc định 30 phút)\n" +
           "/unban [uid] — gỡ ban sớm cho 1 UID, cho vào lại nhóm ngay qua link mời\n" +
           "/dsadmin — danh sách admin\n" +
-          "/taogifcode [coin hoặc min-max] [code] [so_luong] [loi_nhan] — tạo gift code mới, tự thông báo vào nhóm\n" +
+          "/taogifcode [coin hoặc min-max] [code] [so_luong] [veN] [loi_nhan] — tạo gift code mới, veN (VD ve5) tuỳ chọn tặng kèm vé quay, tự thông báo vào nhóm\n" +
           "/checkcode — danh sách gift code\n" +
           "/checkcodesl [code] — chi tiết 1 gift code\n" +
           "/xoagiftcodedayluot xacnhan — xóa các gift code đã hết lượt (giảm tải khi có hàng nghìn mã)";

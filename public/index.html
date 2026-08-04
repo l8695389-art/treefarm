@@ -797,10 +797,10 @@
         <!-- Khối 1b: Quảng cáo Adsgram -->
         <div class="card highlight">
           <div class="qc-row">
-            <div class="qc-badge" id="adsgram-badge">0/20</div>
+            <div class="qc-badge" id="adsgram-badge">0/10</div>
             <div class="qc-info">
               <div class="qc-title-row">🎥 Xem quảng cáo</div>
-              <div class="qc-reward-row"><span class="icon">🪙</span> +4500 Coin</div>
+              <div class="qc-reward-row"><span class="icon">🎒</span> +1 Vé quay</div>
             </div>
             <button id="btn-xem-adsgram" class="qc-nhan-btn" type="button">
               <span class="spinner"></span>
@@ -1032,6 +1032,7 @@
           <div class="qt-huong-dan">
             <div class="qt-huong-dan-title">📋 Cách nhận Vé Quay</div>
             <ul class="rule-list">
+              <li>Mỗi lượt xem <strong>Quảng cáo Adsgram</strong> hoàn thành (+1 vé)</li>
               <li>Hoàn thành đủ <strong>2 lượt</strong> "Nhiệm vụ thêm — Vượt link" trong ngày (+2 vé)</li>
               <li>Theo dõi Gift Code &amp; sự kiện đặc biệt từ admin</li>
             </ul>
@@ -2119,7 +2120,7 @@
       function capNhatUiAdsgram(soLanDaXem, gioiHan) {
         const conLai = Math.max(0, (gioiHan || 20) - (soLanDaXem || 0));
         adsgramHetLuotHomNay = conLai <= 0;
-        if (adsgramBadgeEl) adsgramBadgeEl.textContent = `${soLanDaXem || 0}/${gioiHan || 20}`;
+        if (adsgramBadgeEl) adsgramBadgeEl.textContent = `${soLanDaXem || 0}/${gioiHan || 10}`;
         if (adsgramHetLuotHomNay) {
           clearInterval(adsgramDemNguoc);
           btn.disabled = true;
@@ -2170,9 +2171,10 @@
               const tt = await layTrangThaiHienTai(uid);
               if (tt) {
                 hienThiCoin(tt.coin);
+                if (tt.ve_quay !== undefined) hienThiVeQuay(tt.ve_quay);
                 capNhatUiAdsgram(tt.so_lan_adsgram_da_xem, tt.adsgram_gioi_han_ngay);
                 if (!adsgramHetLuotHomNay) batDauDemNguoc(tt.adsgram_cho_toi_thieu_giay || 300);
-                successEl.textContent = '✅ Đã nhận thưởng +5000 coin!';
+                successEl.textContent = '✅ Đã nhận thưởng! 🎒 +1 vé quay';
               }
             }, 4000);
           })

@@ -1020,6 +1020,10 @@ const DANH_SACH_LENH_ADMIN = [
   { lenh: "/dsadmin", moTa: "Xem danh sách admin hiện tại" },
   { lenh: "/baotri [bat|tat]", moTa: "Bật/tắt chế độ bảo trì, hoặc xem trạng thái nếu không nhập tham số" },
   { lenh: "/tucam [tu_khoa]", moTa: "Thêm từ khóa cấm để bot tự động xóa tin chứa từ đó trong nhóm. /tucam ds xem danh sách, /tucam xoa [tu_khoa] để xóa" },
+  { lenh: "/mute [so_phut]", moTa: "Trả lời (reply) tin nhắn người cần mute, tắt quyền gửi tin trong nhóm X phút (mặc định 30)" },
+  { lenh: "/unmute", moTa: "Trả lời (reply) tin nhắn người cần gỡ mute, hoặc /unmute [uid] — mở lại quyền gửi tin ngay, không cần chờ hết hạn" },
+  { lenh: "/ban [so_phut]", moTa: "Trả lời (reply) tin nhắn người cần ban, cấm vào nhóm X phút (mặc định 30)" },
+  { lenh: "/unban", moTa: "Trả lời (reply) tin nhắn người cần gỡ ban, hoặc /unban [uid] — cho vào lại nhóm ngay qua link mời" },
   { lenh: "/taogifcode [coin hoặc min-max] [code] [so_luot] [loi_nhan]", moTa: "Tạo gift code mới, tự thông báo vào nhóm. loi_nhan tùy chọn — không nhập thì mặc định \"🎁 GIFT CODE NGẪU NHIÊN!\"" },
   { lenh: "/checkcode", moTa: "Xem danh sách các gift code đã tạo" },
   { lenh: "/checkcodesl [code]", moTa: "Xem chi tiết + số người đã nhập 1 gift code" },
@@ -1071,7 +1075,8 @@ async function xuLyLayId(env, message) {
 
 // /mute [phut] — reply tin nhắn người cần mute, tắt quyền gửi tin của họ
 // trong nhóm hiện tại trong X phút (mặc định 30). Dùng restrictChatMember —
-// Telegram tự khôi phục quyền khi hết hạn, không cần lệnh /unmute riêng.
+// Telegram tự khôi phục quyền khi hết hạn; dùng /unmute (xem bên dưới) nếu
+// cần gỡ SỚM hơn, trước khi hết hạn hoặc lỡ mute nhầm người.
 async function xuLyMute(env, message) {
   if (!(await laAdmin(env, message.from.id))) {
     return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "❌ Bạn không có quyền!" });
@@ -1090,7 +1095,12 @@ async function xuLyMute(env, message) {
     return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "⚠️ Số phút không hợp lệ. Dùng: /mute [so_phut] (mặc định 30)." });
   }
 
-  const untilDate = Math.floor(Date.now() / 1000) + phut * 60;
+  // Tối thiểu 31 giây — Telegram coi restrict dưới 30 giây kể từ hiện tại
+  // là VĨNH VIỄN thay vì tạm thời (xem docs restrictChatMember). Input đã
+  // bị chặn ở phut<=0 phía trên nên hiện tại luôn ≥60s rồi, giữ Math.max ở
+  // đây chỉ để phòng thủ nếu sau này đổi validate, đồng bộ cách làm với
+  // xuLyBan() bên dưới.
+  const untilDate = Math.floor(Date.now() / 1000) + Math.max(phut * 60, 31);
   const kq = await telegramApi(env, "restrictChatMember", {
     chat_id: message.chat.id,
     user_id: reply.from.id,
@@ -1163,6 +1173,153 @@ async function xuLyBan(env, message) {
   return telegramApi(env, "sendMessage", {
     chat_id: message.chat.id,
     text: `🚫 Đã ban ${ten} (ID: ${reply.from.id}) trong ${phut} phút.\nCó thể vào lại (cần link mời) từ: ${new Date(untilDate * 1000).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`,
+  });
+}
+
+// ==================================================
+// 🔓 /unmute, /unban — gỡ SỚM trước khi hết hạn tự động (hoặc gỡ khi lỡ
+// mute/ban nhầm người), thay vì buộc phải chờ hết đúng số phút đã đặt lúc
+// /mute, /ban. Cả 2 lệnh chấp nhận HOẶC trả lời (reply) tin nhắn người cần
+// gỡ (giống /mute, /ban) HOẶC truyền thẳng UID làm tham số đầu tiên (vd
+// "/unban 123456789") — hữu ích nhất cho /unban, vì người vừa bị ban
+// thường không còn tin nhắn gần đây nào trong nhóm để admin reply tới.
+// ==================================================
+
+// Xác định UID + tên hiển thị của người cần gỡ mute/ban — ưu tiên tin nhắn
+// đang được reply (có tên thật từ Telegram); nếu không reply thì thử đọc
+// tham số đầu tiên như 1 UID số nguyên. Khi chỉ có UID trần (không reply),
+// tra thêm tên đã lưu trong dữ liệu app (layNguoiDung) để hiển thị đẹp hơn
+// — tra không ra vẫn dùng UID làm tên, không chặn thao tác vì lý do này.
+async function layMucTieuGoTru(env, message, phan) {
+  const reply = message.reply_to_message;
+  if (reply && reply.from) {
+    return { uid: reply.from.id, ten: reply.from.first_name || reply.from.username || String(reply.from.id) };
+  }
+
+  const uidTho = phan[1];
+  if (!uidTho || !/^\d+$/.test(uidTho)) return null;
+
+  const uid = Number(uidTho);
+  let ten = uidTho;
+  try {
+    const nd = await layNguoiDung(env, String(uid));
+    if (nd) ten = (nd.ten && nd.ten.trim()) || (nd.username ? "@" + nd.username : ten);
+  } catch (e) {
+    // không tra được tên trong dữ liệu app (hiếm) — vẫn dùng UID làm tên hiển thị
+  }
+  return { uid, ten };
+}
+
+// Quyền "mở toàn bộ" dùng làm DỰ PHÒNG cho /unmute khi không đọc được
+// quyền mặc định thật của nhóm (vd lỗi mạng gọi getChat) — set về true
+// đúng những field mà xuLyMute() đã đặt false, để gỡ sạch giới hạn đã áp.
+const QUYEN_MO_TOAN_BO_DU_PHONG = {
+  can_send_messages: true,
+  can_send_audios: true,
+  can_send_documents: true,
+  can_send_photos: true,
+  can_send_videos: true,
+  can_send_video_notes: true,
+  can_send_voice_notes: true,
+  can_send_polls: true,
+  can_send_other_messages: true,
+  can_add_web_page_previews: true,
+};
+
+// Đọc quyền MẶC ĐỊNH hiện tại của nhóm (permissions áp dụng cho thành viên
+// thường) qua getChat — /unmute khôi phục ĐÚNG về quyền này thay vì mở
+// toàn bộ, để không vô tình cấp dư quyền so với các thành viên khác (vd
+// nhóm đã tắt "Gửi bình chọn" cho tất cả thành viên thì gỡ mute cũng không
+// nên mở riêng quyền đó cho 1 người). Lỗi mạng/API → dùng quyền dự phòng.
+async function layQuyenMacDinhNhom(env, chatId) {
+  try {
+    const kq = await telegramApi(env, "getChat", { chat_id: chatId });
+    if (kq && kq.ok && kq.result && kq.result.permissions) {
+      return kq.result.permissions;
+    }
+  } catch (e) {
+    // rơi xuống dùng quyền dự phòng bên dưới
+  }
+  return QUYEN_MO_TOAN_BO_DU_PHONG;
+}
+
+// /unmute — reply tin nhắn người cần gỡ mute, HOẶC /unmute [uid].
+async function xuLyUnmute(env, message) {
+  if (!(await laAdmin(env, message.from.id))) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "❌ Bạn không có quyền!" });
+  }
+  if (loaiChat(message) !== "👥 NHÓM") {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "⚠️ Lệnh này chỉ dùng được trong nhóm." });
+  }
+
+  const phan = message.text.trim().split(/\s+/);
+  const mucTieu = await layMucTieuGoTru(env, message, phan);
+  if (!mucTieu) {
+    return telegramApi(env, "sendMessage", {
+      chat_id: message.chat.id,
+      text: "⚠️ Trả lời (reply) tin nhắn người cần gỡ mute, hoặc dùng /unmute [uid].",
+    });
+  }
+
+  const quyen = await layQuyenMacDinhNhom(env, message.chat.id);
+  const kq = await telegramApi(env, "restrictChatMember", {
+    chat_id: message.chat.id,
+    user_id: mucTieu.uid,
+    permissions: quyen,
+  });
+
+  if (!kq || !kq.ok) {
+    return telegramApi(env, "sendMessage", {
+      chat_id: message.chat.id,
+      text: `❌ Không gỡ mute được. Kiểm tra bot đã là admin nhóm kèm quyền "Restrict members" chưa.\n${kq && kq.description ? "Lỗi: " + kq.description : ""}`,
+    });
+  }
+
+  return telegramApi(env, "sendMessage", {
+    chat_id: message.chat.id,
+    text: `🔊 Đã gỡ mute cho ${mucTieu.ten} (ID: ${mucTieu.uid}). Có thể gửi tin nhắn bình thường trở lại ngay.`,
+  });
+}
+
+// /unban — reply tin nhắn người cần gỡ ban, HOẶC /unban [uid] (thường dùng
+// cách này hơn vì người bị ban hiếm khi còn tin nhắn để reply). Dùng
+// unbanChatMember với only_if_banned=true — BẮT BUỘC truyền tham số này:
+// thiếu nó, nếu lỡ gọi /unban cho 1 người ĐANG là thành viên bình thường
+// (chưa từng bị ban), Telegram sẽ hiểu thành lệnh "kick" và ĐUỔI LUÔN
+// người đó khỏi nhóm thay vì không làm gì cả — xem docs unbanChatMember.
+async function xuLyUnban(env, message) {
+  if (!(await laAdmin(env, message.from.id))) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "❌ Bạn không có quyền!" });
+  }
+  if (loaiChat(message) !== "👥 NHÓM") {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "⚠️ Lệnh này chỉ dùng được trong nhóm." });
+  }
+
+  const phan = message.text.trim().split(/\s+/);
+  const mucTieu = await layMucTieuGoTru(env, message, phan);
+  if (!mucTieu) {
+    return telegramApi(env, "sendMessage", {
+      chat_id: message.chat.id,
+      text: "⚠️ Trả lời (reply) tin nhắn người cần gỡ ban, hoặc dùng /unban [uid].",
+    });
+  }
+
+  const kq = await telegramApi(env, "unbanChatMember", {
+    chat_id: message.chat.id,
+    user_id: mucTieu.uid,
+    only_if_banned: true,
+  });
+
+  if (!kq || !kq.ok) {
+    return telegramApi(env, "sendMessage", {
+      chat_id: message.chat.id,
+      text: `❌ Không gỡ ban được. Kiểm tra bot đã là admin nhóm kèm quyền "Ban users" chưa.\n${kq && kq.description ? "Lỗi: " + kq.description : ""}`,
+    });
+  }
+
+  return telegramApi(env, "sendMessage", {
+    chat_id: message.chat.id,
+    text: `✅ Đã gỡ ban cho ${mucTieu.ten} (ID: ${mucTieu.uid}). Người này có thể vào lại nhóm qua link mời.`,
   });
 }
 
@@ -1860,8 +2017,12 @@ async function xuLyUpdate(env, update) {
         return xuLyGuiThongBao(env, message);
       case "/mute":
         return xuLyMute(env, message);
+      case "/unmute":
+        return xuLyUnmute(env, message);
       case "/ban":
         return xuLyBan(env, message);
+      case "/unban":
+        return xuLyUnban(env, message);
       default:
         return; // lệnh lạ, bỏ qua — giống bản Python
     }
@@ -3750,7 +3911,7 @@ async function xuLyLenhAdminWeb(env, request) {
   if (!env.NHOM_CHAT) {
     return Response.json({ thanh_cong: false, text: "⚠️ Chưa cấu hình biến môi trường NHOM_CHAT trên Worker." });
   }
-  const untilDate = Math.floor(Date.now() / 1000) + phut * 60;
+  const untilDate = Math.floor(Date.now() / 1000) + Math.max(phut * 60, 31);
   const kq = await telegramApi(env, "restrictChatMember", {
     chat_id: env.NHOM_CHAT,
     user_id: Number(uid),
@@ -3773,6 +3934,23 @@ async function xuLyLenhAdminWeb(env, request) {
   }
     return Response.json({ thanh_cong: true, text: `🔇 Đã mute UID ${uid} trong ${phut} phút (tới ${new Date(untilDate * 1000).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}).` });
     }
+    case "/unmute": {
+      const uid = phan[1];
+      if (!uid) return Response.json({ thanh_cong: false, text: "⚠️ Dùng: /unmute [uid]." });
+      if (!env.NHOM_CHAT) {
+        return Response.json({ thanh_cong: false, text: "⚠️ Chưa cấu hình biến môi trường NHOM_CHAT trên Worker." });
+      }
+      const quyen = await layQuyenMacDinhNhom(env, env.NHOM_CHAT);
+      const kq = await telegramApi(env, "restrictChatMember", {
+        chat_id: env.NHOM_CHAT,
+        user_id: Number(uid),
+        permissions: quyen,
+      });
+      if (!kq || !kq.ok) {
+        return Response.json({ thanh_cong: false, text: `❌ Không gỡ mute được. ${kq && kq.description ? kq.description : "Kiểm tra bot đã là admin nhóm, quyền Restrict members."}` });
+      }
+      return Response.json({ thanh_cong: true, text: `🔊 Đã gỡ mute cho UID ${uid}.` });
+    }
     case "/ban": {
       const uid = phan[1];
       const phut = phan[2] ? Number(phan[2]) : 30;
@@ -3781,14 +3959,30 @@ async function xuLyLenhAdminWeb(env, request) {
       return Response.json({ thanh_cong: false, text: "⚠️ Số phút không hợp lệ." });
       }
       if (!env.NHOM_CHAT) {
-      return Response.json({ thanh_cong: false, text: "⚠️ Chưa cấu hình biến môi     trường NHOM_CHAT trên Worker." });
+      return Response.json({ thanh_cong: false, text: "⚠️ Chưa cấu hình biến môi trường NHOM_CHAT trên Worker." });
       }
       const untilDate = Math.floor(Date.now() / 1000) + Math.max(phut * 60, 31);
       const kq = await telegramApi(env, "banChatMember", { chat_id: env.NHOM_CHAT, user_id: Number(uid), until_date: untilDate });
       if (!kq || !kq.ok) {
       return Response.json({ thanh_cong: false, text: `❌ Không ban được. ${kq && kq.description ? kq.description : "Kiểm tra bot đã là admin nhóm, quyền Ban users."}` });
       }
-      return Response.json({ thanh_cong: true, text: `🚫 Đã ban UID ${uid} trong ${phut} phút (tới ${new Date(untilDate * 1000).toLocaleString("vi-VN", { timeZone:       "Asia/Ho_Chi_Minh" })}).` });
+      return Response.json({ thanh_cong: true, text: `🚫 Đã ban UID ${uid} trong ${phut} phút (tới ${new Date(untilDate * 1000).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}).` });
+      }
+      case "/unban": {
+        const uid = phan[1];
+        if (!uid) return Response.json({ thanh_cong: false, text: "⚠️ Dùng: /unban [uid]." });
+        if (!env.NHOM_CHAT) {
+          return Response.json({ thanh_cong: false, text: "⚠️ Chưa cấu hình biến môi trường NHOM_CHAT trên Worker." });
+        }
+        const kq = await telegramApi(env, "unbanChatMember", {
+          chat_id: env.NHOM_CHAT,
+          user_id: Number(uid),
+          only_if_banned: true,
+        });
+        if (!kq || !kq.ok) {
+          return Response.json({ thanh_cong: false, text: `❌ Không gỡ ban được. ${kq && kq.description ? kq.description : "Kiểm tra bot đã là admin nhóm, quyền Ban users."}` });
+        }
+        return Response.json({ thanh_cong: true, text: `✅ Đã gỡ ban cho UID ${uid}.` });
       }
       case "/check": {
         const uid = phan[1];
@@ -4070,6 +4264,10 @@ async function xuLyLenhAdminWeb(env, request) {
           "/checknv — thống kê nhiệm vụ theo từng ngày (7 ngày gần nhất)\n" +
           "/baotri [bat|tat] — bật/tắt/xem chế độ bảo trì\n" +
           "/tucam [tu_khoa] — thêm từ khóa cấm để bot tự xóa tin trong nhóm. /tucam ds xem danh sách, /tucam xoa [tu_khoa] để xóa\n" +
+          "/mute [uid] [so_phut] — tắt quyền gửi tin của 1 UID trong nhóm (mặc định 30 phút)\n" +
+          "/unmute [uid] — gỡ mute sớm cho 1 UID, không cần chờ hết hạn\n" +
+          "/ban [uid] [so_phut] — cấm 1 UID vào nhóm (mặc định 30 phút)\n" +
+          "/unban [uid] — gỡ ban sớm cho 1 UID, cho vào lại nhóm ngay qua link mời\n" +
           "/dsadmin — danh sách admin\n" +
           "/taogifcode [coin hoặc min-max] [code] [so_luong] [loi_nhan] — tạo gift code mới, tự thông báo vào nhóm\n" +
           "/checkcode — danh sách gift code\n" +

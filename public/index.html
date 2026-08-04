@@ -176,6 +176,7 @@
     }
     .stat-pill.coin .stat-icon { background: radial-gradient(circle at 35% 30%, #FFE9A8, var(--gold)); box-shadow: 0 0 6px rgba(245,185,66,0.4); }
     .stat-pill .stat-icon svg { width: 12px; height: 12px; }
+    .stat-pill .stat-icon-emoji { font-size: 13px; line-height: 1; }
     .stat-pill .stat-value { font-size: 12.5px; font-weight: 700; color: var(--tg-text); white-space: nowrap; }
 
     /* Cards (shared) */
@@ -548,6 +549,47 @@
       display: flex; align-items: center; justify-content: center; font-size: 16px;
       background: rgba(34,158,217,0.1);
     }
+
+    /* ── TAB "LÀM THÊM" — 4 ô: Nhiệm vụ / Quay thưởng / Nhiệm vụ thêm / Shop ── */
+    .lam-them-o1 { display: flex; align-items: center; gap: 14px; padding: 18px; }
+    .lam-them-o1-icon {
+      flex-shrink: 0; width: 46px; height: 46px; border-radius: 50%;
+      border: 2.5px solid var(--tg-blue); background: rgba(34,158,217,0.08);
+      display: flex; align-items: center; justify-content: center; font-size: 20px;
+    }
+    .lam-them-section-label { font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--tg-muted); margin: 4px 2px 0; }
+
+    .wheel-wrap { display: flex; justify-content: center; margin: 6px 0 14px; }
+    .vong-quay { position: relative; width: 220px; height: 220px; flex-shrink: 0; }
+    .vong-quay-kim {
+      position: absolute; top: -8px; left: 50%; transform: translateX(-50%);
+      font-size: 24px; z-index: 5; filter: drop-shadow(0 3px 4px rgba(0,0,0,0.45)); color: var(--danger);
+    }
+    .vong-quay-dia {
+      width: 100%; height: 100%; border-radius: 50%;
+      border: 5px solid var(--tg-surface); outline: 2px solid var(--tg-border);
+      position: relative; overflow: hidden;
+      transition: transform 4.2s cubic-bezier(0.12, 0.83, 0.22, 1);
+      box-shadow: 0 0 30px rgba(0,0,0,0.35);
+    }
+    .vong-quay-lat {
+      position: absolute; width: 50%; height: 50%; top: 0; left: 50%;
+      transform-origin: 0% 100%;
+      display: flex; align-items: flex-start; justify-content: center;
+      padding-top: 16px; pointer-events: none;
+    }
+    .vong-quay-lat span {
+      display: inline-block; transform: rotate(90deg);
+      font-size: 11.5px; font-weight: 800; color: #1A1206; white-space: nowrap;
+      text-shadow: 0 1px 1px rgba(255,255,255,0.25);
+    }
+    .vong-quay-nhan {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 44px; height: 44px; border-radius: 50%;
+      background: var(--tg-surface); border: 2px solid var(--tg-blue);
+      display: flex; align-items: center; justify-content: center; font-size: 18px; z-index: 4;
+      box-shadow: 0 0 10px var(--tg-glow);
+    }
   </style>
 </head>
 <body>
@@ -629,6 +671,10 @@
           <span class="stat-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#F5B942"/><circle cx="12" cy="12" r="6.5" fill="none" stroke="#B87A1E" stroke-width="1.4"/></svg></span>
           <span class="stat-value" id="header-coin">0</span>
         </div>
+        <div class="stat-pill vequay" title="Vé quay — dùng ở tab Làm thêm">
+          <span class="stat-icon-emoji">🎒</span>
+          <span class="stat-value" id="header-ve-quay">0</span>
+        </div>
       </div>
     </header>
 
@@ -697,7 +743,7 @@
             <div class="qc-badge" id="qc-badge">0/20</div>
             <div class="qc-info">
               <div class="qc-title-row">🎬 Xem quảng cáo</div>
-              <div class="qc-reward-row"><span class="icon">🪙</span> +5000 Coin</div>
+              <div class="qc-reward-row"><span class="icon">🪙</span> +4500 Coin</div>
             </div>
             <button id="btn-xem-qc" class="qc-nhan-btn" type="button">
               <span class="spinner"></span>
@@ -714,7 +760,7 @@
             <div class="qc-badge" id="adsgram-badge">0/20</div>
             <div class="qc-info">
               <div class="qc-title-row">🎥 Xem quảng cáo</div>
-              <div class="qc-reward-row"><span class="icon">🪙</span> +5000 Coin</div>
+              <div class="qc-reward-row"><span class="icon">🪙</span> +4500 Coin</div>
             </div>
             <button id="btn-xem-adsgram" class="qc-nhan-btn" type="button">
               <span class="spinner"></span>
@@ -723,39 +769,6 @@
           </div>
           <div id="adsgram-error" class="error-text"></div>
           <div id="adsgram-success" class="success-text"></div>
-        </div>
-
-        <!-- Khối 2: Vượt link Link4M -->
-        <div class="card highlight">
-          <div class="task-title">🔗 Vượt link nhận thưởng</div>
-          <div class="task-desc">Vượt link xong, nhập mã 6 số hiện ở trang đích để nhận +10000 coin. Giới hạn 2 lần/ngày, cách nhau ít nhất 5 phút/lượt.</div>
-
-          <button id="btn-get-link" class="primary-btn" type="button">
-            <span class="spinner"></span>
-            <span class="btn-label">Nhận link rút gọn</span>
-          </button>
-
-          <div id="link-error" class="error-text"></div>
-          <div id="link-status" class="status-text"></div>
-          <div id="link-success" class="success-text"></div>
-
-          <div id="link-card" class="card highlight link-result" style="padding:16px;margin-top:14px;">
-            <div class="card-label">Link của bạn</div>
-            <div class="card-value mono" id="link-result-value">—</div>
-            <div class="link-actions">
-              <button id="btn-copy-link" class="secondary-btn" type="button">Sao chép</button>
-              <a id="btn-open-link" class="secondary-btn" href="#" target="_blank" rel="noopener">Mở link</a>
-            </div>
-          </div>
-
-          <div id="ma-card" class="card highlight" style="display:none;padding:16px;margin-top:14px;">
-            <div class="card-label">Sau khi vượt link xong, nhập mã 6 số hiện trên trang đích:</div>
-            <input id="ma-input" type="text" inputmode="numeric" maxlength="6" placeholder="000000" class="text-input mono" style="text-align:center;font-size:24px;letter-spacing:6px;" />
-            <button id="btn-xac-nhan-ma" class="primary-btn" type="button">
-              <span class="btn-label">Xác nhận hoàn thành</span>
-            </button>
-            <button id="btn-reset-ma" class="secondary-btn" type="button" style="width:100%;margin-top:10px;">🔄 Reset, lấy mã khác</button>
-          </div>
         </div>
 
         <!-- Khối 3: Gift Code -->
@@ -931,10 +944,88 @@
         </div>
       </section>
 
-      <!-- TAB 7: SHOP -->
-      <section id="tab-shop" class="tab-panel">
-        <div class="eyebrow">Cửa hàng</div>
+      <!-- TAB 7: LÀM THÊM (4 ô: Nhiệm vụ / Quay thưởng / Nhiệm vụ thêm / Shop) -->
+      <section id="tab-lam-them" class="tab-panel">
+        <div class="eyebrow">Làm thêm</div>
 
+        <!-- Ô 1: Nhiệm vụ (điều hướng sang tab Nhiệm vụ) -->
+        <div class="card highlight lam-them-o1">
+          <div class="lam-them-o1-icon">🎯</div>
+          <div style="flex:1;min-width:0;">
+            <div class="qc-title-row" style="margin-bottom:2px;">Nhiệm vụ hằng ngày</div>
+            <div class="task-desc" style="margin:0;">Điểm danh, xem quảng cáo, nhập gift code...</div>
+          </div>
+          <button id="btn-di-toi-nhiem-vu" class="secondary-btn" type="button" style="flex:0 0 auto;">Mở →</button>
+        </div>
+
+        <!-- Ô 2: Quay thưởng -->
+        <div class="lam-them-section-label">🎡 Quay thưởng</div>
+        <div class="card highlight" style="padding:20px 16px;text-align:center;">
+          <div class="task-title" style="justify-content:center;">Vòng quay may mắn</div>
+          <div class="task-desc">Mỗi vé quay dùng 1 lượt, ngẫu nhiên trúng coin ở 1 trong 10 ô.</div>
+
+          <div class="wheel-wrap">
+            <div class="vong-quay">
+              <div class="vong-quay-kim">▼</div>
+              <div id="vong-quay-dia" class="vong-quay-dia">
+                <div class="vong-quay-nhan">🎡</div>
+              </div>
+            </div>
+          </div>
+
+          <div id="quay-lich-su-wrap" style="text-align:left;margin-bottom:14px;">
+            <div class="card-label" style="margin-bottom:8px;">🕘 Lịch sử 15 lượt quay gần nhất</div>
+            <div id="quay-lich-su" style="display:flex;flex-direction:column;gap:6px;">
+              <div class="rank-loading">Chưa có lượt quay nào.</div>
+            </div>
+          </div>
+
+          <div class="balance-sub" style="margin-bottom:12px;">🎒 Vé quay hiện có: <strong id="lam-them-ve-quay">0</strong></div>
+
+          <button id="btn-quay-thuong" class="primary-btn" type="button" disabled>
+            <span class="spinner"></span>
+            <span class="btn-label">🎡 Quay ngay (1 vé)</span>
+          </button>
+          <div id="quay-thuong-error" class="error-text"></div>
+          <div id="quay-thuong-success" class="success-text"></div>
+        </div>
+
+        <!-- Ô 3: Nhiệm vụ thêm — Vượt link Link4M (đã tách khỏi tab Nhiệm vụ) -->
+        <div class="lam-them-section-label">🔗 Nhiệm vụ thêm</div>
+        <div class="card highlight">
+          <div class="task-title">🔗 Vượt link nhận thưởng</div>
+          <div class="task-desc">Vượt link xong, nhập mã 6 số hiện ở trang đích để nhận +10000 coin. Giới hạn 2 lần/ngày. Hoàn thành đủ 2 lượt trong ngày sẽ được tặng thêm 🎒 2 vé quay.</div>
+
+          <button id="btn-get-link" class="primary-btn" type="button">
+            <span class="spinner"></span>
+            <span class="btn-label">Nhận link rút gọn</span>
+          </button>
+
+          <div id="link-error" class="error-text"></div>
+          <div id="link-status" class="status-text"></div>
+          <div id="link-success" class="success-text"></div>
+
+          <div id="link-card" class="card highlight link-result" style="padding:16px;margin-top:14px;">
+            <div class="card-label">Link của bạn</div>
+            <div class="card-value mono" id="link-result-value">—</div>
+            <div class="link-actions">
+              <button id="btn-copy-link" class="secondary-btn" type="button">Sao chép</button>
+              <a id="btn-open-link" class="secondary-btn" href="#" target="_blank" rel="noopener">Mở link</a>
+            </div>
+          </div>
+
+          <div id="ma-card" class="card highlight" style="display:none;padding:16px;margin-top:14px;">
+            <div class="card-label">Sau khi vượt link xong, nhập mã 6 số hiện trên trang đích:</div>
+            <input id="ma-input" type="text" inputmode="numeric" maxlength="6" placeholder="000000" class="text-input mono" style="text-align:center;font-size:24px;letter-spacing:6px;" />
+            <button id="btn-xac-nhan-ma" class="primary-btn" type="button">
+              <span class="btn-label">Xác nhận hoàn thành</span>
+            </button>
+            <button id="btn-reset-ma" class="secondary-btn" type="button" style="width:100%;margin-top:10px;">🔄 Reset, lấy mã khác</button>
+          </div>
+        </div>
+
+        <!-- Ô 4: Shop -->
+        <div class="lam-them-section-label">🛒 Shop</div>
         <div class="card highlight" style="text-align:center;padding:18px;">
           <div class="card-label">Coin khả dụng</div>
           <div class="dao-status-coin" id="shop-coin" style="font-size:26px;">0</div>
@@ -991,9 +1082,9 @@
         <svg viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 5H5a3 3 0 0 0 3 5"/><path d="M16 5h3a3 3 0 0 1-3 5"/><path d="M12 13v3"/><path d="M9 20h6"/><path d="M10 16h4l.5 4h-5l.5-4z"/></svg>
         <span>BXH</span>
       </button>
-      <button class="tab-btn" data-tab="tab-shop" type="button">
-        <svg viewBox="0 0 24 24"><path d="M3 9l1.5-5h15L21 9"/><path d="M3 9h18v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9z"/><path d="M9 13a3 3 0 0 0 6 0"/></svg>
-        <span>Shop</span>
+      <button class="tab-btn" data-tab="tab-lam-them" type="button">
+        <svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 12h18"/></svg>
+        <span>Làm thêm</span>
       </button>
     </nav>
   </div>
@@ -1229,6 +1320,23 @@
       return await res.json();
     }
 
+    // Tab "Làm thêm" — gộp trạng thái 4 ô (vé quay + cấu hình vòng quay,
+    // trạng thái nhiệm vụ thêm Link4M, coin, trạng thái shop) trong 1 lượt gọi.
+    async function layThongTinLamThem(uid) {
+      const endpoint = `${LINK4M_CONFIG.linkGoc}/lam-them-thong-tin?uid=${encodeURIComponent(uid)}`;
+      const res = await fetch(endpoint);
+      if (!res.ok) return null;
+      return await res.json();
+    }
+
+    // Quay 1 lượt vòng quay may mắn — tốn 1 vé quay.
+    async function quayVongThuong(uid) {
+      const endpoint = `${LINK4M_CONFIG.linkGoc}/quay-thuong?uid=${encodeURIComponent(uid)}`;
+      const res = await fetch(endpoint);
+      if (!res.ok) return { thanh_cong: false, loi: 'network' };
+      return await res.json();
+    }
+
     // Tab Bạn bè — số lượng đã mời, link mời riêng theo uid, danh sách bạn bè.
     // Endpoint /thong-tin-ban-be cần được bổ sung phía Worker (index.js),
     // trả về { so_luong, danh_sach: [{ ten, tham_gia_luc }] }.
@@ -1268,8 +1376,8 @@
           await window.__lamMoiDiemDanh();
         } else if (tabDangMo.id === 'tab-trang-chu' && window.__lamMoiDao) {
           await window.__lamMoiDao();
-        } else if (tabDangMo.id === 'tab-shop' && window.__lamMoiShop) {
-          await window.__lamMoiShop();
+        } else if (tabDangMo.id === 'tab-lam-them' && window.__lamMoiLamThem) {
+          await window.__lamMoiLamThem();
         }
       } catch (err) {
         // lỗi mạng tạm thời — bỏ qua, vòng lặp sau sẽ tự thử lại
@@ -1292,6 +1400,21 @@
       if (el) el.textContent = text;
       const elHeader = document.getElementById('header-coin');
       if (elHeader) elHeader.textContent = text;
+    }
+
+    // Số vé quay — hiện ở balo trên header + số trong ô "Quay thưởng" (tab
+    // Làm thêm). Gọi bất cứ đâu API trả về field ve_quay (đào coin, hoàn
+    // thành nhiệm vụ thêm, quay thưởng...) để balo luôn đúng số thực tế.
+    function hienThiVeQuay(ve) {
+      const soVe = ve || 0;
+      const elHeader = document.getElementById('header-ve-quay');
+      if (elHeader) elHeader.textContent = soVe.toLocaleString('vi-VN');
+      const elTab = document.getElementById('lam-them-ve-quay');
+      if (elTab) elTab.textContent = soVe.toLocaleString('vi-VN');
+      const btnQuay = document.getElementById('btn-quay-thuong');
+      if (btnQuay && !btnQuay.classList.contains('loading')) {
+        btnQuay.disabled = soVe <= 0;
+      }
     }
 
 
@@ -1531,8 +1654,8 @@
           if (target === 'tab-trang-chu' && window.__lamMoiDao) {
             window.__lamMoiDao();
           }
-          if (target === 'tab-shop' && window.__lamMoiShop) {
-            window.__lamMoiShop();
+          if (target === 'tab-lam-them' && window.__lamMoiLamThem) {
+            window.__lamMoiLamThem();
           }
         });
       });
@@ -1737,12 +1860,9 @@
         }
 
         if (tt.link4m_gioi_han_ngay !== undefined) {
+          // Đã bỏ cooldown giữa 2 lần vượt link — chỉ còn giới hạn lượt/ngày,
+          // nên không cần đếm ngược nữa, chỉ cập nhật số lượt đã dùng.
           capNhatUiLink4m(tt.so_lan_link4m_da_xong, tt.link4m_gioi_han_ngay);
-          if (tt.link4m_lan_cuoi) {
-            const daTroiGiay = (Date.now() - tt.link4m_lan_cuoi) / 1000;
-            const conLaiGiay = (tt.link4m_cho_toi_thieu_giay || 300) - daTroiGiay;
-            if (conLaiGiay > 0) batDauDemNguocLink4m(conLaiGiay);
-          }
         }
 
         if (tt.trang_thai === 'da_hoan_thanh') {
@@ -1817,20 +1937,21 @@
 
           if (ketQua.hoan_thanh) {
             hienThiCoin(ketQua.coin);
+            if (ketQua.ve_quay !== undefined) hienThiVeQuay(ketQua.ve_quay);
             const gioiHan = ketQua.link4m_gioi_han_ngay || 2;
             const soLanXong = ketQua.so_lan_link4m_da_xong || 0;
             const daHetLuot = soLanXong >= gioiHan;
             const dongThuong = `+${(ketQua.coin_cong || 0).toLocaleString('vi-VN')} coin`;
+            const dongVeQuay = ketQua.ve_quay_moi_nhan ? ' 🎒 +1 vé quay!' : '';
             successEl.textContent = daHetLuot
-              ? `✅ Đã hoàn thành nhiệm vụ! ${dongThuong}.`
-              : `✅ Đã hoàn thành nhiệm vụ! ${dongThuong}. Còn ${gioiHan - soLanXong} lượt hôm nay.`;
+              ? `✅ Đã hoàn thành nhiệm vụ! ${dongThuong}.${dongVeQuay}`
+              : `✅ Đã hoàn thành nhiệm vụ! ${dongThuong}. Còn ${gioiHan - soLanXong} lượt hôm nay.${dongVeQuay}`;
             successEl.style.display = 'block';
             setTimeout(() => {
               if (daHetLuot) {
                 khoaHomNay();
               } else {
                 moLaiChoLuotTiepTheo(soLanXong, gioiHan);
-                batDauDemNguocLink4m(ketQua.cho_toi_thieu_giay || 300);
               }
             }, 1400);
           } else {
@@ -2240,6 +2361,215 @@
       });
 
       lamMoiShop();
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // TAB "LÀM THÊM" — ô Nhiệm vụ (điều hướng), ô Quay thưởng (vòng quay
+    // may mắn), ô Nhiệm vụ thêm (Link4M — markup đã chuyển sang, logic vẫn
+    // nằm ở setupLinkButton() không đổi vì id DOM giữ nguyên), ô Shop (đã
+    // xử lý bởi setupShopTab() ở trên, không đổi).
+    // ────────────────────────────────────────────────────────────
+    let DANH_SACH_PHAN_THUONG_VONG_QUAY = [];
+    let gocVongQuayHienTai = 0; // tổng góc đã xoay lũy kế — cộng dồn qua từng lượt để kim luôn quay tới, không giật ngược về 0
+
+    // Dựng mặt vòng quay từ danh sách phần thưởng (conic-gradient theo số ô
+    // + nhãn coin xoay đúng góc từng lát bánh). Chỉ dựng 1 lần khi có dữ
+    // liệu từ server (số ô + số tiền mỗi ô cố định, không đổi giữa các lượt).
+    function xayDungVongQuay(danhSach) {
+      const dia = document.getElementById('vong-quay-dia');
+      if (!dia || !danhSach || !danhSach.length) return;
+      const n = danhSach.length;
+      const mauSac = ['#F5B942', '#229ED9', '#3DDC7A', '#FF4D6D', '#A855F7', '#F58C42', '#5A7A99', '#22C1D9'];
+      const goc = 360 / n;
+
+      const stops = danhSach.map((_, i) => `${mauSac[i % mauSac.length]} ${i * goc}deg ${(i + 1) * goc}deg`).join(', ');
+      dia.style.background = `conic-gradient(${stops})`;
+
+      dia.innerHTML = '';
+      danhSach.forEach((pt, i) => {
+        const lat = document.createElement('div');
+        lat.className = 'vong-quay-lat';
+        lat.style.transform = `rotate(${i * goc + goc / 2}deg)`;
+        const span = document.createElement('span');
+        span.textContent = pt.nhan || (pt.coin >= 1000 ? `${Math.round(pt.coin / 1000)}k` : String(pt.coin));
+        lat.appendChild(span);
+        dia.appendChild(lat);
+      });
+
+      const nhan = document.createElement('div');
+      nhan.className = 'vong-quay-nhan';
+      nhan.textContent = '🎡';
+      dia.appendChild(nhan);
+    }
+
+    // Xoay đĩa (bằng CSS transition đã khai báo sẵn trong .vong-quay-dia) để
+    // ô "chiSo" (0-based, đúng thứ tự CAU_HINH_VONG_QUAY phía server) dừng
+    // ngay dưới kim cố định ở đỉnh. Luôn cộng dồn thêm vài vòng đầy + góc
+    // lệch ngẫu nhiên nhỏ trong lát để cảm giác random tự nhiên hơn, không
+    // dừng y hệt tâm ô mỗi lần.
+    function quayVongQuayDenChiSo(chiSo, tongSo) {
+      const dia = document.getElementById('vong-quay-dia');
+      if (!dia) return;
+      const goc = 360 / tongSo;
+      const lechNgauNhien = (Math.random() - 0.5) * goc * 0.6; // lệch trong khoảng ±30% bề rộng 1 ô
+      const gocTamO = chiSo * goc + goc / 2;
+      const soVongThem = 6;
+
+      // Muốn tâm ô "chiSo" dừng đúng dưới kim (góc 0 trên cùng): đĩa cần
+      // xoay tới góc (360 - gocTamO) so với vị trí gốc, cộng thêm các vòng
+      // đầy để có hiệu ứng quay dài. Luôn CỘNG DỒN vào góc đã xoay trước đó
+      // (gocVongQuayHienTai) để kim không bao giờ giật lùi giữa các lượt.
+      const gocConLaiTrongVongHienTai = gocVongQuayHienTai % 360;
+      const gocCanThem = (360 - gocTamO - gocConLaiTrongVongHienTai + 360) % 360;
+      gocVongQuayHienTai += soVongThem * 360 + gocCanThem + lechNgauNhien;
+
+      dia.style.transform = `rotate(${gocVongQuayHienTai}deg)`;
+    }
+
+    function setupLamThemTab(tg) {
+      const uid = tg?.initDataUnsafe?.user?.id;
+
+      // Ô 1 — điều hướng sang tab Nhiệm vụ (tái dùng đúng nút bấm tab-bar
+      // sẵn có để không lặp lại logic chuyển tab + làm mới dữ liệu ở đó).
+      const btnDiNhiemVu = document.getElementById('btn-di-toi-nhiem-vu');
+      if (btnDiNhiemVu) {
+        btnDiNhiemVu.addEventListener('click', () => {
+          const nutTabNhiemVu = document.querySelector('.tab-btn[data-tab="tab-nhiem-vu"]');
+          if (nutTabNhiemVu) nutTabNhiemVu.click();
+        });
+      }
+
+      // Ô 2 — vòng quay may mắn
+      const btnQuay = document.getElementById('btn-quay-thuong');
+      const labelQuay = btnQuay ? btnQuay.querySelector('.btn-label') : null;
+      const quayErrorEl = document.getElementById('quay-thuong-error');
+      const quaySuccessEl = document.getElementById('quay-thuong-success');
+      const quayLichSuEl = document.getElementById('quay-lich-su');
+      let dangQuay = false;
+
+      // Nhãn hiển thị cho 1 lượt quay trong danh sách lịch sử — ưu tiên
+      // "nhan" tùy chỉnh (vd "Chúc may mắn" ở ô 0 coin), không có thì hiện
+      // số coin đã trúng.
+      function nhanLichSuQuay(banGhi) {
+        if (banGhi.nhan) return banGhi.nhan;
+        return `+${(banGhi.coin || 0).toLocaleString('vi-VN')} coin`;
+      }
+
+      function renderLichSuQuay(danhSach) {
+        if (!quayLichSuEl) return;
+        quayLichSuEl.innerHTML = '';
+
+        if (!danhSach || !danhSach.length) {
+          quayLichSuEl.innerHTML = '<div class="rank-loading">Chưa có lượt quay nào.</div>';
+          return;
+        }
+
+        danhSach.forEach((banGhi) => {
+          const row = document.createElement('div');
+          row.className = 'giaodich-row';
+
+          const top = document.createElement('div');
+          top.className = 'giaodich-top';
+
+          const nhan = document.createElement('div');
+          nhan.className = 'giaodich-amount';
+          nhan.textContent = `Ô ${(banGhi.chi_so ?? 0) + 1} — ${nhanLichSuQuay(banGhi)}`;
+
+          const badge = document.createElement('div');
+          badge.className = 'giaodich-badge ' + ((banGhi.coin || 0) > 0 ? 'hoan_thanh' : 'tu_choi');
+          badge.textContent = (banGhi.coin || 0) > 0 ? '🎉 Trúng' : '🍀 Trật';
+
+          top.appendChild(nhan);
+          top.appendChild(badge);
+          row.appendChild(top);
+
+          if (banGhi.luc) {
+            const time = document.createElement('div');
+            time.className = 'giaodich-time';
+            time.textContent = new Date(banGhi.luc).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+            row.appendChild(time);
+          }
+
+          quayLichSuEl.appendChild(row);
+        });
+      }
+
+      async function lamMoiLamThem() {
+        if (!uid) return;
+        const tt = await layThongTinLamThem(uid);
+        if (!tt || !tt.thanh_cong) return;
+
+        hienThiCoin(tt.coin);
+        hienThiVeQuay(tt.ve_quay);
+
+        if (!DANH_SACH_PHAN_THUONG_VONG_QUAY.length && tt.danh_sach_phan_thuong && tt.danh_sach_phan_thuong.length) {
+          DANH_SACH_PHAN_THUONG_VONG_QUAY = tt.danh_sach_phan_thuong;
+          xayDungVongQuay(DANH_SACH_PHAN_THUONG_VONG_QUAY);
+        }
+
+        renderLichSuQuay(tt.lich_su_quay);
+
+        // Đồng bộ luôn trạng thái ô Shop (dùng chung hàm __lamMoiShop đã có).
+        if (window.__lamMoiShop) window.__lamMoiShop();
+      }
+      window.__lamMoiLamThem = lamMoiLamThem;
+
+      if (btnQuay) {
+        btnQuay.addEventListener('click', async () => {
+          if (!uid || dangQuay) return;
+          quayErrorEl.style.display = 'none';
+          quaySuccessEl.style.display = 'none';
+
+          dangQuay = true;
+          btnQuay.disabled = true;
+          btnQuay.classList.add('loading');
+
+          try {
+            const kq = await quayVongThuong(uid);
+
+            if (kq.thanh_cong) {
+              const tongSo = DANH_SACH_PHAN_THUONG_VONG_QUAY.length || 8;
+              quayVongQuayDenChiSo(kq.chi_so_trung, tongSo);
+              btnQuay.classList.remove('loading');
+
+              // Đợi animation quay (4.2s khai báo ở CSS) chạy xong rồi mới
+              // cập nhật coin/vé + hiện kết quả, để không "lộ" đáp án trước
+              // khi bánh xe dừng hẳn.
+              setTimeout(() => {
+                hienThiCoin(kq.coin);
+                hienThiVeQuay(kq.ve_quay);
+                const soO = (kq.chi_so_trung ?? 0) + 1;
+                quaySuccessEl.textContent = (kq.coin_cong || 0) > 0
+                  ? `🎉 Rơi vào ô ${soO}! Bạn trúng +${kq.coin_cong.toLocaleString('vi-VN')} coin!`
+                  : `🍀 Rơi vào ô ${soO} — ${kq.nhan_trung || 'Chúc bạn may mắn lần sau!'}`;
+                quaySuccessEl.style.display = 'block';
+                renderLichSuQuay(kq.lich_su_quay);
+                dangQuay = false;
+                btnQuay.disabled = !(kq.ve_quay > 0);
+              }, 4400);
+            } else {
+              dangQuay = false;
+              btnQuay.classList.remove('loading');
+              btnQuay.disabled = false;
+              const thongBaoLoi = {
+                khong_du_ve_quay: '❌ Bạn không còn vé quay nào — hoàn thành 2 lượt "Nhiệm vụ thêm" để nhận thêm vé.',
+                khong_tim_thay_nguoi_dung: '❌ Không xác định được tài khoản, thử lại sau.',
+              };
+              quayErrorEl.textContent = thongBaoLoi[kq.loi] || '❌ Không quay được, thử lại sau.';
+              quayErrorEl.style.display = 'block';
+            }
+          } catch (err) {
+            console.error('Lỗi quay thưởng:', err);
+            dangQuay = false;
+            btnQuay.classList.remove('loading');
+            btnQuay.disabled = false;
+            quayErrorEl.textContent = '❌ Lỗi kết nối, thử lại sau.';
+            quayErrorEl.style.display = 'block';
+          }
+        });
+      }
+
+      lamMoiLamThem();
     }
 
     function setupBanBeTab(tg) {
@@ -2681,6 +3011,7 @@
       capTxt.textContent = tt.da_max_cap ? `Cấp ${tt.cap_dao}/20 (Max)` : `Cấp ${tt.cap_dao}/20`;
       const dongBoost = tt.boost_dao && tt.boost_dao.het_han_luc > Date.now() ? ` ⚡x${tt.boost_dao.he_so}` : '';
       tocDoTxt.innerHTML = `Tốc độ: <strong>${Math.round(tt.toc_do_dao_moi_gio).toLocaleString('vi-VN')}</strong> coin/giờ${dongBoost}`;
+      if (tt.ve_quay !== undefined) hienThiVeQuay(tt.ve_quay);
 
       if (tt.da_max_cap) {
         xpFill.style.width = '100%';
@@ -2883,6 +3214,7 @@
         setupBangXepHangTab(tg);
         setupDaoTab(tg);
         setupShopTab(tg);
+        setupLamThemTab(tg);
 
         // Cập nhật định kỳ mỗi 20–30 giây (ngẫu nhiên mỗi vòng) — số dư, bảng xếp
         // hạng, ví. Dùng setTimeout tự lặp thay vì setInterval cố định để: (1)

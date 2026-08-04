@@ -559,37 +559,78 @@
     }
     .lam-them-section-label { font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--tg-muted); margin: 4px 2px 0; }
 
-    .wheel-wrap { display: flex; justify-content: center; margin: 6px 0 14px; }
-    .vong-quay { position: relative; width: 220px; height: 220px; flex-shrink: 0; }
-    .vong-quay-kim {
-      position: absolute; top: -8px; left: 50%; transform: translateX(-50%);
-      font-size: 24px; z-index: 5; filter: drop-shadow(0 3px 4px rgba(0,0,0,0.45)); color: var(--danger);
+    /* ── Thẻ Vòng Quay May Mắn — bố cục lại theo tham chiếu: header có icon
+       tròn + tiêu đề, vòng quay lớn hơn với kim chỉ dạng huy hiệu, nhãn
+       tiền thưởng rõ nét (trắng đậm + viền tối) đọc được trên mọi màu ô,
+       khối "Cách nhận vé quay" dạng danh sách gạch đầu dòng bên dưới nút. ── */
+    .qt-card { padding: 20px 18px 22px; }
+    .qt-header { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+    .qt-header-icon {
+      flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%;
+      background: linear-gradient(135deg, rgba(245,185,66,0.22), rgba(245,185,66,0.06));
+      border: 1.5px solid rgba(245,185,66,0.35);
+      display: flex; align-items: center; justify-content: center; font-size: 20px;
     }
+    .qt-header-title { font-size: 15.5px; font-weight: 800; color: var(--tg-text); letter-spacing: -0.01em; }
+    .qt-header-sub { font-size: 12px; color: var(--tg-muted); margin-top: 2px; line-height: 1.5; }
+
+    .wheel-wrap { display: flex; justify-content: center; margin: 18px 0 16px; }
+    .vong-quay { position: relative; width: 248px; height: 248px; flex-shrink: 0; }
+    .vong-quay-kim {
+      position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+      z-index: 6; width: 34px; height: 34px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--tg-blue), #1A6FA0);
+      border: 3px solid var(--tg-dark);
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 10px -2px rgba(0,0,0,0.5), 0 0 0 3px rgba(34,158,217,0.18);
+    }
+    .vong-quay-kim svg { width: 16px; height: 16px; fill: #fff; }
     .vong-quay-dia {
       width: 100%; height: 100%; border-radius: 50%;
-      border: 5px solid var(--tg-surface); outline: 2px solid var(--tg-border);
+      border: 6px solid var(--tg-surface);
+      outline: 2.5px solid var(--tg-border);
+      outline-offset: -1px;
       position: relative; overflow: hidden;
       transition: transform 4.2s cubic-bezier(0.12, 0.83, 0.22, 1);
-      box-shadow: 0 0 30px rgba(0,0,0,0.35);
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.25), 0 14px 34px -12px rgba(0,0,0,0.55), inset 0 0 24px rgba(0,0,0,0.18);
     }
     .vong-quay-lat {
       position: absolute; width: 50%; height: 50%; top: 0; left: 50%;
       transform-origin: 0% 100%;
       display: flex; align-items: flex-start; justify-content: center;
-      padding-top: 16px; pointer-events: none;
+      padding-top: 15px; pointer-events: none;
     }
     .vong-quay-lat span {
-      display: inline-block; transform: rotate(90deg);
-      font-size: 11.5px; font-weight: 800; color: #1A1206; white-space: nowrap;
-      text-shadow: 0 1px 1px rgba(255,255,255,0.25);
+      display: flex; flex-direction: column; align-items: center; line-height: 1.15;
+      transform: rotate(90deg);
+      color: #fff; white-space: nowrap;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.55), 0 0 6px rgba(0,0,0,0.35);
+    }
+    .vong-quay-lat span b { font-size: 13.5px; font-weight: 800; letter-spacing: 0.01em; }
+    .vong-quay-lat span small {
+      font-size: 8.5px; font-weight: 700; letter-spacing: 0.06em; opacity: 0.92; margin-top: 1px;
     }
     .vong-quay-nhan {
       position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: 44px; height: 44px; border-radius: 50%;
-      background: var(--tg-surface); border: 2px solid var(--tg-blue);
-      display: flex; align-items: center; justify-content: center; font-size: 18px; z-index: 4;
-      box-shadow: 0 0 10px var(--tg-glow);
+      width: 52px; height: 52px; border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #1A2540, var(--tg-surface));
+      border: 2.5px solid var(--tg-blue);
+      display: flex; align-items: center; justify-content: center; font-size: 20px; z-index: 4;
+      box-shadow: 0 0 14px var(--tg-glow), inset 0 0 6px rgba(0,0,0,0.4);
     }
+    .qt-ve-hien-co {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      margin: 4px auto 16px; padding: 9px 18px; width: fit-content;
+      border-radius: 30px; background: rgba(245,185,66,0.1); border: 1px solid rgba(245,185,66,0.3);
+      font-size: 12.5px; font-weight: 600; color: var(--tg-muted);
+    }
+    .qt-ve-hien-co strong { color: var(--gold); font-size: 14px; font-weight: 800; }
+    .qt-btn-quay { max-width: 340px; margin-left: auto; margin-right: auto; }
+    .qt-huong-dan {
+      margin-top: 16px; padding: 14px 16px; border-radius: 14px;
+      background: rgba(34,158,217,0.05); border: 1px solid var(--tg-border); text-align: left;
+    }
+    .qt-huong-dan-title { font-size: 12.5px; font-weight: 700; color: var(--tg-text); margin-bottom: 8px; }
   </style>
 </head>
 <body>
@@ -960,34 +1001,49 @@
 
         <!-- Ô 2: Quay thưởng -->
         <div class="lam-them-section-label">🎡 Quay thưởng</div>
-        <div class="card highlight" style="padding:20px 16px;text-align:center;">
-          <div class="task-title" style="justify-content:center;">Vòng quay may mắn</div>
-          <div class="task-desc">Mỗi vé quay dùng 1 lượt, ngẫu nhiên trúng coin ở 1 trong 10 ô.</div>
+        <div class="card highlight qt-card">
+          <div class="qt-header">
+            <div class="qt-header-icon">🎡</div>
+            <div>
+              <div class="qt-header-title">Vòng Quay May Mắn</div>
+              <div class="qt-header-sub">Mỗi vé quay dùng 1 lượt, ngẫu nhiên trúng coin ở 1 trong 10 ô</div>
+            </div>
+          </div>
 
           <div class="wheel-wrap">
             <div class="vong-quay">
-              <div class="vong-quay-kim">▼</div>
+              <div class="vong-quay-kim">
+                <svg viewBox="0 0 24 24"><path d="M12 20L4 8h16z"/></svg>
+              </div>
               <div id="vong-quay-dia" class="vong-quay-dia">
                 <div class="vong-quay-nhan">🎡</div>
               </div>
             </div>
           </div>
 
-          <div id="quay-lich-su-wrap" style="text-align:left;margin-bottom:14px;">
+          <div class="qt-ve-hien-co">🎒 Vé quay hiện có: <strong id="lam-them-ve-quay">0</strong></div>
+
+          <button id="btn-quay-thuong" class="primary-btn qt-btn-quay" type="button" disabled>
+            <span class="spinner"></span>
+            <span class="btn-label">🎡 Quay Ngay (-1 🎫)</span>
+          </button>
+          <div id="quay-thuong-error" class="error-text"></div>
+          <div id="quay-thuong-success" class="success-text"></div>
+
+          <div class="qt-huong-dan">
+            <div class="qt-huong-dan-title">📋 Cách nhận Vé Quay</div>
+            <ul class="rule-list">
+              <li>Hoàn thành đủ <strong>2 lượt</strong> "Nhiệm vụ thêm — Vượt link" trong ngày (+2 vé)</li>
+              <li>Theo dõi Gift Code &amp; sự kiện đặc biệt từ admin</li>
+            </ul>
+          </div>
+
+          <div id="quay-lich-su-wrap" style="text-align:left;margin-top:16px;">
             <div class="card-label" style="margin-bottom:8px;">🕘 Lịch sử 15 lượt quay gần nhất</div>
             <div id="quay-lich-su" style="display:flex;flex-direction:column;gap:6px;">
               <div class="rank-loading">Chưa có lượt quay nào.</div>
             </div>
           </div>
-
-          <div class="balance-sub" style="margin-bottom:12px;">🎒 Vé quay hiện có: <strong id="lam-them-ve-quay">0</strong></div>
-
-          <button id="btn-quay-thuong" class="primary-btn" type="button" disabled>
-            <span class="spinner"></span>
-            <span class="btn-label">🎡 Quay ngay (1 vé)</span>
-          </button>
-          <div id="quay-thuong-error" class="error-text"></div>
-          <div id="quay-thuong-success" class="success-text"></div>
         </div>
 
         <!-- Ô 3: Nhiệm vụ thêm — Vượt link Link4M (đã tách khỏi tab Nhiệm vụ) -->
@@ -2390,8 +2446,23 @@
         const lat = document.createElement('div');
         lat.className = 'vong-quay-lat';
         lat.style.transform = `rotate(${i * goc + goc / 2}deg)`;
+
+        // Nhãn 2 dòng (số tiền lớn + chữ "Coin" nhỏ bên dưới) để dễ đọc hơn
+        // trên mọi màu ô — ô "Chúc may mắn" (không có coin) chỉ hiện 1 dòng.
         const span = document.createElement('span');
-        span.textContent = pt.nhan || (pt.coin >= 1000 ? `${Math.round(pt.coin / 1000)}k` : String(pt.coin));
+        if (pt.nhan) {
+          const dongChu = document.createElement('b');
+          dongChu.textContent = pt.nhan;
+          dongChu.style.cssText = 'font-size:10px;white-space:normal;text-align:center;max-width:64px;line-height:1.2;';
+          span.appendChild(dongChu);
+        } else {
+          const dongSo = document.createElement('b');
+          dongSo.textContent = pt.coin >= 1000 ? `${Math.round(pt.coin / 1000)}k` : String(pt.coin);
+          const dongDonVi = document.createElement('small');
+          dongDonVi.textContent = 'COIN';
+          span.appendChild(dongSo);
+          span.appendChild(dongDonVi);
+        }
         lat.appendChild(span);
         dia.appendChild(lat);
       });

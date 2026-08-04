@@ -188,13 +188,14 @@
               <th>Tổng đã kiếm</th>
               <th>Cấp đào</th>
               <th>Trạng thái đào</th>
+              <th>Vé quay</th>
               <th>Người giới thiệu</th>
               <th>Tham gia lúc</th>
               <th>Thao tác</th>
             </tr>
           </thead>
           <tbody id="tbody-nguoi-choi">
-            <tr><td colspan="10" class="muted">Đang tải...</td></tr>
+            <tr><td colspan="11" class="muted">Đang tải...</td></tr>
           </tbody>
         </table>
       </div>
@@ -224,6 +225,9 @@
 
       <div class="field-label">XP đào</div>
       <input type="text" inputmode="numeric" id="modal-sua-xpdao" placeholder="0" />
+
+      <div class="field-label">🎒 Vé quay</div>
+      <input type="text" inputmode="numeric" id="modal-sua-vequay" placeholder="0" />
 
       <div id="modal-sua-loi" class="loi-text"></div>
       <div id="modal-sua-thanhcong"></div>
@@ -264,7 +268,7 @@
     const tbody = document.getElementById('tbody-nguoi-choi');
     tbody.innerHTML = '';
     if (!danhSach || !danhSach.length) {
-      tbody.innerHTML = '<tr><td colspan="10" class="muted">Không tìm thấy người chơi nào.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11" class="muted">Không tìm thấy người chơi nào.</td></tr>';
       return;
     }
     danhSach.forEach((nd) => {
@@ -277,6 +281,7 @@
         <td class="mono">${dinhDangSo(nd.tong_da_kiem)}</td>
         <td>${nd.cap_dao}/20</td>
         <td>${nd.dang_dao ? '<span class="badge dao">⛏️ Đang đào</span>' : '<span class="muted">—</span>'}</td>
+        <td class="mono">🎒 ${dinhDangSo(nd.ve_quay)}</td>
         <td class="mono">${nd.gioi_thieu_boi || '<span class="muted">—</span>'}</td>
         <td class="muted">${nd.ngay_tham_gia || '—'}</td>
         <td><button type="button" class="btn-sua" data-uid="${nd.uid}">✏️ Sửa</button></td>
@@ -301,6 +306,7 @@
     document.getElementById('modal-sua-tongdakiem').value = nd.tong_da_kiem || 0;
     document.getElementById('modal-sua-capdao').value = nd.cap_dao || 1;
     document.getElementById('modal-sua-xpdao').value = nd.xp_dao || 0;
+    document.getElementById('modal-sua-vequay').value = nd.ve_quay || 0;
 
     document.getElementById('modal-sua-loi').style.display = 'none';
     document.getElementById('modal-sua-thanhcong').style.display = 'none';
@@ -333,6 +339,7 @@
       tong_da_kiem: Number(document.getElementById('modal-sua-tongdakiem').value),
       cap_dao: Number(document.getElementById('modal-sua-capdao').value),
       xp_dao: Number(document.getElementById('modal-sua-xpdao').value),
+      ve_quay: Number(document.getElementById('modal-sua-vequay').value),
     };
 
     btn.disabled = true;
@@ -356,6 +363,7 @@
         tong_da_kiem_khong_hop_le: 'Tổng đã kiếm phải là số nguyên không âm.',
         cap_dao_khong_hop_le: 'Cấp đào phải từ 1 đến 20.',
         xp_dao_khong_hop_le: 'XP đào phải là số nguyên không âm.',
+        ve_quay_khong_hop_le: 'Vé quay phải là số nguyên không âm.',
       };
       loiEl.textContent = '❌ ' + (thongBaoLoi[data && data.loi] || 'Không lưu được, thử lại sau.');
       loiEl.style.display = 'block';

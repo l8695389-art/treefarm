@@ -27,12 +27,18 @@ binding = "DB"
 database_name = "vuacaytien-db"
 database_id = "80c9a3a0-6620-47c5-bf75-7e41ca582e14"
 
-# Cloudflare Workers AI — dùng cho lớp AI phát hiện lôi kéo xem bio/tiểu sử
-# trong bộ lọc tin nhắn nhóm (aiPhatHienLoiKeoXemBio trong index.js). MIỄN
-# PHÍ 10.000 Neurons/ngày (reset 00:00 UTC), không cần API key hay thẻ nào
-# thêm — chỉ cần khai báo binding này. Nếu bind lỗi/vượt hạn mức ngày, code
-# tự rơi xuống Anthropic API (nếu có cấu hình secret ANTHROPIC_API_KEY),
-# hoặc fail-safe bỏ qua nếu cả 2 đều không khả dụng.
+# Cloudflare Workers AI — dùng cho lớp trích chữ trong ẢNH đăng trong nhóm
+# (trichVanBanTuAnh / anhCoTuCamTrongTinNhan trong index.js, model
+# @cf/meta/llama-3.2-11b-vision-instruct) để bắt spammer nhét chữ cấm/link
+# vào ảnh né bộ lọc text. Chữ trích được so khớp lại với đúng danh sách từ
+# khoá cấm của /tucam — không có danh sách riêng cho ảnh. MIỄN PHÍ 10.000
+# Neurons/ngày (reset 00:00 UTC), không cần API key hay thẻ nào thêm — chỉ
+# cần khai báo binding này. Nếu bind lỗi/vượt hạn mức ngày, trichVanBanTuAnh
+# tự fail-safe trả về rỗng — không chặn oan tin nhắn có ảnh.
+# (Lớp AI phát hiện lôi kéo xem bio/tiểu sử — aiPhatHienLoiKeoXemBio — dùng
+# binding này trước đây đã bị GỠ BỎ HOÀN TOÀN khỏi index.js, xem comment ở
+# đầu file đó. Biến ANTHROPIC_API_KEY nếu còn set cũng không còn nơi nào
+# đọc tới, có thể xoá secret đó nếu không dùng việc gì khác.)
 [ai]
 binding = "AI"
 

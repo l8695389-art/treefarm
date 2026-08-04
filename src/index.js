@@ -2205,6 +2205,7 @@ async function xuLyNhiemVuHienTai(env, url) {
 
   const trangThaiChung = {
     coin,
+    ve_quay: nguoiDung ? nguoiDung.veQuay || 0 : 0,
     so_lan_qc_da_xem: soLanQcDaXem,
     qc_gioi_han_ngay: QC_GIOI_HAN_NGAY,
     qc_lan_cuoi: qcLanCuoi,
@@ -2320,25 +2321,21 @@ async function xuLyAdsgramCallback(env, url) {
   await env.USERS.put(key, String(soLanMoi));
   await env.USERS.put(keyLanCuoi, String(now));
 
-  const soCoinCong = Number(env.THUONG_COIN_ADSGRAM || 4500); // nếu đã đặt biến môi trường THUONG_COIN_ADSGRAM trên Worker thì cần cập nhật giá trị đó luôn, vì nó được ưu tiên hơn số mặc định này
   const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, tongDaKiem: 0 };
-  nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
-  congCoin(nguoiDung, soCoinCong);
-  congXpDaoVaLenCap(nguoiDung, XP_MOI_LUOT_QUANG_CAO);
-  await congBxhMoiBanNeuDuDieuKien(env, uid, nguoiDung); // chỉ tính vào BXH Mời Bạn nếu vừa đạt Lv2 (KHÔNG cộng thêm coin)
+  nguoiDung.veQuay = (nguoiDung.veQuay || 0) + 1; // Adsgram KHÔNG còn thưởng coin nữa — mỗi lượt xem hoàn thành CHỈ tặng đúng 1 vé quay
   await luuNguoiDung(env, uid, nguoiDung);
-  await congHoaHongGioiThieu(env, uid, soCoinCong);
   await tangBoDemToanCuc(env, KEY_TONG_LUOT_ADSGRAM); // thống kê all-time (không hiển thị nữa nhưng vẫn giữ để không mất dữ liệu)
   await tangBoDemNgay(env, TIEN_TO_ADSGRAM_NGAY_TK, homNay); // thống kê theo ngày cho /checknv (7 ngày gần nhất)
 
   return Response.json({
     thanh_cong: true,
-    coin: nguoiDung.coin,
-    coin_cong: soCoinCong,
+    coin: nguoiDung.coin || 0,
     so_lan_adsgram_da_xem: soLanMoi,
     adsgram_gioi_han_ngay: ADSGRAM_GIOI_HAN_NGAY,
     cap_dao: nguoiDung.capDao || 1,
     xp_dao: nguoiDung.xpDao || 0,
+    ve_quay: nguoiDung.veQuay || 0,
+    ve_quay_moi_nhan: true, // Adsgram luôn tặng +1 vé quay mỗi lượt hoàn thành, không cần điều kiện gộp lượt như Link4M
   });
 }
 

@@ -2938,7 +2938,9 @@
 
           if (ketQua.thanh_cong) {
             hienThiCoin(ketQua.coin);
-            successEl.textContent = `✅ Nhập mã "${ketQua.ma}" thành công! +${(ketQua.coin_cong || 0).toLocaleString('vi-VN')} coin`;
+            if (ketQua.ve_quay !== undefined) hienThiVeQuay(ketQua.ve_quay);
+            const dongVeQuayGifcode = ketQua.ve_quay_cong > 0 ? ` 🎫 +${ketQua.ve_quay_cong.toLocaleString('vi-VN')} vé quay!` : '';
+            successEl.textContent = `✅ Nhập mã "${ketQua.ma}" thành công! +${(ketQua.coin_cong || 0).toLocaleString('vi-VN')} coin${dongVeQuayGifcode}`;
             successEl.style.display = 'block';
             input.value = '';
           } else {

@@ -130,6 +130,101 @@ const KEY_DANH_SACH_ADMIN = "danh_sach_admin";
 const KEY_BAO_TRI = "che-do-bao-tri"; // giá trị "1" = đang bảo trì (chặn toàn bộ miniapp + API), khác "1" = hoạt động bình thường
 
 // ==================================================
+// 🔐 XÁC THỰC TELEGRAM INIT DATA — mọi endpoint đọc/ghi dữ liệu theo uid
+// TRƯỚC ĐÂY lấy thẳng uid từ query string do CLIENT tự khai (dễ giả mạo —
+// ai cũng gõ được 1 uid bất kỳ vào URL để đọc/ghi dữ liệu của người khác,
+// kể cả đổi tài khoản nhận tiền rút). Giờ bắt buộc xác thực initData THẬT
+// do Telegram ký (HMAC-SHA256 dựa trên bot token, theo đúng thuật toán
+// chính thức của Telegram WebApp), không tin uid client gửi lên nữa.
+// ==================================================
+const TTL_INIT_DATA_GIAY = 86400; // 24h — initData cũ hơn mức này bị từ chối (chống replay)
+
+async function hmacSha256(khoaRawBytes, duLieuChuoi) {
+  const khoa = await crypto.subtle.importKey("raw", khoaRawBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return crypto.subtle.sign("HMAC", khoa, new TextEncoder().encode(duLieuChuoi));
+}
+
+function hexHoa(buffer) {
+  return Array.from(new Uint8Array(buffer)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// So sánh CỐ ĐỊNH thời gian — tránh lộ thông tin qua timing attack, dùng
+// cho cả so khớp hash initData lẫn ADMIN_WEB_SECRET.
+function soSanhAnToan(a, b) {
+  if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
+  let khac = 0;
+  for (let i = 0; i < a.length; i++) khac |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return khac === 0;
+}
+
+// Xác thực chuỗi initData Telegram gửi lên (header X-Telegram-Init-Data) —
+// trả về { uid, user } nếu hợp lệ, null nếu chữ ký sai / hết hạn / thiếu
+// dữ liệu user. Xem thuật toán chính thức: https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
+async function xacThucInitData(botToken, initDataTho) {
+  if (!botToken || !initDataTho) return null;
+
+  const params = new URLSearchParams(initDataTho);
+  const hashNhanDuoc = params.get("hash");
+  if (!hashNhanDuoc) return null;
+  params.delete("hash");
+
+  const cacCap = [];
+  for (const [key, value] of params.entries()) cacCap.push(`${key}=${value}`);
+  cacCap.sort();
+  const dataCheckString = cacCap.join("\n");
+
+  const secretKeyBuffer = await hmacSha256(new TextEncoder().encode("WebAppData"), botToken);
+  const hashBuffer = await hmacSha256(new Uint8Array(secretKeyBuffer), dataCheckString);
+  if (!soSanhAnToan(hexHoa(hashBuffer), hashNhanDuoc)) return null; // chữ ký sai — initData giả mạo hoặc sai bot token
+
+  const authDate = Number(params.get("auth_date") || 0);
+  if (!authDate || Date.now() / 1000 - authDate > TTL_INIT_DATA_GIAY) return null; // hết hạn / chống replay tấn công
+
+  const userRaw = params.get("user");
+  if (!userRaw) return null;
+  try {
+    const user = JSON.parse(userRaw);
+    if (!user || !user.id) return null;
+    return { uid: String(user.id), user };
+  } catch (e) {
+    return null;
+  }
+}
+
+// Danh sách đường dẫn GET bắt buộc phải kèm initData hợp lệ — gồm mọi
+// endpoint đọc/ghi dữ liệu cá nhân của user (coin, ví, đào, nhiệm vụ, BXH,
+// bạn bè, rút tiền...). KHÔNG gồm: /webhook (đã có secret_token riêng),
+// /admin/* (đã có ADMIN_WEB_SECRET), /adsgram-callback (webhook S2S từ
+// Adsgram, không chạy trong Telegram WebView nên không có initData),
+// /nv/<ma> và /nvtp/<ma> (trang đích mở ngoài Telegram, không lộ dữ liệu
+// của ai khác), /suc-khoe (health check).
+const DUONG_DAN_CAN_XAC_THUC_INIT_DATA = new Set([
+  "/kiem-tra-thanh-vien",
+  "/tao-nhiem-vu",
+  "/nhiem-vu-hien-tai",
+  "/reset-nhiem-vu",
+  "/xac-nhan-nhiem-vu",
+  "/tao-nhiem-vu-tp",
+  "/nhiem-vu-hien-tai-tp",
+  "/reset-nhiem-vu-tp",
+  "/xac-nhan-nhiem-vu-tp",
+  "/xac-nhan-quang-cao",
+  "/thong-tin-diem-danh",
+  "/diem-danh",
+  "/nhap-gifcode",
+  "/bat-dau-dao",
+  "/trang-thai-dao",
+  "/shop-thong-tin",
+  "/shop-mua",
+  "/lam-them-thong-tin",
+  "/quay-thuong",
+  "/bang-xep-hang",
+  "/thong-tin-vi",
+  "/thong-tin-ban-be",
+  "/yeu-cau-rut-tien",
+]);
+
+// ==================================================
 // 🔒 BẮT BUỘC THAM GIA NHÓM + KÊNH — trước khi cho vào miniapp, frontend
 // gọi /kiem-tra-thanh-vien để hỏi bot xem user (theo Telegram ID) đã tham
 // gia NHÓM TRÒ CHUYỆN và KÊNH THÔNG BÁO chưa (dùng Bot API getChatMember).
@@ -2656,6 +2751,16 @@ async function xuLyXacNhanQuangCao(env, url) {
 // y hệt cơ chế của khối quảng cáo Monetag.
 // ==================================================
 async function xuLyAdsgramCallback(env, url) {
+  // Nếu đã cấu hình ADSGRAM_SECRET_TOKEN (đặt cùng chuỗi này vào tham số
+  // "secret" trong Reward URL trên partner.adsgram.ai), bắt buộc khớp
+  // đúng token mới xử lý — đây là callback SERVER-TO-SERVER nên KHÔNG thể
+  // kèm initData Telegram, secret token là lớp xác thực duy nhất khả thi.
+  // Chưa cấu hình thì bỏ qua bước này (giữ hành vi cũ), chỉ còn giới hạn
+  // ngày/cooldown làm lớp phòng vệ như trước.
+  if (env.ADSGRAM_SECRET_TOKEN && !soSanhAnToan(url.searchParams.get("secret") || "", env.ADSGRAM_SECRET_TOKEN)) {
+    return new Response("sai_secret", { status: 401 });
+  }
+
   const uid = url.searchParams.get("userid");
   if (!uid) return new Response("thieu_userid", { status: 400 });
 
@@ -4331,7 +4436,7 @@ async function xuLyYeuCauRutTien(env, url) {
 // ==================================================
 function xacThucAdminWeb(env, request) {
   const secret = request.headers.get("X-Admin-Secret") || "";
-  return Boolean(env.ADMIN_WEB_SECRET) && secret === env.ADMIN_WEB_SECRET;
+  return Boolean(env.ADMIN_WEB_SECRET) && soSanhAnToan(secret, env.ADMIN_WEB_SECRET);
 }
 
 // Che 1 phần chuỗi (ID Telegram, số TK...) khi hiển thị công khai ra nhóm —
@@ -5206,6 +5311,15 @@ export default {
       if (url.pathname.startsWith("/nvtp/")) {
         const ma = url.pathname.slice("/nvtp/".length);
         return xuLyTrangNhiemVuTP(env, ma);
+      }
+
+      // 🔐 Bắt buộc initData THẬT cho mọi endpoint dữ liệu cá nhân — ghi
+      // đè uid client gửi (nếu có) bằng uid ĐÃ XÁC THỰC từ chữ ký Telegram,
+      // để không handler nào bên dưới còn tin được uid do client tự khai.
+      if (DUONG_DAN_CAN_XAC_THUC_INIT_DATA.has(url.pathname)) {
+        const xacThuc = await xacThucInitData(env.BOT_TOKEN, request.headers.get("X-Telegram-Init-Data") || "");
+        if (!xacThuc) return Response.json({ thanh_cong: false, loi: "chua_xac_thuc" }, { status: 401 });
+        url.searchParams.set("uid", xacThuc.uid);
       }
 
       switch (url.pathname) {

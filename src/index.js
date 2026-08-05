@@ -568,12 +568,12 @@ const CAU_HINH_VONG_QUAY = [
   { coin: 200, trongSo: 6 }, // ô 2 — nhóm 40%
   { coin: 300, trongSo: 6 }, // ô 3 — nhóm 40%
   { coin: 500, trongSo: 6 }, // ô 4 — nhóm 40%
-  { coin: 700, trongSo: 6 }, // ô 5 — nhóm 40%
-  { coin: 900, trongSo: 5 }, // ô 6 — nhóm 40%
-  { coin: 1000, trongSo: 5 }, // ô 7 — nhóm 40%
+  { coin: 700, trongSo: 14 }, // ô 5 — nhóm 40%
+  { coin: 900, trongSo: 6 }, // ô 6 — nhóm 40%
+  { coin: 1000, trongSo: 6 }, // ô 7 — nhóm 40%
   { coin: 5000, trongSo: 5 }, // ô 8 — nhóm 10%
   { coin: 10000, trongSo: 5 }, // ô 9 — nhóm 10%
-  { coin: 0, trongSo: 50, nhan: "Chúc may mắn" }, // ô 10 — 50%
+  { coin: 0, trongSo: 30, nhan: "Chúc may mắn" }, // ô 10 — 50%
 ];
 
 // Random 1 chỉ số trong CAU_HINH_VONG_QUAY theo trọng số (trongSo càng cao

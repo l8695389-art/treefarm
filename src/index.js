@@ -3184,7 +3184,7 @@ async function xuLyTaoNhiemVuTP(env, url, goc) {
   }
 
   const trangDich = `${goc}/nvtp/${ma}`;
-  const apiUrl = `https://taplayma.com/api?token=${env.TAPLAYMA_API_TOKEN}&url=${encodeURIComponent(trangDich)}`;
+  const apiUrl = `https://api.taplayma.com/api?token=${env.TAPLAYMA_API_TOKEN}&url=${encodeURIComponent(trangDich)}`;
 
   try {
     const res = await fetch(apiUrl, { signal: AbortSignal.timeout(15000) });

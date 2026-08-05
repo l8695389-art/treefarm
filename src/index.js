@@ -203,6 +203,7 @@ async function xuLyKiemTraThanhVien(env, url) {
 const KEY_TONG_LUOT_QC = "tong-luot-qc-hoan-thanh"; // tổng lượt xem quảng cáo Monetag đã hoàn thành (mọi user, mọi thời điểm)
 const KEY_TONG_LUOT_ADSGRAM = "tong-luot-adsgram-hoan-thanh"; // tương tự, cho quảng cáo Adsgram
 const KEY_TONG_LUOT_LINK4M = "tong-luot-link4m-hoan-thanh"; // tương tự, cho lượt vượt link Link4M hoàn thành
+const KEY_TONG_LUOT_TAPLAYMA = "tong-luot-taplayma-hoan-thanh"; // tương tự, cho lượt vượt link Taplayma hoàn thành
 
 // Bộ đếm THEO TỪNG NGÀY (khác bộ đếm all-time ở trên) — dùng để /checknv
 // hiển thị 7 ngày gần nhất thay vì 1 con số tổng cộng dồn từ trước tới nay.
@@ -211,6 +212,7 @@ const KEY_TONG_LUOT_LINK4M = "tong-luot-link4m-hoan-thanh"; // tương tự, cho
 const TIEN_TO_QC_NGAY_TK = "tong-luot-qc-ngay:";
 const TIEN_TO_ADSGRAM_NGAY_TK = "tong-luot-adsgram-ngay:";
 const TIEN_TO_LINK4M_NGAY_TK = "tong-luot-link4m-ngay:";
+const TIEN_TO_TAPLAYMA_NGAY_TK = "tong-luot-taplayma-ngay:";
 const SO_NGAY_THONG_KE_NHIEM_VU = 7; // /checknv hiển thị tối đa 7 ngày gần nhất
 const TIEN_TO_USER = "user:";
 const TIEN_TO_QC_SO_LAN_NGAY = "qc-so-lan-ngay:";
@@ -238,9 +240,24 @@ const RUT_TOI_THIEU = 500000; // coin (~5.000đ) — tăng từ 200.000 lên 500
 const RUT_TOI_DA_NGAY = 1800000; // coin / ngày (~18.000đ)
 const RUT_TOI_DA_TUAN = 5000000; // coin / tuần (~50.000đ)
 const TIEN_TO_LINK4M_SO_LAN_NGAY = "link4m-so-lan-ngay:"; // số lần hoàn thành nhiệm vụ link4m hôm nay
-const LINK4M_GIOI_HAN_NGAY = 2; // tăng từ 2 lên 3 lần/ngày
+const LINK4M_GIOI_HAN_NGAY = 1; // chỉ 1 lần/ngày — mỗi lần hoàn thành tặng luôn 1 vé quay (xem xuLyXacNhanNhiemVu)
 const TIEN_TO_LINK4M_LAN_CUOI = "link4m-lan-cuoi:"; // mốc thời gian hoàn thành nhiệm vụ link4m gần nhất — chặn vượt liên tục
 const LINK4M_CHO_TOI_THIEU_MS = 0; // ĐÃ BỎ cooldown giữa 2 lần vượt link — chỉ còn giới hạn LINK4M_GIOI_HAN_NGAY lượt/ngày
+
+// ==================================================
+// 🔗 NHIỆM VỤ VƯỢT LINK TAPLAYMA — link rút gọn thứ 2, chạy SONG SONG với
+// Link4M (khác endpoint, khác con trỏ nhiệm vụ, khác bộ đếm/giới hạn), để
+// người chơi có thêm 1 nguồn kiếm coin + vé quay độc lập trong ngày. Dùng
+// chung cơ chế mã 6 số tự host (trang /nvtp/<ma>) như Link4M vì Taplayma
+// cũng không có API kiểm tra hoàn thành/reward.
+// ==================================================
+const TIEN_TO_TAPLAYMA_SO_LAN_NGAY = "taplayma-so-lan-ngay:"; // số lần hoàn thành nhiệm vụ Taplayma hôm nay
+const TAPLAYMA_GIOI_HAN_NGAY = 4; // 4 lần/ngày
+const TIEN_TO_TAPLAYMA_LAN_CUOI = "taplayma-lan-cuoi:"; // mốc thời gian hoàn thành gần nhất — dự phòng, không dùng để chặn cooldown
+const TAPLAYMA_CHO_TOI_THIEU_MS = 0; // không cooldown giữa 2 lần vượt — chỉ giới hạn theo TAPLAYMA_GIOI_HAN_NGAY lượt/ngày
+const TAPLAYMA_COIN_MIN = 2000; // mỗi lượt hoàn thành thưởng ngẫu nhiên 2000-2500 coin
+const TAPLAYMA_COIN_MAX = 2500;
+const TAPLAYMA_VE_QUAY_THUONG = 4; // tặng khi hoàn thành ĐỦ TAPLAYMA_GIOI_HAN_NGAY (4) lượt trong ngày
 const KEY_CACHE_BANG_XEP_HANG = "cache-bang-xep-hang"; // JSON { kiem_xu, cap_nhat_luc } — làm mới mỗi 10 phút qua Cron Trigger
 const KEY_MUA_GIAI = "mua-giai-bxh-hien-tai"; // JSON { bat_dau, ket_thuc } — mùa giải BXH hiện tại, tự mở mùa mới khi hết hạn
 const MUA_GIAI_SO_NGAY = 7; // độ dài 1 mùa giải BXH (ngày)
@@ -443,8 +460,8 @@ const SHOP_VAT_PHAM = {
 // 🎡 VÒNG QUAY MAY MẮN — tab "Làm thêm". Người chơi tiêu 1 "vé quay"
 // (nguoiDung.veQuay) mỗi lần quay, random có trọng số 1 trong các ô thưởng
 // coin bên dưới. Vé quay được TẶNG (không bán) — cứ hoàn thành đủ
-// LINK4M_GIOI_HAN_NGAY (2) lượt "Nhiệm vụ thêm — Vượt link" trong ngày là
-// được +1 vé, xem chỗ cộng trong xuLyXacNhanNhiemVu() bên dưới.
+// LINK4M_GIOI_HAN_NGAY (1) lượt "Nhiệm vụ thêm — Vượt link Link4M" trong
+// ngày là được +1 vé, xem chỗ cộng trong xuLyXacNhanNhiemVu() bên dưới.
 // ==================================================
 // 10 ô, tổng trọng số = 100 (dễ đọc = %):
 //   - Ô "Chúc may mắn"          → trongSo 50  → 50%
@@ -678,7 +695,8 @@ async function layThongKeNhiemVuNgay(env) {
     const qc = await layBoDemNgay(env, TIEN_TO_QC_NGAY_TK, ngay);
     const adsgram = await layBoDemNgay(env, TIEN_TO_ADSGRAM_NGAY_TK, ngay);
     const link4m = await layBoDemNgay(env, TIEN_TO_LINK4M_NGAY_TK, ngay);
-    ketQua.push({ ngay, qc, adsgram, link4m });
+    const taplayma = await layBoDemNgay(env, TIEN_TO_TAPLAYMA_NGAY_TK, ngay);
+    ketQua.push({ ngay, qc, adsgram, link4m, taplayma });
     ngay = ngayTruocVN(ngay);
   }
   return ketQua;
@@ -691,20 +709,21 @@ function dinhDangThongKeNhiemVuNgay(thongKe) {
     return (
       `📅 ${d.ngay}\n` +
       `   🎬 Monetag: ${d.qc.toLocaleString("vi-VN")} | 🎥 Adsgram: ${d.adsgram.toLocaleString("vi-VN")} | 📺 Tổng QC: ${tongQcNgay.toLocaleString("vi-VN")}\n` +
-      `   🔗 Link4M: ${d.link4m.toLocaleString("vi-VN")}`
+      `   🔗 Link4M: ${d.link4m.toLocaleString("vi-VN")} | 🔗 Taplayma: ${(d.taplayma || 0).toLocaleString("vi-VN")}`
     );
   });
 
   const tongQc7Ngay = thongKe.reduce((s, d) => s + d.qc, 0);
   const tongAdsgram7Ngay = thongKe.reduce((s, d) => s + d.adsgram, 0);
   const tongLink4m7Ngay = thongKe.reduce((s, d) => s + d.link4m, 0);
+  const tongTaplayma7Ngay = thongKe.reduce((s, d) => s + (d.taplayma || 0), 0);
 
   return (
     `📊 THỐNG KÊ NHIỆM VỤ (${thongKe.length} NGÀY GẦN NHẤT)\n` +
     `━━━━━━━━━━━━━━━━━━\n` +
     dong.join("\n\n") +
     `\n━━━━━━━━━━━━━━━━━━\n` +
-    `Σ ${thongKe.length} ngày — 🎬 ${tongQc7Ngay.toLocaleString("vi-VN")} | 🎥 ${tongAdsgram7Ngay.toLocaleString("vi-VN")} | 📺 ${(tongQc7Ngay + tongAdsgram7Ngay).toLocaleString("vi-VN")} | 🔗 ${tongLink4m7Ngay.toLocaleString("vi-VN")}`
+    `Σ ${thongKe.length} ngày — 🎬 ${tongQc7Ngay.toLocaleString("vi-VN")} | 🎥 ${tongAdsgram7Ngay.toLocaleString("vi-VN")} | 📺 ${(tongQc7Ngay + tongAdsgram7Ngay).toLocaleString("vi-VN")} | 🔗 Link4M ${tongLink4m7Ngay.toLocaleString("vi-VN")} | 🔗 Taplayma ${tongTaplayma7Ngay.toLocaleString("vi-VN")}`
   );
 }
 
@@ -2993,6 +3012,213 @@ async function xuLyResetNhiemVu(env, url) {
   return Response.json({ thanh_cong: true });
 }
 
+// ==================================================
+// 🔗 NHIỆM VỤ VƯỢT LINK TAPLAYMA — SONG SONG với Link4M ở trên, dùng
+// tiền tố KV riêng (nhiemvu-tp: / nhiemvu-tp-hientai:) và bộ đếm/giới hạn
+// riêng (TAPLAYMA_GIOI_HAN_NGAY = 4 lượt/ngày, thưởng ngẫu nhiên
+// TAPLAYMA_COIN_MIN-TAPLAYMA_COIN_MAX/lượt), hoàn thành ĐỦ 4 lượt trong
+// ngày mới được tặng TAPLAYMA_VE_QUAY_THUONG (4) vé quay — khác Link4M vốn
+// chỉ có 1 lượt/ngày và tặng 1 vé ngay khi hoàn thành. Logic đường đi
+// giống hệt các hàm Link4M ở trên (đặt
+// tên "TP" cho gọn), CHỈ khác đúng phần cấu hình + gọi API taplayma.com.
+// ==================================================
+const TIEN_TO_NHIEM_VU_TP = "nhiemvu-tp:";
+const TIEN_TO_NHIEM_VU_TP_HIEN_TAI = "nhiemvu-tp-hientai:"; // con trỏ nhiệm vụ Taplayma đang chờ, để khôi phục khi mở lại app
+
+async function taoNhiemVuTPMoi(env, uid) {
+  for (let lanThu = 0; lanThu < 5; lanThu++) {
+    const ma = sinhMaNgauNhien();
+    const key = TIEN_TO_NHIEM_VU_TP + ma;
+    const daTonTai = await env.USERS.get(key);
+    if (daTonTai) continue; // đụng mã hiếm khi xảy ra, thử lại
+
+    await env.USERS.put(key, JSON.stringify({ uid: String(uid), daDung: false, taoLuc: Date.now() }));
+    return ma;
+  }
+  throw new Error("khong_sinh_duoc_ma");
+}
+
+async function layNhiemVuTPHienTai(env, uid) {
+  const raw = await env.USERS.get(TIEN_TO_NHIEM_VU_TP_HIEN_TAI + uid);
+  return raw ? JSON.parse(raw) : null;
+}
+
+async function luuNhiemVuTPHienTai(env, uid, duLieu) {
+  await env.USERS.put(TIEN_TO_NHIEM_VU_TP_HIEN_TAI + uid, JSON.stringify(duLieu));
+}
+
+async function xoaNhiemVuTPHienTai(env, uid) {
+  await env.USERS.delete(TIEN_TO_NHIEM_VU_TP_HIEN_TAI + uid);
+}
+
+async function xuLyTaoNhiemVuTP(env, url, goc) {
+  const uid = url.searchParams.get("uid");
+  if (!uid) return Response.json({ thanh_cong: false, loi: "thieu_uid" }, { status: 400 });
+
+  const homNay = ngayVnHomNay();
+
+  // Chặn sớm nếu hôm nay đã dùng hết lượt rồi (tối đa TAPLAYMA_GIOI_HAN_NGAY
+  // lần/ngày) — đỡ tốn 1 lượt gọi Taplayma vô ích
+  const soLanDaXong = Number((await env.USERS.get(TIEN_TO_TAPLAYMA_SO_LAN_NGAY + uid + ":" + homNay)) || 0);
+  if (soLanDaXong >= TAPLAYMA_GIOI_HAN_NGAY) {
+    return Response.json({ thanh_cong: false, loi: "da_vuot_hom_nay" });
+  }
+
+  // Còn nhiệm vụ đang chờ, chưa hoàn thành, chưa hết hạn → trả lại ĐÚNG
+  // link cũ, không tạo mới (giống cơ chế của Link4M).
+  const dangCho = await layNhiemVuTPHienTai(env, uid);
+  if (dangCho && dangCho.ngay === homNay && Date.now() - dangCho.taoLuc <= TTL_NHIEM_VU_MS) {
+    return Response.json({ thanh_cong: true, link: dangCho.link });
+  }
+
+  let ma;
+  try {
+    ma = await taoNhiemVuTPMoi(env, uid);
+  } catch {
+    return Response.json({ thanh_cong: false, loi: "khong_sinh_duoc_ma" }, { status: 500 });
+  }
+
+  const trangDich = `${goc}/nvtp/${ma}`;
+  const apiUrl = `https://taplayma.com/api?token=${env.TAPLAYMA_API_TOKEN}&url=${encodeURIComponent(trangDich)}`;
+
+  try {
+    const res = await fetch(apiUrl, { signal: AbortSignal.timeout(15000) });
+    const data = await res.json();
+    if (data.status === "success" && data.shortenedUrl) {
+      await luuNhiemVuTPHienTai(env, uid, { ma, link: data.shortenedUrl, taoLuc: Date.now(), ngay: homNay });
+      return Response.json({ thanh_cong: true, link: data.shortenedUrl });
+    }
+    return Response.json({ thanh_cong: false, loi: data.message || "loi_khong_ro" });
+  } catch (e) {
+    return Response.json({ thanh_cong: false, loi: String(e) }, { status: 500 });
+  }
+}
+
+// Trạng thái hiện tại của nhiệm vụ Taplayma — frontend gọi lúc mở app để
+// khôi phục link cũ, biết đã hoàn thành hôm nay chưa, đã vượt bao nhiêu
+// lượt hôm nay, và hiện số dư (song song xuLyNhiemVuHienTai của Link4M).
+async function xuLyNhiemVuHienTaiTP(env, url) {
+  const uid = url.searchParams.get("uid");
+  if (!uid) return Response.json({ loi: "thieu_uid" }, { status: 400 });
+
+  const homNay = ngayVnHomNay();
+  const nguoiDung = await layNguoiDung(env, uid);
+  const coin = nguoiDung ? nguoiDung.coin || 0 : 0;
+
+  const soLanDaXong = Number((await env.USERS.get(TIEN_TO_TAPLAYMA_SO_LAN_NGAY + uid + ":" + homNay)) || 0);
+  const lanCuoi = Number((await env.USERS.get(TIEN_TO_TAPLAYMA_LAN_CUOI + uid)) || 0);
+
+  const trangThaiChung = {
+    coin,
+    ve_quay: nguoiDung ? nguoiDung.veQuay || 0 : 0,
+    so_lan_taplayma_da_xong: soLanDaXong,
+    taplayma_gioi_han_ngay: TAPLAYMA_GIOI_HAN_NGAY,
+    taplayma_lan_cuoi: lanCuoi,
+    taplayma_cho_toi_thieu_giay: TAPLAYMA_CHO_TOI_THIEU_MS / 1000,
+  };
+
+  if (soLanDaXong >= TAPLAYMA_GIOI_HAN_NGAY) {
+    return Response.json({ trang_thai: "da_hoan_thanh", ...trangThaiChung });
+  }
+
+  const dangCho = await layNhiemVuTPHienTai(env, uid);
+  if (dangCho && dangCho.ngay === homNay && Date.now() - dangCho.taoLuc <= TTL_NHIEM_VU_MS) {
+    return Response.json({ trang_thai: "dang_cho", link: dangCho.link, ...trangThaiChung });
+  }
+
+  return Response.json({ trang_thai: "chua_co", ...trangThaiChung });
+}
+
+async function xuLyXacNhanNhiemVuTP(env, url) {
+  const uid = url.searchParams.get("uid");
+  const ma = url.searchParams.get("ma");
+  if (!uid || !ma) return Response.json({ hoan_thanh: false, loi: "thieu_tham_so" }, { status: 400 });
+
+  const homNay = ngayVnHomNay();
+
+  // Chốt chặn thật — dù có lách qua bước tạo link thế nào cũng dừng ở đây
+  const keySoLan = TIEN_TO_TAPLAYMA_SO_LAN_NGAY + uid + ":" + homNay;
+  const soLanDaXong = Number((await env.USERS.get(keySoLan)) || 0);
+  if (soLanDaXong >= TAPLAYMA_GIOI_HAN_NGAY) {
+    return Response.json({ hoan_thanh: false, loi: "da_vuot_hom_nay" });
+  }
+
+  const key = TIEN_TO_NHIEM_VU_TP + ma;
+  const raw = await env.USERS.get(key);
+  if (!raw) return Response.json({ hoan_thanh: false, loi: "sai_ma" });
+
+  const banGhi = JSON.parse(raw);
+  if (banGhi.uid !== String(uid)) return Response.json({ hoan_thanh: false, loi: "sai_ma" });
+  if (banGhi.daDung) return Response.json({ hoan_thanh: false, loi: "da_dung" });
+  if (Date.now() - banGhi.taoLuc > TTL_NHIEM_VU_MS) return Response.json({ hoan_thanh: false, loi: "het_han" });
+
+  banGhi.daDung = true;
+  await env.USERS.put(key, JSON.stringify(banGhi));
+  const soLanMoi = soLanDaXong + 1;
+  await env.USERS.put(keySoLan, String(soLanMoi));
+  await env.USERS.put(TIEN_TO_TAPLAYMA_LAN_CUOI + uid, String(Date.now()));
+  await xoaNhiemVuTPHienTai(env, uid); // dọn con trỏ, nhiệm vụ này xong rồi
+
+  // Cộng thưởng coin — ngẫu nhiên trong khoảng [TAPLAYMA_COIN_MIN, TAPLAYMA_COIN_MAX]
+  const soCoinCong = ngauNhienCoinTrongKhoang(TAPLAYMA_COIN_MIN, TAPLAYMA_COIN_MAX);
+  const nguoiDung = (await layNguoiDung(env, uid)) || { coin: 0, tongDaKiem: 0 };
+  nguoiDung.tongDaKiem = (nguoiDung.tongDaKiem || 0) + soCoinCong;
+  congCoin(nguoiDung, soCoinCong);
+  congXpDaoVaLenCap(nguoiDung, XP_MOI_LUOT_VUOT_LINK); // XP đào/lượt vượt link, giống Link4M
+
+  // 🎒 Chỉ tặng vé quay khi hoàn thành ĐỦ TAPLAYMA_GIOI_HAN_NGAY (4) lượt
+  // trong ngày — KHÁC Link4M (chỉ 1 lượt/ngày, tặng ngay 1 vé), vì
+  // Taplayma đã cấu hình thưởng thẳng 1 cụm 4 vé cho cả ngày, tránh cộng
+  // dồn quá nhiều vé.
+  let veQuayMoiNhan = false;
+  if (soLanMoi >= TAPLAYMA_GIOI_HAN_NGAY) {
+    nguoiDung.veQuay = (nguoiDung.veQuay || 0) + TAPLAYMA_VE_QUAY_THUONG;
+    veQuayMoiNhan = true;
+  }
+
+  await congBxhMoiBanNeuDuDieuKien(env, uid, nguoiDung); // chỉ tính vào BXH Mời Bạn nếu vừa đạt Lv2 (KHÔNG cộng thêm coin)
+  await luuNguoiDung(env, uid, nguoiDung);
+  await congHoaHongGioiThieu(env, uid, soCoinCong);
+  await tangBoDemToanCuc(env, KEY_TONG_LUOT_TAPLAYMA); // thống kê all-time
+  await tangBoDemNgay(env, TIEN_TO_TAPLAYMA_NGAY_TK, homNay); // thống kê theo ngày cho /checknv (7 ngày gần nhất)
+
+  return Response.json({
+    hoan_thanh: true,
+    coin: nguoiDung.coin,
+    coin_cong: soCoinCong,
+    so_lan_taplayma_da_xong: soLanMoi,
+    taplayma_gioi_han_ngay: TAPLAYMA_GIOI_HAN_NGAY,
+    cho_toi_thieu_giay: TAPLAYMA_CHO_TOI_THIEU_MS / 1000,
+    cap_dao: nguoiDung.capDao || 1,
+    xp_dao: nguoiDung.xpDao || 0,
+    ve_quay: nguoiDung.veQuay || 0,
+    ve_quay_moi_nhan: veQuayMoiNhan,
+  });
+}
+
+// Reset mã Taplayma — hủy nhiệm vụ đang chờ (CHƯA hoàn thành) để tạo lại
+// link mới, dùng khi lỡ mất mã/đóng nhầm trang đích. Không cho reset nếu
+// đã xong hôm nay rồi, tránh lách giới hạn ngày (song song xuLyResetNhiemVu
+// của Link4M).
+async function xuLyResetNhiemVuTP(env, url) {
+  const uid = url.searchParams.get("uid");
+  if (!uid) return Response.json({ thanh_cong: false, loi: "thieu_uid" }, { status: 400 });
+
+  const homNay = ngayVnHomNay();
+  const soLanDaXong = Number((await env.USERS.get(TIEN_TO_TAPLAYMA_SO_LAN_NGAY + uid + ":" + homNay)) || 0);
+  if (soLanDaXong >= TAPLAYMA_GIOI_HAN_NGAY) {
+    return Response.json({ thanh_cong: false, loi: "da_hoan_thanh_khong_the_reset" });
+  }
+
+  const dangCho = await layNhiemVuTPHienTai(env, uid);
+  if (!dangCho || dangCho.ngay !== homNay) {
+    return Response.json({ thanh_cong: false, loi: "khong_co_gi_de_reset" });
+  }
+
+  await xoaNhiemVuTPHienTai(env, uid);
+  return Response.json({ thanh_cong: true });
+}
+
 // Màn hình "Đang bảo trì" — trả về khi chế độ bảo trì đang BẬT, dùng chung
 // bảng màu tối với miniapp chính để nhất quán trải nghiệm.
 function trangBaoTri() {
@@ -3231,6 +3457,43 @@ async function xuLyTrangNhiemVu(env, ma) {
   });
 }
 
+// Trang đích /nvtp/<ma> — song song xuLyTrangNhiemVu() của Link4M ở trên,
+// đọc từ namespace mã riêng TIEN_TO_NHIEM_VU_TP.
+async function xuLyTrangNhiemVuTP(env, ma) {
+  const raw = await env.USERS.get(TIEN_TO_NHIEM_VU_TP + ma);
+  if (!raw) {
+    return trangHtmlMa({
+      icon: "❌",
+      tieuDe: "Mã không hợp lệ",
+      moTa: "Mã này không tồn tại hoặc đã bị xóa. Quay lại app tạo nhiệm vụ mới.",
+    });
+  }
+
+  const banGhi = JSON.parse(raw);
+  if (banGhi.daDung) {
+    return trangHtmlMa({
+      icon: "✅",
+      tieuDe: "Mã đã dùng",
+      moTa: "Mã này đã được xác nhận trước đó rồi.",
+    });
+  }
+  if (Date.now() - banGhi.taoLuc > TTL_NHIEM_VU_MS) {
+    return trangHtmlMa({
+      icon: "⏰",
+      tieuDe: "Mã đã hết hạn",
+      moTa: "Nhiệm vụ này đã hết hạn. Quay lại app tạo nhiệm vụ mới.",
+    });
+  }
+
+  return trangHtmlMa({
+    icon: "🎯",
+    tieuDe: "Mã xác nhận",
+    ma,
+    moTa: "Copy mã này và nhập vào mục Rút gọn trong game để nhận thưởng.",
+    ghiChu: "Mã có hiệu lực 30 phút sau khi tạo link",
+  });
+}
+
 async function xuLyXacNhanNhiemVu(env, url) {
   const uid = url.searchParams.get("uid");
   const ma = url.searchParams.get("ma");
@@ -3268,15 +3531,11 @@ async function xuLyXacNhanNhiemVu(env, url) {
   congCoin(nguoiDung, soCoinCong);
   congXpDaoVaLenCap(nguoiDung, XP_MOI_LUOT_VUOT_LINK); // +15 XP đào/lượt vượt link
 
-  // 🎒 Cứ hoàn thành ĐỦ soLanMoi chẵn (mỗi 2 lượt/ngày, khớp đúng
-  // LINK4M_GIOI_HAN_NGAY hiện tại) thì tặng thêm 2 vé quay — dùng ở tab
-  // "Làm thêm" (ô Quay thưởng). soLanMoi % 2 === 0 nghĩa là user vừa hoàn
-  // thành lượt thứ 2, thứ 4, ... trong ngày.
-  let veQuayMoiNhan = false;
-  if (soLanMoi % 2 === 0) {
-    nguoiDung.veQuay = (nguoiDung.veQuay || 0) + 2;
-    veQuayMoiNhan = true;
-  }
+  // 🎒 Mỗi lần hoàn thành (nay chỉ có đúng 1 lượt/ngày, khớp
+  // LINK4M_GIOI_HAN_NGAY = 1) tặng ngay 1 vé quay — dùng ở tab "Làm thêm"
+  // (ô Quay thưởng).
+  nguoiDung.veQuay = (nguoiDung.veQuay || 0) + 1;
+  const veQuayMoiNhan = true;
 
   await congBxhMoiBanNeuDuDieuKien(env, uid, nguoiDung); // chỉ tính vào BXH Mời Bạn nếu vừa đạt Lv2 (KHÔNG cộng thêm coin)
   await luuNguoiDung(env, uid, nguoiDung);
@@ -4944,6 +5203,10 @@ export default {
         const ma = url.pathname.slice("/nv/".length);
         return xuLyTrangNhiemVu(env, ma);
       }
+      if (url.pathname.startsWith("/nvtp/")) {
+        const ma = url.pathname.slice("/nvtp/".length);
+        return xuLyTrangNhiemVuTP(env, ma);
+      }
 
       switch (url.pathname) {
         case "/kiem-tra-thanh-vien":
@@ -4956,6 +5219,14 @@ export default {
           return xuLyResetNhiemVu(env, url);
         case "/xac-nhan-nhiem-vu":
           return xuLyXacNhanNhiemVu(env, url);
+        case "/tao-nhiem-vu-tp":
+          return xuLyTaoNhiemVuTP(env, url, url.origin);
+        case "/nhiem-vu-hien-tai-tp":
+          return xuLyNhiemVuHienTaiTP(env, url);
+        case "/reset-nhiem-vu-tp":
+          return xuLyResetNhiemVuTP(env, url);
+        case "/xac-nhan-nhiem-vu-tp":
+          return xuLyXacNhanNhiemVuTP(env, url);
         case "/xac-nhan-quang-cao":
           return xuLyXacNhanQuangCao(env, url);
         case "/adsgram-callback":

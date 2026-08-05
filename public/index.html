@@ -559,6 +559,25 @@
     }
     .lam-them-section-label { font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--tg-muted); margin: 4px 2px 0; }
 
+    /* ── Menu 2x2 (Điểm Danh / Vòng Quay / Shop / Vượt Link) ── */
+    .lt-menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 4px; }
+    .lt-menu-card {
+      background: var(--tg-surface); border: 1px solid var(--tg-border); border-radius: 20px;
+      padding: 24px 14px; display: flex; flex-direction: column; align-items: center; text-align: center;
+      gap: 12px; cursor: pointer; font-family: inherit; transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+    .lt-menu-card:active { transform: scale(0.96); border-color: var(--tg-blue); }
+    .lt-menu-icon {
+      width: 58px; height: 58px; border-radius: 50%; display: flex; align-items: center;
+      justify-content: center; font-size: 26px; flex-shrink: 0;
+    }
+    .lt-menu-icon.blue   { background: rgba(34,158,217,0.12); }
+    .lt-menu-icon.gold   { background: rgba(245,185,66,0.12); }
+    .lt-menu-icon.purple { background: rgba(168,85,247,0.12); }
+    .lt-menu-icon.green  { background: rgba(61,220,122,0.12); }
+    .lt-menu-title { font-size: 14px; font-weight: 800; color: var(--tg-text); }
+    .lt-menu-sub { font-size: 11.5px; font-weight: 600; color: var(--tg-muted); }
+
     /* ── Thẻ Vòng Quay May Mắn — bố cục lại theo tham chiếu: header có icon
        tròn + tiêu đề, vòng quay lớn hơn với kim chỉ dạng huy hiệu, nhãn
        tiền thưởng rõ nét (trắng đậm + viền tối) đọc được trên mọi màu ô,
@@ -988,17 +1007,32 @@
       <section id="tab-lam-them" class="tab-panel">
         <div class="eyebrow">Làm thêm</div>
 
-        <!-- Ô 1: Nhiệm vụ (điều hướng sang tab Nhiệm vụ) -->
-        <div class="card highlight lam-them-o1">
-          <div class="lam-them-o1-icon">🎯</div>
-          <div style="flex:1;min-width:0;">
-            <div class="qc-title-row" style="margin-bottom:2px;">Nhiệm vụ hằng ngày</div>
-            <div class="task-desc" style="margin:0;">Điểm danh, xem quảng cáo, nhập gift code...</div>
-          </div>
-          <button id="btn-di-toi-nhiem-vu" class="secondary-btn" type="button" style="flex:0 0 auto;">Mở →</button>
+        <!-- Menu 2x2: Điểm Danh / Vòng Quay / Shop / Vượt Link -->
+        <div class="lt-menu-grid">
+          <button class="lt-menu-card" id="lt-card-diem-danh" type="button">
+            <div class="lt-menu-icon blue">📅</div>
+            <div class="lt-menu-title">Điểm Danh</div>
+            <div class="lt-menu-sub">Chuỗi 7 Ngày</div>
+          </button>
+          <button class="lt-menu-card" id="lt-card-vong-quay" type="button">
+            <div class="lt-menu-icon gold">🎡</div>
+            <div class="lt-menu-title">Vòng Quay</div>
+            <div class="lt-menu-sub">Thử Vận May</div>
+          </button>
+          <button class="lt-menu-card" id="lt-card-shop" type="button">
+            <div class="lt-menu-icon purple">🛒</div>
+            <div class="lt-menu-title">Shop</div>
+            <div class="lt-menu-sub">Vật Phẩm Hỗ Trợ</div>
+          </button>
+          <button class="lt-menu-card" id="lt-card-vuot-link" type="button">
+            <div class="lt-menu-icon green">🔗</div>
+            <div class="lt-menu-title">Vượt Link</div>
+            <div class="lt-menu-sub">Kiếm Thêm Vé Quay</div>
+          </button>
         </div>
 
         <!-- Ô 2: Quay thưởng -->
+        <div id="lt-section-quay">
         <div class="lam-them-section-label">🎡 Quay thưởng</div>
         <div class="card highlight qt-card">
           <div class="qt-header">
@@ -1045,8 +1079,10 @@
             </div>
           </div>
         </div>
+        </div><!-- /lt-section-quay -->
 
         <!-- Ô 3: Nhiệm vụ thêm — Vượt link Link4M (đã tách khỏi tab Nhiệm vụ) -->
+        <div id="lt-section-vuot-link">
         <div class="lam-them-section-label">🔗 Nhiệm vụ thêm</div>
         <div class="card highlight">
           <div class="task-title">🔗 Vượt link nhận thưởng</div>
@@ -1079,8 +1115,10 @@
             <button id="btn-reset-ma" class="secondary-btn" type="button" style="width:100%;margin-top:10px;">🔄 Reset, lấy mã khác</button>
           </div>
         </div>
+        </div><!-- /lt-section-vuot-link -->
 
         <!-- Ô 4: Shop -->
+        <div id="lt-section-shop">
         <div class="lam-them-section-label">🛒 Shop</div>
         <div class="card highlight" style="text-align:center;padding:18px;">
           <div class="card-label">Coin khả dụng</div>
@@ -1112,6 +1150,7 @@
           <div id="shop-baove-error" class="error-text"></div>
           <div id="shop-baove-success" class="success-text"></div>
         </div>
+        </div><!-- /lt-section-shop -->
       </section>
 
     </div>
@@ -2501,15 +2540,29 @@
     function setupLamThemTab(tg) {
       const uid = tg?.initDataUnsafe?.user?.id;
 
-      // Ô 1 — điều hướng sang tab Nhiệm vụ (tái dùng đúng nút bấm tab-bar
-      // sẵn có để không lặp lại logic chuyển tab + làm mới dữ liệu ở đó).
-      const btnDiNhiemVu = document.getElementById('btn-di-toi-nhiem-vu');
-      if (btnDiNhiemVu) {
-        btnDiNhiemVu.addEventListener('click', () => {
+      // Menu 2x2 — Điểm Danh (điều hướng sang tab Nhiệm vụ, tái dùng nút
+      // bấm tab-bar sẵn có), Vòng Quay / Shop / Vượt Link (cuộn xuống đúng
+      // khối tương ứng ngay trong tab Làm thêm).
+      const cuonToiKhoi = (id) => {
+        const el = document.getElementById(id);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      };
+
+      const cardDiemDanh = document.getElementById('lt-card-diem-danh');
+      if (cardDiemDanh) {
+        cardDiemDanh.addEventListener('click', () => {
           const nutTabNhiemVu = document.querySelector('.tab-btn[data-tab="tab-nhiem-vu"]');
           if (nutTabNhiemVu) nutTabNhiemVu.click();
         });
       }
+      const cardVongQuay = document.getElementById('lt-card-vong-quay');
+      if (cardVongQuay) cardVongQuay.addEventListener('click', () => cuonToiKhoi('lt-section-quay'));
+
+      const cardShop = document.getElementById('lt-card-shop');
+      if (cardShop) cardShop.addEventListener('click', () => cuonToiKhoi('lt-section-shop'));
+
+      const cardVuotLink = document.getElementById('lt-card-vuot-link');
+      if (cardVuotLink) cardVuotLink.addEventListener('click', () => cuonToiKhoi('lt-section-vuot-link'));
 
       // Ô 2 — vòng quay may mắn
       const btnQuay = document.getElementById('btn-quay-thuong');

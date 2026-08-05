@@ -1335,6 +1335,25 @@
       blockId: '40595'
     };
 
+    // ────────────────────────────────────────────────────────────
+    // 🔐 GỌI API KÈM INIT DATA — mọi endpoint đọc/ghi dữ liệu cá nhân
+    // (coin, ví, đào, nhiệm vụ, BXH, bạn bè, rút tiền...) giờ BẮT BUỘC
+    // kèm theo tg.initData (chuỗi đã được Telegram KÝ bằng bot token) qua
+    // header "X-Telegram-Init-Data" — Worker tự xác thực chữ ký này rồi
+    // mới lấy uid THẬT ra dùng, không còn tin uid client tự khai trong
+    // query string nữa (trước đây ai cũng gõ được 1 uid bất kỳ vào URL để
+    // đọc/ghi dữ liệu của người khác). Tham số uid trong query string vẫn
+    // được giữ ở các hàm gọi bên dưới để không phải sửa lại toàn bộ chữ ký
+    // hàm, nhưng phía Worker sẽ BỎ QUA nó và ghi đè bằng uid đã xác thực.
+    function layInitDataTelegram() {
+      return (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) || '';
+    }
+    async function goiApiMiniapp(duongDan) {
+      return fetch(`${LINK4M_CONFIG.linkGoc}${duongDan}`, {
+        headers: { 'X-Telegram-Init-Data': layInitDataTelegram() }
+      });
+    }
+
     // Định dạng đếm ngược NGẮN (cooldown vài phút, vd chờ giữa 2 lần xem
     // quảng cáo) dạng "phút:giây" (mm:ss), vd 125 giây -> "2:05".
     function dinhDangDemNguocNgan(giayConLai) {
@@ -1362,58 +1381,50 @@
     // trang /nv/<ma> do chính Worker host. Trả nguyên object (không throw)
     // để UI phân biệt được từng loại lỗi, đặc biệt "da_vuot_hom_nay".
     async function taoNhiemVuFull(uid) {
-      const endpoint = `${LINK4M_CONFIG.linkGoc}/tao-nhiem-vu?uid=${encodeURIComponent(uid)}`;
-      const res = await fetch(endpoint);
+      const res = await goiApiMiniapp(`/tao-nhiem-vu?uid=${encodeURIComponent(uid)}`);
       if (!res.ok) return { thanh_cong: false, loi: 'network' };
       return await res.json();
     }
 
     async function xacNhanMa(uid, ma) {
-      const endpoint = `${LINK4M_CONFIG.linkGoc}/xac-nhan-nhiem-vu?uid=${encodeURIComponent(uid)}&ma=${encodeURIComponent(ma)}`;
-      const res = await fetch(endpoint);
+      const res = await goiApiMiniapp(`/xac-nhan-nhiem-vu?uid=${encodeURIComponent(uid)}&ma=${encodeURIComponent(ma)}`);
       if (!res.ok) return { hoan_thanh: false, loi: 'network' };
       return await res.json();
     }
 
     async function layTrangThaiHienTai(uid) {
-      const endpoint = `${LINK4M_CONFIG.linkGoc}/nhiem-vu-hien-tai?uid=${encodeURIComponent(uid)}`;
-      const res = await fetch(endpoint);
+      const res = await goiApiMiniapp(`/nhiem-vu-hien-tai?uid=${encodeURIComponent(uid)}`);
       if (!res.ok) return null;
       return await res.json();
     }
 
     async function resetNhiemVu(uid) {
-      const endpoint = `${LINK4M_CONFIG.linkGoc}/reset-nhiem-vu?uid=${encodeURIComponent(uid)}`;
-      const res = await fetch(endpoint);
+      const res = await goiApiMiniapp(`/reset-nhiem-vu?uid=${encodeURIComponent(uid)}`);
       if (!res.ok) return { thanh_cong: false, loi: 'network' };
       return await res.json();
     }
 
     // ── Taplayma — link rút gọn thứ 2, song song Link4M, endpoint riêng ──
     async function taoNhiemVuTPFull(uid) {
-      const endpoint = `${LINK4M_CONFIG.linkGoc}/tao-nhiem-vu-tp?uid=${encodeURIComponent(uid)}`;
-      const res = await fetch(endpoint);
+      const res = await goiApiMiniapp(`/tao-nhiem-vu-tp?uid=${encodeURIComponent(uid)}`);
       if (!res.ok) return { thanh_cong: false, loi: 'network' };
       return await res.json();
     }
 
     async function xacNhanMaTP(uid, ma) {
-      const endpoint = `${LINK4M_CONFIG.linkGoc}/xac-nhan-nhiem-vu-tp?uid=${encodeURIComponent(uid)}&ma=${encodeURIComponent(ma)}`;
-      const res = await fetch(endpoint);
+      const res = await goiApiMiniapp(`/xac-nhan-nhiem-vu-tp?uid=${encodeURIComponent(uid)}&ma=${encodeURIComponent(ma)}`);
       if (!res.ok) return { hoan_thanh: false, loi: 'network' };
       return await res.json();
     }
 
     async function layTrangThaiHienTaiTP(uid) {
-      const endpoint = `${LINK4M_CONFIG.linkGoc}/nhiem-vu-hien-tai-tp?uid=${encodeURIComponent(uid)}`;
-      const res = await fetch(endpoint);
+      const res = await goiApiMiniapp(`/nhiem-vu-hien-tai-tp?uid=${encodeURIComponent(uid)}`);
       if (!res.ok) return null;
       return await res.json();
     }
 
     async function resetNhiemVuTP(uid) {
-      const endpoint = `${LINK4M_CONFIG.linkGoc}/reset-nhiem-vu-tp?uid=${encodeURIComponent(uid)}`;
-      const res = await fetch(endpoint);
+      const res = await goiApiMiniapp(`/reset-nhiem-vu-tp?uid=${encodeURIComponent(uid)}`);
       if (!res.ok) return { thanh_cong: false, loi: 'network' };
       return await res.json();
     }
@@ -1421,8 +1432,7 @@
     async function layBangXepHang(loai, uid) {
       const params = new URLSearchParams({ loai: loai || 'kiem-xu' });
       if (uid) params.set('uid', uid);
-      const endpoint = `${LINK4M_CONFIG.linkGoc}/bang-xep-hang?${params.toString()}`;
-      const res = await fetch(endpoint);
+      const res = await goiApiMiniapp(`/bang-xep-hang?${params.toString()}`);
       if (!res.ok) return null;
       return await res.json();
     }
@@ -1430,23 +1440,20 @@
     // Nhập gift code — cộng thưởng coin ngay nếu mã còn hợp lệ + còn lượt +
     // user chưa từng nhập mã này.
     async function napGifcode(uid, code) {
-      const endpoint = `${LINK4M_CONFIG.linkGoc}/nhap-gifcode?uid=${encodeURIComponent(uid)}&code=${encodeURIComponent(code)}`;
-      const res = await fetch(endpoint);
+      const res = await goiApiMiniapp(`/nhap-gifcode?uid=${encodeURIComponent(uid)}&code=${encodeURIComponent(code)}`);
       if (!res.ok) return { thanh_cong: false, loi: 'network' };
       return await res.json();
     }
 
     // Xác nhận đã xem quảng cáo Monetag — gọi trong .then() của show_11396646().
     async function xacNhanQuangCao(uid) {
-      const endpoint = `${LINK4M_CONFIG.linkGoc}/xac-nhan-quang-cao?uid=${encodeURIComponent(uid)}`;
-      const res = await fetch(endpoint);
+      const res = await goiApiMiniapp(`/xac-nhan-quang-cao?uid=${encodeURIComponent(uid)}`);
       if (!res.ok) return { thanh_cong: false, loi: 'network' };
       return await res.json();
     }
 
     async function layThongTinVi(uid) {
-      const endpoint = `${LINK4M_CONFIG.linkGoc}/thong-tin-vi?uid=${encodeURIComponent(uid)}`;
-      const res = await fetch(endpoint);
+      const res = await goiApiMiniapp(`/thong-tin-vi?uid=${encodeURIComponent(uid)}`);
       if (!res.ok) return null;
       return await res.json();
     }
@@ -1454,24 +1461,21 @@
 
     // Điểm danh chuỗi ngày — chỉ đọc trạng thái, không cộng thưởng
     async function layThongTinDiemDanh(uid) {
-      const endpoint = `${LINK4M_CONFIG.linkGoc}/thong-tin-diem-danh?uid=${encodeURIComponent(uid)}`;
-      const res = await fetch(endpoint);
+      const res = await goiApiMiniapp(`/thong-tin-diem-danh?uid=${encodeURIComponent(uid)}`);
       if (!res.ok) return null;
       return await res.json();
     }
 
     // Xác nhận điểm danh hôm nay — cộng thưởng coin theo chuỗi
     async function guiDiemDanh(uid) {
-      const endpoint = `${LINK4M_CONFIG.linkGoc}/diem-danh?uid=${encodeURIComponent(uid)}`;
-      const res = await fetch(endpoint);
+      const res = await goiApiMiniapp(`/diem-danh?uid=${encodeURIComponent(uid)}`);
       if (!res.ok) return { thanh_cong: false, loi: 'network' };
       return await res.json();
     }
 
     // Đào Coin — bắt đầu 1 phiên đào 4 giờ mới
     async function batDauDao(uid) {
-      const endpoint = `${LINK4M_CONFIG.linkGoc}/bat-dau-dao?uid=${encodeURIComponent(uid)}`;
-      const res = await fetch(endpoint);
+      const res = await goiApiMiniapp(`/bat-dau-dao?uid=${encodeURIComponent(uid)}`);
       if (!res.ok) return { thanh_cong: false, loi: 'network' };
       return await res.json();
     }
@@ -1480,8 +1484,7 @@
     // là lúc server credit phần coin phát sinh, nên số coin sẽ tăng dần
     // theo thời gian thực mỗi khi hàm này được gọi lặp lại.
     async function layTrangThaiDao(uid) {
-      const endpoint = `${LINK4M_CONFIG.linkGoc}/trang-thai-dao?uid=${encodeURIComponent(uid)}`;
-      const res = await fetch(endpoint);
+      const res = await goiApiMiniapp(`/trang-thai-dao?uid=${encodeURIComponent(uid)}`);
       if (!res.ok) return null;
       return await res.json();
     }
@@ -1489,15 +1492,13 @@
     // Cửa hàng — đọc trạng thái (coin, boost đang hoạt động, số lượt bảo vệ
     // chuỗi) và mua vật phẩm.
     async function layThongTinShop(uid) {
-      const endpoint = `${LINK4M_CONFIG.linkGoc}/shop-thong-tin?uid=${encodeURIComponent(uid)}`;
-      const res = await fetch(endpoint);
+      const res = await goiApiMiniapp(`/shop-thong-tin?uid=${encodeURIComponent(uid)}`);
       if (!res.ok) return null;
       return await res.json();
     }
 
     async function muaVatPhamShop(uid, ma) {
-      const endpoint = `${LINK4M_CONFIG.linkGoc}/shop-mua?uid=${encodeURIComponent(uid)}&ma=${encodeURIComponent(ma)}`;
-      const res = await fetch(endpoint);
+      const res = await goiApiMiniapp(`/shop-mua?uid=${encodeURIComponent(uid)}&ma=${encodeURIComponent(ma)}`);
       if (!res.ok) return { thanh_cong: false, loi: 'network' };
       return await res.json();
     }
@@ -1505,16 +1506,14 @@
     // Tab "Làm thêm" — gộp trạng thái 4 ô (vé quay + cấu hình vòng quay,
     // trạng thái nhiệm vụ thêm Link4M, coin, trạng thái shop) trong 1 lượt gọi.
     async function layThongTinLamThem(uid) {
-      const endpoint = `${LINK4M_CONFIG.linkGoc}/lam-them-thong-tin?uid=${encodeURIComponent(uid)}`;
-      const res = await fetch(endpoint);
+      const res = await goiApiMiniapp(`/lam-them-thong-tin?uid=${encodeURIComponent(uid)}`);
       if (!res.ok) return null;
       return await res.json();
     }
 
     // Quay 1 lượt vòng quay may mắn — tốn 1 vé quay.
     async function quayVongThuong(uid) {
-      const endpoint = `${LINK4M_CONFIG.linkGoc}/quay-thuong?uid=${encodeURIComponent(uid)}`;
-      const res = await fetch(endpoint);
+      const res = await goiApiMiniapp(`/quay-thuong?uid=${encodeURIComponent(uid)}`);
       if (!res.ok) return { thanh_cong: false, loi: 'network' };
       return await res.json();
     }
@@ -1523,8 +1522,7 @@
     // Endpoint /thong-tin-ban-be cần được bổ sung phía Worker (index.js),
     // trả về { so_luong, danh_sach: [{ ten, tham_gia_luc }] }.
     async function layThongTinBanBe(uid) {
-      const endpoint = `${LINK4M_CONFIG.linkGoc}/thong-tin-ban-be?uid=${encodeURIComponent(uid)}`;
-      const res = await fetch(endpoint);
+      const res = await goiApiMiniapp(`/thong-tin-ban-be?uid=${encodeURIComponent(uid)}`);
       if (!res.ok) return null;
       return await res.json();
     }
@@ -1568,8 +1566,7 @@
 
     async function guiYeuCauRutTien(uid, nganHang, soTk, tenNguoiNhan, soCoin) {
       const params = new URLSearchParams({ uid, ngan_hang: nganHang, so_tk: soTk, ten_nguoi_nhan: tenNguoiNhan, so_coin: soCoin });
-      const endpoint = `${LINK4M_CONFIG.linkGoc}/yeu-cau-rut-tien?${params.toString()}`;
-      const res = await fetch(endpoint);
+      const res = await goiApiMiniapp(`/yeu-cau-rut-tien?${params.toString()}`);
       if (!res.ok) return { thanh_cong: false, loi: 'network' };
       return await res.json();
     }
@@ -3572,8 +3569,7 @@
     async function kiemTraThanhVienNhomKenh(uid) {
       if (!uid) return { thanh_cong: false, da_tham_gia: true }; // không xác định được uid — không chặn oan
       try {
-        const endpoint = `${LINK4M_CONFIG.linkGoc}/kiem-tra-thanh-vien?uid=${encodeURIComponent(uid)}`;
-        const res = await fetch(endpoint);
+        const res = await goiApiMiniapp(`/kiem-tra-thanh-vien?uid=${encodeURIComponent(uid)}`);
         if (!res.ok) return { thanh_cong: false, da_tham_gia: true }; // lỗi mạng tạm thời — không khóa cứng user
         return await res.json();
       } catch (e) {

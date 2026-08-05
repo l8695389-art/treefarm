@@ -567,6 +567,17 @@
       gap: 12px; cursor: pointer; font-family: inherit; transition: transform 0.15s ease, border-color 0.15s ease;
     }
     .lt-menu-card:active { transform: scale(0.96); border-color: var(--tg-blue); }
+    .lt-view { display: none; }
+    .lt-view.active { display: flex; flex-direction: column; gap: 14px; }
+    .lt-back-row { display: flex; align-items: center; gap: 10px; padding: 2px 2px 0; }
+    .lt-back-btn {
+      flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--tg-border);
+      background: var(--tg-surface); color: var(--tg-text); font-size: 16px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; font-family: inherit;
+      transition: background 0.15s ease, transform 0.15s ease;
+    }
+    .lt-back-btn:active { transform: scale(0.92); background: rgba(34,158,217,0.12); }
+    .lt-back-title { font-size: 15.5px; font-weight: 800; color: var(--tg-text); letter-spacing: -0.01em; }
     .lt-menu-icon {
       width: 58px; height: 58px; border-radius: 50%; display: flex; align-items: center;
       justify-content: center; font-size: 26px; flex-shrink: 0;
@@ -1005,6 +1016,7 @@
 
       <!-- TAB 7: LÀM THÊM (4 ô: Nhiệm vụ / Quay thưởng / Nhiệm vụ thêm / Shop) -->
       <section id="tab-lam-them" class="tab-panel">
+        <div id="lt-view-menu" class="lt-view active">
         <div class="eyebrow">Làm thêm</div>
 
         <!-- Menu 2x2: Điểm Danh / Vòng Quay / Shop / Vượt Link -->
@@ -1030,10 +1042,14 @@
             <div class="lt-menu-sub">Kiếm Thêm Vé Quay</div>
           </button>
         </div>
+        </div><!-- /lt-view-menu -->
 
         <!-- Ô 2: Quay thưởng -->
-        <div id="lt-section-quay">
-        <div class="lam-them-section-label">🎡 Quay thưởng</div>
+        <div id="lt-section-quay" class="lt-view">
+        <div class="lt-back-row">
+          <button class="lt-back-btn" type="button" data-lt-back>←</button>
+          <div class="lt-back-title">🎡 Quay thưởng</div>
+        </div>
         <div class="card highlight qt-card">
           <div class="qt-header">
             <div class="qt-header-icon">🎡</div>
@@ -1067,7 +1083,8 @@
             <div class="qt-huong-dan-title">📋 Cách nhận Vé Quay</div>
             <ul class="rule-list">
               <li>Mỗi lượt xem <strong>Quảng cáo Adsgram</strong> hoàn thành (+1 vé)</li>
-              <li>Hoàn thành đủ <strong>2 lượt</strong> "Nhiệm vụ thêm — Vượt link" trong ngày (+2 vé)</li>
+              <li>Hoàn thành <strong>1 lượt</strong> "Nhiệm vụ thêm — Vượt link Link4M" trong ngày (+1 vé)</li>
+              <li>Hoàn thành đủ <strong>4 lượt</strong> "Nhiệm vụ thêm — Vượt link Taplayma" trong ngày (+4 vé)</li>
               <li>Theo dõi Gift Code &amp; sự kiện đặc biệt từ admin</li>
             </ul>
           </div>
@@ -1082,11 +1099,14 @@
         </div><!-- /lt-section-quay -->
 
         <!-- Ô 3: Nhiệm vụ thêm — Vượt link Link4M (đã tách khỏi tab Nhiệm vụ) -->
-        <div id="lt-section-vuot-link">
-        <div class="lam-them-section-label">🔗 Nhiệm vụ thêm</div>
+        <div id="lt-section-vuot-link" class="lt-view">
+        <div class="lt-back-row">
+          <button class="lt-back-btn" type="button" data-lt-back>←</button>
+          <div class="lt-back-title">🔗 Nhiệm vụ thêm</div>
+        </div>
         <div class="card highlight">
           <div class="task-title">🔗 Vượt link nhận thưởng</div>
-          <div class="task-desc">Vượt link xong, nhập mã 6 số hiện ở trang đích để nhận +10000 coin. Giới hạn 2 lần/ngày. Hoàn thành đủ 2 lượt trong ngày sẽ được tặng thêm 🎒 2 vé quay.</div>
+          <div class="task-desc">Vượt link xong, nhập mã 6 số hiện ở trang đích để nhận +10000 coin. Giới hạn 1 lần/ngày. Hoàn thành sẽ được tặng ngay 🎒 1 vé quay.</div>
 
           <button id="btn-get-link" class="primary-btn" type="button">
             <span class="spinner"></span>
@@ -1115,11 +1135,49 @@
             <button id="btn-reset-ma" class="secondary-btn" type="button" style="width:100%;margin-top:10px;">🔄 Reset, lấy mã khác</button>
           </div>
         </div>
+
+        <!-- Khối vượt link Taplayma — song song Link4M, giới hạn riêng
+             4 lượt/ngày, thưởng ngẫu nhiên 2000-2500 coin/lượt, hoàn thành
+             đủ 4 lượt trong ngày được tặng thêm 4 vé quay. -->
+        <div class="card highlight">
+          <div class="task-title">🔗 Vượt link Taplayma nhận thưởng</div>
+          <div class="task-desc">Vượt link xong, nhập mã 6 số hiện ở trang đích để nhận 2.000–2.500 coin ngẫu nhiên. Giới hạn 4 lần/ngày. Hoàn thành đủ 4 lượt trong ngày sẽ được tặng thêm 🎒 4 vé quay.</div>
+
+          <button id="btn-get-link-tp" class="primary-btn" type="button">
+            <span class="spinner"></span>
+            <span class="btn-label">Nhận link rút gọn</span>
+          </button>
+
+          <div id="link-error-tp" class="error-text"></div>
+          <div id="link-status-tp" class="status-text"></div>
+          <div id="link-success-tp" class="success-text"></div>
+
+          <div id="link-card-tp" class="card highlight link-result" style="padding:16px;margin-top:14px;">
+            <div class="card-label">Link của bạn</div>
+            <div class="card-value mono" id="link-result-value-tp">—</div>
+            <div class="link-actions">
+              <button id="btn-copy-link-tp" class="secondary-btn" type="button">Sao chép</button>
+              <a id="btn-open-link-tp" class="secondary-btn" href="#" target="_blank" rel="noopener">Mở link</a>
+            </div>
+          </div>
+
+          <div id="ma-card-tp" class="card highlight" style="display:none;padding:16px;margin-top:14px;">
+            <div class="card-label">Sau khi vượt link xong, nhập mã 6 số hiện trên trang đích:</div>
+            <input id="ma-input-tp" type="text" inputmode="numeric" maxlength="6" placeholder="000000" class="text-input mono" style="text-align:center;font-size:24px;letter-spacing:6px;" />
+            <button id="btn-xac-nhan-ma-tp" class="primary-btn" type="button">
+              <span class="btn-label">Xác nhận hoàn thành</span>
+            </button>
+            <button id="btn-reset-ma-tp" class="secondary-btn" type="button" style="width:100%;margin-top:10px;">🔄 Reset, lấy mã khác</button>
+          </div>
+        </div>
         </div><!-- /lt-section-vuot-link -->
 
         <!-- Ô 4: Shop -->
-        <div id="lt-section-shop">
-        <div class="lam-them-section-label">🛒 Shop</div>
+        <div id="lt-section-shop" class="lt-view">
+        <div class="lt-back-row">
+          <button class="lt-back-btn" type="button" data-lt-back>←</button>
+          <div class="lt-back-title">🛒 Shop</div>
+        </div>
         <div class="card highlight" style="text-align:center;padding:18px;">
           <div class="card-label">Coin khả dụng</div>
           <div class="dao-status-coin" id="shop-coin" style="font-size:26px;">0</div>
@@ -1326,6 +1384,35 @@
 
     async function resetNhiemVu(uid) {
       const endpoint = `${LINK4M_CONFIG.linkGoc}/reset-nhiem-vu?uid=${encodeURIComponent(uid)}`;
+      const res = await fetch(endpoint);
+      if (!res.ok) return { thanh_cong: false, loi: 'network' };
+      return await res.json();
+    }
+
+    // ── Taplayma — link rút gọn thứ 2, song song Link4M, endpoint riêng ──
+    async function taoNhiemVuTPFull(uid) {
+      const endpoint = `${LINK4M_CONFIG.linkGoc}/tao-nhiem-vu-tp?uid=${encodeURIComponent(uid)}`;
+      const res = await fetch(endpoint);
+      if (!res.ok) return { thanh_cong: false, loi: 'network' };
+      return await res.json();
+    }
+
+    async function xacNhanMaTP(uid, ma) {
+      const endpoint = `${LINK4M_CONFIG.linkGoc}/xac-nhan-nhiem-vu-tp?uid=${encodeURIComponent(uid)}&ma=${encodeURIComponent(ma)}`;
+      const res = await fetch(endpoint);
+      if (!res.ok) return { hoan_thanh: false, loi: 'network' };
+      return await res.json();
+    }
+
+    async function layTrangThaiHienTaiTP(uid) {
+      const endpoint = `${LINK4M_CONFIG.linkGoc}/nhiem-vu-hien-tai-tp?uid=${encodeURIComponent(uid)}`;
+      const res = await fetch(endpoint);
+      if (!res.ok) return null;
+      return await res.json();
+    }
+
+    async function resetNhiemVuTP(uid) {
+      const endpoint = `${LINK4M_CONFIG.linkGoc}/reset-nhiem-vu-tp?uid=${encodeURIComponent(uid)}`;
       const res = await fetch(endpoint);
       if (!res.ok) return { thanh_cong: false, loi: 'network' };
       return await res.json();
@@ -1922,7 +2009,7 @@
       }
 
       function capNhatUiLink4m(soLanXong, gioiHan) {
-        const conLai = Math.max(0, (gioiHan || 2) - (soLanXong || 0));
+        const conLai = Math.max(0, (gioiHan || 1) - (soLanXong || 0));
         if (conLai <= 0) return; // khoaHomNay() lo phần khóa
         btn.disabled = false;
         label.textContent = `Nhận link rút gọn (còn ${conLai} lượt)`;
@@ -2033,7 +2120,7 @@
           if (ketQua.hoan_thanh) {
             hienThiCoin(ketQua.coin);
             if (ketQua.ve_quay !== undefined) hienThiVeQuay(ketQua.ve_quay);
-            const gioiHan = ketQua.link4m_gioi_han_ngay || 2;
+            const gioiHan = ketQua.link4m_gioi_han_ngay || 1;
             const soLanXong = ketQua.so_lan_link4m_da_xong || 0;
             const daHetLuot = soLanXong >= gioiHan;
             const dongThuong = `+${(ketQua.coin_cong || 0).toLocaleString('vi-VN')} coin`;
@@ -2093,6 +2180,220 @@
           }
         } catch (err) {
           console.error('Lỗi reset:', err);
+          btnResetMa.disabled = false;
+          btnResetMa.textContent = '🔄 Reset, lấy mã khác';
+          batLoi('❌ Lỗi kết nối, thử lại sau.');
+        }
+      });
+
+      copyBtn.addEventListener('click', () => {
+        copyText(valueEl.textContent).then(() => {
+          const old = copyBtn.textContent;
+          copyBtn.textContent = 'Đã sao chép';
+          setTimeout(() => { copyBtn.textContent = old; }, 1500);
+        });
+      });
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // TAB "LÀM THÊM" — Vượt link Taplayma (song song Link4M, khác endpoint
+    // + giới hạn 4 lượt/ngày + thưởng 2000-2500 coin/lượt ngẫu nhiên + 4
+    // vé quay khi hoàn thành ĐỦ 4 lượt trong ngày — khác Link4M vốn chỉ có
+    // 1 lượt/ngày và tặng ngay 1 vé khi hoàn thành).
+    // ────────────────────────────────────────────────────────────
+    function setupLinkButtonTP(tg) {
+      const uid = tg?.initDataUnsafe?.user?.id;
+
+      const btn = document.getElementById('btn-get-link-tp');
+      const label = btn.querySelector('.btn-label');
+      const card = document.getElementById('link-card-tp');
+      const valueEl = document.getElementById('link-result-value-tp');
+      const errorEl = document.getElementById('link-error-tp');
+      const statusEl = document.getElementById('link-status-tp');
+      const successEl = document.getElementById('link-success-tp');
+      const openBtn = document.getElementById('btn-open-link-tp');
+      const copyBtn = document.getElementById('btn-copy-link-tp');
+      const maCard = document.getElementById('ma-card-tp');
+      const maInput = document.getElementById('ma-input-tp');
+      const btnXacNhanMa = document.getElementById('btn-xac-nhan-ma-tp');
+      const labelXacNhan = btnXacNhanMa.querySelector('.btn-label');
+      const btnResetMa = document.getElementById('btn-reset-ma-tp');
+
+      function anTatCaThongBao() {
+        errorEl.style.display = 'none';
+        statusEl.style.display = 'none';
+        successEl.style.display = 'none';
+      }
+      function batLoi(text) {
+        anTatCaThongBao();
+        errorEl.textContent = text;
+        errorEl.style.display = 'block';
+      }
+      function hienThiLink(link) {
+        valueEl.textContent = link;
+        openBtn.href = link;
+        card.style.display = 'block';
+        maCard.style.display = 'block';
+      }
+      function khoaHomNay() {
+        btn.disabled = true;
+        label.textContent = 'Đã hoàn thành hôm nay ✅';
+        card.style.display = 'none';
+        maCard.style.display = 'none';
+        anTatCaThongBao();
+        statusEl.textContent = '🎉 Hẹn gặp lại lúc 00:00 (giờ Việt Nam) cho nhiệm vụ tiếp theo!';
+        statusEl.style.display = 'block';
+      }
+      function capNhatUiTP(soLanXong, gioiHan) {
+        const conLai = Math.max(0, (gioiHan || 4) - (soLanXong || 0));
+        if (conLai <= 0) return; // khoaHomNay() lo phần khóa
+        btn.disabled = false;
+        label.textContent = `Nhận link rút gọn (còn ${conLai} lượt)`;
+      }
+      function moLaiChoLuotTiepTheo(soLanXong, gioiHan) {
+        card.style.display = 'none';
+        maCard.style.display = 'none';
+        maInput.value = '';
+        capNhatUiTP(soLanXong, gioiHan);
+      }
+
+      // Khôi phục trạng thái ngay khi mở app.
+      (async () => {
+        if (!uid) return;
+        const tt = await layTrangThaiHienTaiTP(uid);
+        if (!tt) return;
+        hienThiCoin(tt.coin);
+        if (tt.ve_quay !== undefined) hienThiVeQuay(tt.ve_quay);
+        capNhatUiTP(tt.so_lan_taplayma_da_xong, tt.taplayma_gioi_han_ngay);
+
+        if (tt.trang_thai === 'da_hoan_thanh') {
+          khoaHomNay();
+        } else if (tt.trang_thai === 'dang_cho' && tt.link) {
+          hienThiLink(tt.link);
+          statusEl.textContent = '⏳ Vượt link xong, mã 6 số sẽ hiện ở trang đích — quay lại đây nhập mã đó.';
+          statusEl.style.display = 'block';
+        }
+      })();
+
+      btn.addEventListener('click', async () => {
+        anTatCaThongBao();
+        maInput.value = '';
+        btn.disabled = true;
+        btn.classList.add('loading');
+        label.textContent = 'Đang tạo nhiệm vụ...';
+
+        try {
+          if (!uid) throw new Error('khong_co_uid');
+          const data = await taoNhiemVuTPFull(uid);
+
+          btn.disabled = false;
+          btn.classList.remove('loading');
+          label.textContent = 'Nhận link rút gọn';
+
+          if (!data.thanh_cong) {
+            if (data.loi === 'da_vuot_hom_nay') {
+              const tt = await layTrangThaiHienTaiTP(uid);
+              if (tt) { hienThiCoin(tt.coin); }
+              return khoaHomNay();
+            }
+            return batLoi('❌ Không tạo được link, thử lại sau nhé.');
+          }
+
+          hienThiLink(data.link);
+          gsap.fromTo(card, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.35, ease: 'power2.out' });
+          gsap.fromTo(maCard, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.35, ease: 'power2.out' });
+
+          statusEl.textContent = '⏳ Vượt link xong, mã 6 số sẽ hiện ở trang đích — quay lại đây nhập mã đó.';
+          statusEl.style.display = 'block';
+        } catch (err) {
+          console.error('Lỗi tạo nhiệm vụ Taplayma:', err);
+          btn.disabled = false;
+          btn.classList.remove('loading');
+          label.textContent = 'Nhận link rút gọn';
+          batLoi('❌ Không tạo được link, thử lại sau nhé.');
+        }
+      });
+
+      btnXacNhanMa.addEventListener('click', async () => {
+        const ma = maInput.value.trim();
+
+        if (!uid) return batLoi('❌ Không xác định được tài khoản Telegram.');
+        if (!/^\d{6}$/.test(ma)) return batLoi('❌ Mã phải gồm đúng 6 chữ số.');
+
+        anTatCaThongBao();
+        btnXacNhanMa.disabled = true;
+        btnXacNhanMa.classList.add('loading');
+        labelXacNhan.textContent = 'Đang kiểm tra...';
+
+        try {
+          const ketQua = await xacNhanMaTP(uid, ma);
+          btnXacNhanMa.disabled = false;
+          btnXacNhanMa.classList.remove('loading');
+          labelXacNhan.textContent = 'Xác nhận hoàn thành';
+
+          if (ketQua.hoan_thanh) {
+            hienThiCoin(ketQua.coin);
+            if (ketQua.ve_quay !== undefined) hienThiVeQuay(ketQua.ve_quay);
+            const gioiHan = ketQua.taplayma_gioi_han_ngay || 4;
+            const soLanXong = ketQua.so_lan_taplayma_da_xong || 0;
+            const daHetLuot = soLanXong >= gioiHan;
+            const dongThuong = `+${(ketQua.coin_cong || 0).toLocaleString('vi-VN')} coin`;
+            const dongVeQuay = ketQua.ve_quay_moi_nhan ? ' 🎒 +4 vé quay!' : '';
+            successEl.textContent = daHetLuot
+              ? `✅ Đã hoàn thành nhiệm vụ! ${dongThuong}.${dongVeQuay}`
+              : `✅ Đã hoàn thành nhiệm vụ! ${dongThuong}. Còn ${gioiHan - soLanXong} lượt hôm nay.`;
+            successEl.style.display = 'block';
+            setTimeout(() => {
+              if (daHetLuot) {
+                khoaHomNay();
+              } else {
+                moLaiChoLuotTiepTheo(soLanXong, gioiHan);
+              }
+            }, 1400);
+          } else {
+            const thongBaoLoi = {
+              sai_ma: '❌ Mã không đúng.',
+              da_dung: '❌ Mã này đã được dùng rồi.',
+              het_han: '❌ Mã đã hết hạn, bấm Reset để lấy link mới.',
+              da_vuot_hom_nay: '❌ Bạn đã hoàn thành nhiệm vụ hôm nay rồi.',
+            };
+            if (ketQua.loi === 'da_vuot_hom_nay') return khoaHomNay();
+            batLoi(thongBaoLoi[ketQua.loi] || '❌ Không xác nhận được, thử lại sau.');
+          }
+        } catch (err) {
+          console.error('Lỗi xác nhận mã Taplayma:', err);
+          btnXacNhanMa.disabled = false;
+          btnXacNhanMa.classList.remove('loading');
+          labelXacNhan.textContent = 'Xác nhận hoàn thành';
+          batLoi('❌ Lỗi kết nối, thử lại sau.');
+        }
+      });
+
+      btnResetMa.addEventListener('click', async () => {
+        if (!uid) return batLoi('❌ Không xác định được tài khoản Telegram.');
+
+        anTatCaThongBao();
+        btnResetMa.disabled = true;
+        btnResetMa.textContent = 'Đang reset...';
+
+        try {
+          const ketQua = await resetNhiemVuTP(uid);
+          btnResetMa.disabled = false;
+          btnResetMa.textContent = '🔄 Reset, lấy mã khác';
+
+          if (ketQua.thanh_cong) {
+            card.style.display = 'none';
+            maCard.style.display = 'none';
+            maInput.value = '';
+            statusEl.textContent = '🔄 Đã reset. Bấm "Nhận link rút gọn" để lấy link mới.';
+            statusEl.style.display = 'block';
+          } else if (ketQua.loi === 'da_hoan_thanh_khong_the_reset') {
+            khoaHomNay();
+          } else {
+            batLoi('❌ Không reset được, thử lại sau.');
+          }
+        } catch (err) {
+          console.error('Lỗi reset Taplayma:', err);
           btnResetMa.disabled = false;
           btnResetMa.textContent = '🔄 Reset, lấy mã khác';
           batLoi('❌ Lỗi kết nối, thử lại sau.');
@@ -2540,13 +2841,27 @@
     function setupLamThemTab(tg) {
       const uid = tg?.initDataUnsafe?.user?.id;
 
-      // Menu 2x2 — Điểm Danh (điều hướng sang tab Nhiệm vụ, tái dùng nút
-      // bấm tab-bar sẵn có), Vòng Quay / Shop / Vượt Link (cuộn xuống đúng
-      // khối tương ứng ngay trong tab Làm thêm).
-      const cuonToiKhoi = (id) => {
-        const el = document.getElementById(id);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      };
+      // Tab "Làm thêm" hoạt động như 1 mini-router có 4 "trang": trang menu
+      // (lưới 2x2) + 3 trang con (Vòng Quay / Shop / Vượt Link) — Điểm Danh
+      // không có trang con ở đây mà điều hướng thẳng sang tab Nhiệm vụ.
+      // Mỗi lần chỉ 1 trang hiển thị (.lt-view.active), trang con nào cũng
+      // có nút "←" quay lại trang menu.
+      const ID_VIEW_MENU = 'lt-view-menu';
+      const CAC_VIEW_CON = [
+        { idThe: 'lt-card-vong-quay', idView: 'lt-section-quay' },
+        { idThe: 'lt-card-shop', idView: 'lt-section-shop' },
+        { idThe: 'lt-card-vuot-link', idView: 'lt-section-vuot-link' },
+      ];
+      const TAT_CA_ID_VIEW = [ID_VIEW_MENU, ...CAC_VIEW_CON.map((v) => v.idView)];
+
+      function chuyenSangViewLamThem(idViewCanHien) {
+        TAT_CA_ID_VIEW.forEach((idView) => {
+          const view = document.getElementById(idView);
+          if (view) view.classList.toggle('active', idView === idViewCanHien);
+        });
+        const tabContent = document.querySelector('.tab-content');
+        if (tabContent) tabContent.scrollTop = 0;
+      }
 
       const cardDiemDanh = document.getElementById('lt-card-diem-danh');
       if (cardDiemDanh) {
@@ -2555,14 +2870,16 @@
           if (nutTabNhiemVu) nutTabNhiemVu.click();
         });
       }
-      const cardVongQuay = document.getElementById('lt-card-vong-quay');
-      if (cardVongQuay) cardVongQuay.addEventListener('click', () => cuonToiKhoi('lt-section-quay'));
 
-      const cardShop = document.getElementById('lt-card-shop');
-      if (cardShop) cardShop.addEventListener('click', () => cuonToiKhoi('lt-section-shop'));
+      CAC_VIEW_CON.forEach(({ idThe, idView }) => {
+        const the = document.getElementById(idThe);
+        if (the) the.addEventListener('click', () => chuyenSangViewLamThem(idView));
+      });
 
-      const cardVuotLink = document.getElementById('lt-card-vuot-link');
-      if (cardVuotLink) cardVuotLink.addEventListener('click', () => cuonToiKhoi('lt-section-vuot-link'));
+      // Mỗi trang con đều có 1 nút [data-lt-back] để quay lại trang menu.
+      document.querySelectorAll('#tab-lam-them [data-lt-back]').forEach((btn) => {
+        btn.addEventListener('click', () => chuyenSangViewLamThem(ID_VIEW_MENU));
+      });
 
       // Ô 2 — vòng quay may mắn
       const btnQuay = document.getElementById('btn-quay-thuong');
@@ -2677,7 +2994,7 @@
               btnQuay.classList.remove('loading');
               btnQuay.disabled = false;
               const thongBaoLoi = {
-                khong_du_ve_quay: '❌ Bạn không còn vé quay nào — hoàn thành 2 lượt "Nhiệm vụ thêm" để nhận thêm vé.',
+                khong_du_ve_quay: '❌ Bạn không còn vé quay nào — hoàn thành "Nhiệm vụ thêm — Vượt link" (Link4M hoặc Taplayma) để nhận thêm vé.',
                 khong_tim_thay_nguoi_dung: '❌ Không xác định được tài khoản, thử lại sau.',
               };
               quayErrorEl.textContent = thongBaoLoi[kq.loi] || '❌ Không quay được, thử lại sau.';
@@ -3332,6 +3649,7 @@
       function batDauApp() {
         setupTabBar();
         setupLinkButton(tg);
+        setupLinkButtonTP(tg);
         setupAdsgramTab(tg);
         setupGifcodeTab(tg);
         setupModalChonNganHang();

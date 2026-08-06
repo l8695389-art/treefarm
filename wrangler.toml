@@ -82,7 +82,12 @@ LINK_BOT = "https://t.me/vuacaytien_bot"
 # có thể khai báo ở đây nếu muốn ghi đè mặc định trong code.
 
 # Secrets — set qua Dashboard: Settings > Variables and secrets
-#   BOT_TOKEN, LINK4M_API_TOKEN, WEBHOOK_SECRET, ADMIN_WEB_SECRET
+#   BOT_TOKEN, LINK4M_API_TOKEN, TAPLAYMA_API_TOKEN, BBMKTS_API_TOKEN,
+#   WEBHOOK_SECRET, ADMIN_WEB_SECRET
+#   (LINK4M_API_TOKEN / TAPLAYMA_API_TOKEN / BBMKTS_API_TOKEN: token API của
+#   3 nhà cung cấp rút gọn link dùng cho "Nhiệm vụ thêm — Vượt link", lấy ở
+#   trang quản lý riêng của từng bên — bbmkts lấy tại https://bbmkts.com/admin,
+#   mục "Mã API của bạn")
 #   (ADMIN_WEB_SECRET: mật khẩu trang web quản lý rút tiền /admin-rut-tien.html)
 #   ANTHROPIC_API_KEY (TUỲ CHỌN, TỐN PHÍ): chỉ dùng làm DỰ PHÒNG cho lớp AI
 #   lọc bio khi Workers AI (binding [ai] ở trên, MIỄN PHÍ) không khả dụng

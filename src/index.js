@@ -1210,6 +1210,18 @@ const DANH_SACH_LENH_ADMIN = [
   { lenh: "/dslenh", moTa: "Xem danh sách lệnh admin này" },
 ];
 
+// Escape các ký tự có ý nghĩa đặc biệt trong parse_mode "Markdown" (legacy)
+// của Telegram — "_" (in nghiêng), "*" (in đậm), "`" (code), "[" (link) —
+// khi xuất hiện trong VĂN BẢN THƯỜNG (ngoài các đoạn code `...` đã tự động
+// không bị parse thêm). Cần dùng cho moTa vì các mô tả lệnh có chứa "_"
+// (vd "tu_khoa", "loi_nhan") — nếu để nguyên, tin nhắn có SỐ LẺ dấu "_" sẽ
+// khiến Telegram trả lỗi "can't parse entities" và KHÔNG GỬI ĐƯỢC TOÀN BỘ
+// tin nhắn (silent fail, telegramApi() không throw nên admin không thấy
+// lỗi gì — đây chính là nguyên nhân /dslenh trước đây "không hoạt động").
+function thoatMarkdownDon(chuoi) {
+  return String(chuoi ?? "").replace(/([_*`[])/g, "\\$1");
+}
+
 async function xuLyDsLenh(env, message) {
   if (!(await laAdmin(env, message.from.id))) {
     return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "❌ Bạn không có quyền!" });
@@ -1217,9 +1229,17 @@ async function xuLyDsLenh(env, message) {
 
   const text =
     "🛠️ DANH SÁCH LỆNH ADMIN:\n\n" +
-    DANH_SACH_LENH_ADMIN.map((l, idx) => `${idx + 1}. \`${l.lenh}\`\n   ${l.moTa}`).join("\n\n");
+    DANH_SACH_LENH_ADMIN.map((l, idx) => `${idx + 1}. \`${l.lenh}\`\n   ${thoatMarkdownDon(l.moTa)}`).join("\n\n");
 
-  return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text, parse_mode: "Markdown" });
+  const ketQua = await telegramApi(env, "sendMessage", { chat_id: message.chat.id, text, parse_mode: "Markdown" });
+
+  // Lớp phòng vệ: nếu Markdown vẫn lỗi vì lý do khác (vd escape sót), gửi
+  // lại bằng PLAIN TEXT (bỏ parse_mode) thay vì im lặng thất bại — admin
+  // luôn nhận được danh sách lệnh dù định dạng có thể kém đẹp hơn 1 chút.
+  if (!ketQua || !ketQua.ok) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text });
+  }
+  return ketQua;
 }
 
 // /id — lấy ID cuộc trò chuyện hiện tại (chat riêng, nhóm, hoặc kênh).

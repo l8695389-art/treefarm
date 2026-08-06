@@ -576,16 +576,16 @@ const SHOP_VAT_PHAM = {
 //   - 2 ô coin 5000/10000       → tổng 10     → 10%
 // trongSo không hiển thị ra frontend nên tỷ lệ thật không lộ cho người chơi.
 const CAU_HINH_VONG_QUAY = [
-  { coin: 100, trongSo: 6 }, // ô 1 — nhóm 40%
-  { coin: 200, trongSo: 6 }, // ô 2 — nhóm 40%
-  { coin: 300, trongSo: 6 }, // ô 3 — nhóm 40%
-  { coin: 500, trongSo: 6 }, // ô 4 — nhóm 40%
-  { coin: 700, trongSo: 14 }, // ô 5 — nhóm 40%
-  { coin: 900, trongSo: 6 }, // ô 6 — nhóm 40%
-  { coin: 1000, trongSo: 6 }, // ô 7 — nhóm 40%
-  { coin: 5000, trongSo: 5 }, // ô 8 — nhóm 10%
-  { coin: 10000, trongSo: 5 }, // ô 9 — nhóm 10%
-  { coin: 0, trongSo: 30, nhan: "Chúc may mắn" }, // ô 10 — 50%
+  { coin: 100, trongSo: 8 },   // ô 1
+  { coin: 200, trongSo: 8 },   // ô 2
+  { coin: 300, trongSo: 8 },   // ô 3
+  { coin: 500, trongSo: 8 },   // ô 4
+  { coin: 700, trongSo: 12 },  // ô 5
+  { coin: 900, trongSo: 8 },   // ô 6
+  { coin: 1000, trongSo: 8 },  // ô 7
+  { coin: 5000, trongSo: 5 },   // ô 8 (5%)
+  { coin: 10000, trongSo: 5 },  // ô 9 (5%)
+  { coin: 0, trongSo: 30, nhan: "Chúc may mắn" }, // ô 10 (30%)
 ];
 
 // Random 1 chỉ số trong CAU_HINH_VONG_QUAY theo trọng số (trongSo càng cao

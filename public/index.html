@@ -621,7 +621,7 @@
       outline: 2.5px solid var(--tg-border);
       outline-offset: -1px;
       position: relative; overflow: hidden;
-      transition: transform 4.2s cubic-bezier(0.12, 0.83, 0.22, 1);
+      transition: transform 6.5s cubic-bezier(0.1, 0.7, 0.15, 1);
       box-shadow: 0 0 0 1px rgba(0,0,0,0.25), 0 14px 34px -12px rgba(0,0,0,0.55), inset 0 0 24px rgba(0,0,0,0.18);
     }
     .vong-quay-lat {
@@ -3372,7 +3372,7 @@
       const goc = 360 / tongSo;
       const lechNgauNhien = (Math.random() - 0.5) * goc * 0.6; // lệch trong khoảng ±30% bề rộng 1 ô
       const gocTamO = chiSo * goc + goc / 2;
-      const soVongThem = 6;
+      const soVongThem = 10;
 
       // Muốn tâm ô "chiSo" dừng đúng dưới kim (góc 0 trên cùng): đĩa cần
       // xoay tới góc (360 - gocTamO) so với vị trí gốc, cộng thêm các vòng
@@ -3535,7 +3535,7 @@
                 renderLichSuQuay(kq.lich_su_quay);
                 dangQuay = false;
                 btnQuay.disabled = !(kq.ve_quay > 0);
-              }, 4400);
+              }, 6700);
             } else {
               dangQuay = false;
               btnQuay.classList.remove('loading');

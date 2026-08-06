@@ -1085,6 +1085,7 @@
               <li>Mỗi lượt xem <strong>Quảng cáo Adsgram</strong> hoàn thành (+1 vé)</li>
               <li>Hoàn thành <strong>1 lượt</strong> "Nhiệm vụ thêm — Vượt link Link4M" trong ngày (+1 vé)</li>
               <li>Hoàn thành đủ <strong>4 lượt</strong> "Nhiệm vụ thêm — Vượt link Taplayma" trong ngày (+4 vé)</li>
+              <li>Hoàn thành <strong>1 lượt</strong> "Nhiệm vụ thêm — Vượt link bbmkts" trong ngày (+1 vé)</li>
               <li>Theo dõi Gift Code &amp; sự kiện đặc biệt từ admin</li>
             </ul>
           </div>
@@ -1168,6 +1169,41 @@
               <span class="btn-label">Xác nhận hoàn thành</span>
             </button>
             <button id="btn-reset-ma-tp" class="secondary-btn" type="button" style="width:100%;margin-top:10px;">🔄 Reset, lấy mã khác</button>
+          </div>
+        </div>
+
+        <!-- Khối vượt link bbmkts — song song Link4M/Taplayma, giới hạn
+             riêng 1 lượt/ngày, thưởng cố định 3500 coin/lượt, tặng ngay
+             1 vé quay khi hoàn thành (giống cơ chế Link4M). -->
+        <div class="card highlight">
+          <div class="task-title">🔗 Vượt link bbmkts nhận thưởng</div>
+          <div class="task-desc">Vượt link xong, nhập mã 6 số hiện ở trang đích để nhận +3500 coin. Giới hạn 1 lần/ngày. Hoàn thành sẽ được tặng ngay 🎒 1 vé quay.</div>
+
+          <button id="btn-get-link-bb" class="primary-btn" type="button">
+            <span class="spinner"></span>
+            <span class="btn-label">Nhận link rút gọn</span>
+          </button>
+
+          <div id="link-error-bb" class="error-text"></div>
+          <div id="link-status-bb" class="status-text"></div>
+          <div id="link-success-bb" class="success-text"></div>
+
+          <div id="link-card-bb" class="card highlight link-result" style="padding:16px;margin-top:14px;">
+            <div class="card-label">Link của bạn</div>
+            <div class="card-value mono" id="link-result-value-bb">—</div>
+            <div class="link-actions">
+              <button id="btn-copy-link-bb" class="secondary-btn" type="button">Sao chép</button>
+              <a id="btn-open-link-bb" class="secondary-btn" href="#" target="_blank" rel="noopener">Mở link</a>
+            </div>
+          </div>
+
+          <div id="ma-card-bb" class="card highlight" style="display:none;padding:16px;margin-top:14px;">
+            <div class="card-label">Sau khi vượt link xong, nhập mã 6 số hiện trên trang đích:</div>
+            <input id="ma-input-bb" type="text" inputmode="numeric" maxlength="6" placeholder="000000" class="text-input mono" style="text-align:center;font-size:24px;letter-spacing:6px;" />
+            <button id="btn-xac-nhan-ma-bb" class="primary-btn" type="button">
+              <span class="btn-label">Xác nhận hoàn thành</span>
+            </button>
+            <button id="btn-reset-ma-bb" class="secondary-btn" type="button" style="width:100%;margin-top:10px;">🔄 Reset, lấy mã khác</button>
           </div>
         </div>
         </div><!-- /lt-section-vuot-link -->
@@ -1425,6 +1461,31 @@
 
     async function resetNhiemVuTP(uid) {
       const res = await goiApiMiniapp(`/reset-nhiem-vu-tp?uid=${encodeURIComponent(uid)}`);
+      if (!res.ok) return { thanh_cong: false, loi: 'network' };
+      return await res.json();
+    }
+
+    // ── bbmkts — link rút gọn thứ 3, song song Link4M/Taplayma, endpoint riêng ──
+    async function taoNhiemVuBBFull(uid) {
+      const res = await goiApiMiniapp(`/tao-nhiem-vu-bb?uid=${encodeURIComponent(uid)}`);
+      if (!res.ok) return { thanh_cong: false, loi: 'network' };
+      return await res.json();
+    }
+
+    async function xacNhanMaBB(uid, ma) {
+      const res = await goiApiMiniapp(`/xac-nhan-nhiem-vu-bb?uid=${encodeURIComponent(uid)}&ma=${encodeURIComponent(ma)}`);
+      if (!res.ok) return { hoan_thanh: false, loi: 'network' };
+      return await res.json();
+    }
+
+    async function layTrangThaiHienTaiBB(uid) {
+      const res = await goiApiMiniapp(`/nhiem-vu-hien-tai-bb?uid=${encodeURIComponent(uid)}`);
+      if (!res.ok) return null;
+      return await res.json();
+    }
+
+    async function resetNhiemVuBB(uid) {
+      const res = await goiApiMiniapp(`/reset-nhiem-vu-bb?uid=${encodeURIComponent(uid)}`);
       if (!res.ok) return { thanh_cong: false, loi: 'network' };
       return await res.json();
     }
@@ -2407,6 +2468,220 @@
     }
 
     // ────────────────────────────────────────────────────────────
+    // TAB "LÀM THÊM" — Vượt link bbmkts (song song Link4M/Taplayma, khác
+    // endpoint + giới hạn 1 lượt/ngày + thưởng cố định 3500 coin/lượt + 1
+    // vé quay ngay khi hoàn thành — giống cơ chế Link4M, khác Taplayma vốn
+    // phải gộp đủ nhiều lượt trong ngày mới được vé).
+    // ────────────────────────────────────────────────────────────
+    function setupLinkButtonBB(tg) {
+      const uid = tg?.initDataUnsafe?.user?.id;
+
+      const btn = document.getElementById('btn-get-link-bb');
+      const label = btn.querySelector('.btn-label');
+      const card = document.getElementById('link-card-bb');
+      const valueEl = document.getElementById('link-result-value-bb');
+      const errorEl = document.getElementById('link-error-bb');
+      const statusEl = document.getElementById('link-status-bb');
+      const successEl = document.getElementById('link-success-bb');
+      const openBtn = document.getElementById('btn-open-link-bb');
+      const copyBtn = document.getElementById('btn-copy-link-bb');
+      const maCard = document.getElementById('ma-card-bb');
+      const maInput = document.getElementById('ma-input-bb');
+      const btnXacNhanMa = document.getElementById('btn-xac-nhan-ma-bb');
+      const labelXacNhan = btnXacNhanMa.querySelector('.btn-label');
+      const btnResetMa = document.getElementById('btn-reset-ma-bb');
+
+      function anTatCaThongBao() {
+        errorEl.style.display = 'none';
+        statusEl.style.display = 'none';
+        successEl.style.display = 'none';
+      }
+      function batLoi(text) {
+        anTatCaThongBao();
+        errorEl.textContent = text;
+        errorEl.style.display = 'block';
+      }
+      function hienThiLink(link) {
+        valueEl.textContent = link;
+        openBtn.href = link;
+        card.style.display = 'block';
+        maCard.style.display = 'block';
+      }
+      function khoaHomNay() {
+        btn.disabled = true;
+        label.textContent = 'Đã hoàn thành hôm nay ✅';
+        card.style.display = 'none';
+        maCard.style.display = 'none';
+        anTatCaThongBao();
+        statusEl.textContent = '🎉 Hẹn gặp lại lúc 00:00 (giờ Việt Nam) cho nhiệm vụ tiếp theo!';
+        statusEl.style.display = 'block';
+      }
+      function capNhatUiBB(soLanXong, gioiHan) {
+        const conLai = Math.max(0, (gioiHan || 1) - (soLanXong || 0));
+        if (conLai <= 0) return; // khoaHomNay() lo phần khóa
+        btn.disabled = false;
+        label.textContent = `Nhận link rút gọn (còn ${conLai} lượt)`;
+      }
+      function moLaiChoLuotTiepTheo(soLanXong, gioiHan) {
+        card.style.display = 'none';
+        maCard.style.display = 'none';
+        maInput.value = '';
+        capNhatUiBB(soLanXong, gioiHan);
+      }
+
+      // Khôi phục trạng thái ngay khi mở app.
+      (async () => {
+        if (!uid) return;
+        const tt = await layTrangThaiHienTaiBB(uid);
+        if (!tt) return;
+        hienThiCoin(tt.coin);
+        if (tt.ve_quay !== undefined) hienThiVeQuay(tt.ve_quay);
+        capNhatUiBB(tt.so_lan_bbmkts_da_xong, tt.bbmkts_gioi_han_ngay);
+
+        if (tt.trang_thai === 'da_hoan_thanh') {
+          khoaHomNay();
+        } else if (tt.trang_thai === 'dang_cho' && tt.link) {
+          hienThiLink(tt.link);
+          statusEl.textContent = '⏳ Vượt link xong, mã 6 số sẽ hiện ở trang đích — quay lại đây nhập mã đó.';
+          statusEl.style.display = 'block';
+        }
+      })();
+
+      btn.addEventListener('click', async () => {
+        anTatCaThongBao();
+        maInput.value = '';
+        btn.disabled = true;
+        btn.classList.add('loading');
+        label.textContent = 'Đang tạo nhiệm vụ...';
+
+        try {
+          if (!uid) throw new Error('khong_co_uid');
+          const data = await taoNhiemVuBBFull(uid);
+
+          btn.disabled = false;
+          btn.classList.remove('loading');
+          label.textContent = 'Nhận link rút gọn';
+
+          if (!data.thanh_cong) {
+            if (data.loi === 'da_vuot_hom_nay') {
+              const tt = await layTrangThaiHienTaiBB(uid);
+              if (tt) { hienThiCoin(tt.coin); }
+              return khoaHomNay();
+            }
+            return batLoi('❌ Không tạo được link, thử lại sau nhé.');
+          }
+
+          hienThiLink(data.link);
+          gsap.fromTo(card, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.35, ease: 'power2.out' });
+          gsap.fromTo(maCard, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.35, ease: 'power2.out' });
+
+          statusEl.textContent = '⏳ Vượt link xong, mã 6 số sẽ hiện ở trang đích — quay lại đây nhập mã đó.';
+          statusEl.style.display = 'block';
+        } catch (err) {
+          console.error('Lỗi tạo nhiệm vụ bbmkts:', err);
+          btn.disabled = false;
+          btn.classList.remove('loading');
+          label.textContent = 'Nhận link rút gọn';
+          batLoi('❌ Không tạo được link, thử lại sau nhé.');
+        }
+      });
+
+      btnXacNhanMa.addEventListener('click', async () => {
+        const ma = maInput.value.trim();
+
+        if (!uid) return batLoi('❌ Không xác định được tài khoản Telegram.');
+        if (!/^\d{6}$/.test(ma)) return batLoi('❌ Mã phải gồm đúng 6 chữ số.');
+
+        anTatCaThongBao();
+        btnXacNhanMa.disabled = true;
+        btnXacNhanMa.classList.add('loading');
+        labelXacNhan.textContent = 'Đang kiểm tra...';
+
+        try {
+          const ketQua = await xacNhanMaBB(uid, ma);
+          btnXacNhanMa.disabled = false;
+          btnXacNhanMa.classList.remove('loading');
+          labelXacNhan.textContent = 'Xác nhận hoàn thành';
+
+          if (ketQua.hoan_thanh) {
+            hienThiCoin(ketQua.coin);
+            if (ketQua.ve_quay !== undefined) hienThiVeQuay(ketQua.ve_quay);
+            const gioiHan = ketQua.bbmkts_gioi_han_ngay || 1;
+            const soLanXong = ketQua.so_lan_bbmkts_da_xong || 0;
+            const daHetLuot = soLanXong >= gioiHan;
+            const dongThuong = `+${(ketQua.coin_cong || 0).toLocaleString('vi-VN')} coin`;
+            const dongVeQuay = ketQua.ve_quay_moi_nhan ? ' 🎒 +1 vé quay!' : '';
+            successEl.textContent = daHetLuot
+              ? `✅ Đã hoàn thành nhiệm vụ! ${dongThuong}.${dongVeQuay}`
+              : `✅ Đã hoàn thành nhiệm vụ! ${dongThuong}. Còn ${gioiHan - soLanXong} lượt hôm nay.${dongVeQuay}`;
+            successEl.style.display = 'block';
+            setTimeout(() => {
+              if (daHetLuot) {
+                khoaHomNay();
+              } else {
+                moLaiChoLuotTiepTheo(soLanXong, gioiHan);
+              }
+            }, 1400);
+          } else {
+            const thongBaoLoi = {
+              sai_ma: '❌ Mã không đúng.',
+              da_dung: '❌ Mã này đã được dùng rồi.',
+              het_han: '❌ Mã đã hết hạn, bấm Reset để lấy link mới.',
+              da_vuot_hom_nay: '❌ Bạn đã hoàn thành nhiệm vụ hôm nay rồi.',
+            };
+            if (ketQua.loi === 'da_vuot_hom_nay') return khoaHomNay();
+            batLoi(thongBaoLoi[ketQua.loi] || '❌ Không xác nhận được, thử lại sau.');
+          }
+        } catch (err) {
+          console.error('Lỗi xác nhận mã bbmkts:', err);
+          btnXacNhanMa.disabled = false;
+          btnXacNhanMa.classList.remove('loading');
+          labelXacNhan.textContent = 'Xác nhận hoàn thành';
+          batLoi('❌ Lỗi kết nối, thử lại sau.');
+        }
+      });
+
+      btnResetMa.addEventListener('click', async () => {
+        if (!uid) return batLoi('❌ Không xác định được tài khoản Telegram.');
+
+        anTatCaThongBao();
+        btnResetMa.disabled = true;
+        btnResetMa.textContent = 'Đang reset...';
+
+        try {
+          const ketQua = await resetNhiemVuBB(uid);
+          btnResetMa.disabled = false;
+          btnResetMa.textContent = '🔄 Reset, lấy mã khác';
+
+          if (ketQua.thanh_cong) {
+            card.style.display = 'none';
+            maCard.style.display = 'none';
+            maInput.value = '';
+            statusEl.textContent = '🔄 Đã reset. Bấm "Nhận link rút gọn" để lấy link mới.';
+            statusEl.style.display = 'block';
+          } else if (ketQua.loi === 'da_hoan_thanh_khong_the_reset') {
+            khoaHomNay();
+          } else {
+            batLoi('❌ Không reset được, thử lại sau.');
+          }
+        } catch (err) {
+          console.error('Lỗi reset bbmkts:', err);
+          btnResetMa.disabled = false;
+          btnResetMa.textContent = '🔄 Reset, lấy mã khác';
+          batLoi('❌ Lỗi kết nối, thử lại sau.');
+        }
+      });
+
+      copyBtn.addEventListener('click', () => {
+        copyText(valueEl.textContent).then(() => {
+          const old = copyBtn.textContent;
+          copyBtn.textContent = 'Đã sao chép';
+          setTimeout(() => { copyBtn.textContent = old; }, 1500);
+        });
+      });
+    }
+
+    // ────────────────────────────────────────────────────────────
     // TAB NHIỆM VỤ — Quảng cáo Adsgram. Khác Monetag: Adsgram không xác
     // nhận thưởng qua callback phía CLIENT — Adsgram server tự gọi
     // /adsgram-callback (S2S) sau khi user xem xong. Nút bấm chỉ có nhiệm
@@ -2991,7 +3266,7 @@
               btnQuay.classList.remove('loading');
               btnQuay.disabled = false;
               const thongBaoLoi = {
-                khong_du_ve_quay: '❌ Bạn không còn vé quay nào — hoàn thành "Nhiệm vụ thêm — Vượt link" (Link4M hoặc Taplayma) để nhận thêm vé.',
+                khong_du_ve_quay: '❌ Bạn không còn vé quay nào — hoàn thành "Nhiệm vụ thêm — Vượt link" (Link4M, Taplayma hoặc bbmkts) để nhận thêm vé.',
                 khong_tim_thay_nguoi_dung: '❌ Không xác định được tài khoản, thử lại sau.',
               };
               quayErrorEl.textContent = thongBaoLoi[kq.loi] || '❌ Không quay được, thử lại sau.';
@@ -3646,6 +3921,7 @@
         setupTabBar();
         setupLinkButton(tg);
         setupLinkButtonTP(tg);
+        setupLinkButtonBB(tg);
         setupAdsgramTab(tg);
         setupGifcodeTab(tg);
         setupModalChonNganHang();

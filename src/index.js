@@ -1201,6 +1201,7 @@ const DANH_SACH_LENH_ADMIN = [
   { lenh: "/taogifcode [coin hoặc min-max] [code] [so_luot] [veN] [loi_nhan]", moTa: "Tạo gift code mới, tự thông báo vào nhóm. veN (VD ve5) tuỳ chọn — tặng kèm N vé quay/lượt nhập. loi_nhan tùy chọn — không nhập thì mặc định \"🎁 GIFT CODE NGẪU NHIÊN!\"" },
   { lenh: "/checkcode", moTa: "Xem danh sách các gift code đã tạo" },
   { lenh: "/checkcodesl [code]", moTa: "Xem chi tiết + số người đã nhập 1 gift code" },
+  { lenh: "/xoacode [code]", moTa: "Xóa VĨNH VIỄN 1 gift code ngay cả khi CHƯA hết lượt nhập — mã sẽ không dùng được nữa" },
   { lenh: "/gui", moTa: "Trả lời 1 tin nhắn kèm lệnh này để broadcast tới toàn bộ user" },
   { lenh: "/sluser", moTa: "Xem tổng số user đã /start với bot" },
   { lenh: "/check [ID]", moTa: "Xem toàn bộ thông tin 1 người chơi (coin, cấp đào, điểm danh, xu BXH mùa hiện tại, ví, bạn bè...)" },
@@ -1893,6 +1894,38 @@ async function xuLyCheckCodeSoLuong(env, message) {
   return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text, parse_mode: "Markdown" });
 }
 
+// /xoacode [code] — XÓA VĨNH VIỄN 1 gift code NGAY CẢ KHI CHƯA hết lượt
+// nhập — khác /xoagiftcodedayluot (chỉ dọn mã đã hết lượt). Dùng khi cần
+// vô hiệu hóa gấp 1 mã cụ thể (vd lỡ tạo sai số coin, mã bị lộ ra ngoài
+// nhóm không mong muốn...). Sau khi xóa, endpoint /nhap-gifcode sẽ trả về
+// lỗi "ma_khong_ton_tai" cho mọi lượt nhập tiếp theo với mã này.
+async function xuLyXoaCode(env, message) {
+  if (!(await laAdmin(env, message.from.id))) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "❌ Bạn không có quyền!" });
+  }
+
+  const phan = message.text.trim().split(/\s+/);
+  if (phan.length < 2) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: "⚠️ Dùng: /xoacode [code]" });
+  }
+
+  const ma = phan[1].toUpperCase();
+  const raw = await env.USERS.get(TIEN_TO_GIFCODE + ma);
+  if (!raw) {
+    return telegramApi(env, "sendMessage", { chat_id: message.chat.id, text: `❌ Mã "${ma}" không tồn tại.` });
+  }
+
+  const gc = JSON.parse(raw);
+  await env.USERS.delete(TIEN_TO_GIFCODE + ma);
+
+  return telegramApi(env, "sendMessage", {
+    chat_id: message.chat.id,
+    text:
+      `✅ Đã xóa gift code "${ma}" (đã dùng ${gc.soLuongDaDung}/${gc.soLuongToiDa} lượt).\n` +
+      `🚫 Mã này sẽ KHÔNG còn hoạt động được nữa, kể cả khi chưa hết lượt nhập.`,
+  });
+}
+
 // ==================================================
 // 🚪 /start
 // ==================================================
@@ -2540,6 +2573,8 @@ async function xuLyUpdate(env, update) {
         return xuLyCheckCode(env, message);
       case "/checkcodesl":
         return xuLyCheckCodeSoLuong(env, message);
+      case "/xoacode":
+        return xuLyXoaCode(env, message);
       case "/gui":
         return xuLyGuiThongBao(env, message);
       case "/mute":
@@ -5702,6 +5737,18 @@ async function xuLyLenhAdminWeb(env, request) {
         const gc = JSON.parse(raw);
         return Response.json({ thanh_cong: true, text: `🎁 Mã: ${gc.code}\n👥 Đã dùng: ${gc.soLuongDaDung}/${gc.soLuongToiDa}` });
       }
+      case "/xoacode": {
+        const ma = (phan[1] || "").toUpperCase();
+        if (!ma) return Response.json({ thanh_cong: false, text: "⚠️ Dùng: /xoacode [code]" });
+        const raw = await env.USERS.get(TIEN_TO_GIFCODE + ma);
+        if (!raw) return Response.json({ thanh_cong: false, text: `❌ Mã "${ma}" không tồn tại.` });
+        const gc = JSON.parse(raw);
+        await env.USERS.delete(TIEN_TO_GIFCODE + ma);
+        return Response.json({
+          thanh_cong: true,
+          text: `✅ Đã xóa gift code "${ma}" (đã dùng ${gc.soLuongDaDung}/${gc.soLuongToiDa} lượt). 🚫 Mã sẽ không còn hoạt động được nữa, kể cả khi chưa hết lượt nhập.`,
+        });
+      }
       case "/dslenh": {
         const text =
           "🛠️ LỆNH HỖ TRỢ TRÊN WEB:\n" +
@@ -5719,6 +5766,7 @@ async function xuLyLenhAdminWeb(env, request) {
           "/taogifcode [coin hoặc min-max] [code] [so_luong] [veN] [loi_nhan] — tạo gift code mới, veN (VD ve5) tuỳ chọn tặng kèm vé quay, tự thông báo vào nhóm\n" +
           "/checkcode — danh sách gift code\n" +
           "/checkcodesl [code] — chi tiết 1 gift code\n" +
+          "/xoacode [code] — xóa vĩnh viễn 1 gift code kể cả khi chưa hết lượt\n" +
           "/xoagiftcodedayluot xacnhan — xóa các gift code đã hết lượt (giảm tải khi có hàng nghìn mã)";
         return Response.json({ thanh_cong: true, text });
       }

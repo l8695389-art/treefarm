@@ -25,7 +25,7 @@ id = "91b472dddf924a89910d82f4a719c930"
 [[d1_databases]]
 binding = "DB"
 database_name = "vuacaytien-db"
-database_id = "80c9a3a0-6620-47c5-bf75-7e41ca582e14"
+database_id = "9ccaaae8-7e43-4e15-863b-46900bf2f3df"
 
 # Cloudflare Workers AI — dùng cho lớp trích chữ trong ẢNH đăng trong nhóm
 # (trichVanBanTuAnh / anhCoTuCamTrongTinNhan trong index.js, model

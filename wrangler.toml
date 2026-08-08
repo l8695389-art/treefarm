@@ -1,95 +1,31 @@
-name = "c"
-main = "src/index.js"
+name = "crystal-tap-game"
+main = "src/worker.js"
 compatibility_date = "2024-09-23"
 
 [assets]
 directory = "./public"
 binding = "ASSETS"
+not_found_handling = "single-page-application"
 
-[[kv_namespaces]]
-binding = "ADMINS"
-id = "2a64bba3ee4c4f6f9e39c180aef8f430"
-
-# USERS giờ chỉ còn giữ tai-khoan-nhan:{uid} — mọi thứ khác (user:*, ban-be:*,
-# giao-dich-rut:*, nhiemvu:*, diem-danh:*, các counter *-so-lan-ngay:*,
-# mua-giai-bxh-hien-tai) đã chuyển sang D1 (binding DB bên dưới).
-[[kv_namespaces]]
-binding = "USERS"
-id = "91b472dddf924a89910d82f4a719c930"
-
-# D1 — thay KV cho dữ liệu ghi nhiều (user, giao dịch rút, nhiệm vụ, điểm
-# danh, counters ngày, mùa giải BXH). Tạo DB trước khi deploy:
-#   npx wrangler d1 create vuacaytien-db
-#   npx wrangler d1 execute vuacaytien-db --file=./schema.sql --remote
-# rồi dán database_id do lệnh create trả về vào đây.
 [[d1_databases]]
 binding = "DB"
-database_name = "vuacaytien-db"
-database_id = "9ccaaae8-7e43-4e15-863b-46900bf2f3df"
-
-# Cloudflare Workers AI — dùng cho lớp trích chữ trong ẢNH đăng trong nhóm
-# (trichVanBanTuAnh / anhCoTuCamTrongTinNhan trong index.js, model
-# @cf/meta/llama-3.2-11b-vision-instruct) để bắt spammer nhét chữ cấm/link
-# vào ảnh né bộ lọc text. Chữ trích được so khớp lại với đúng danh sách từ
-# khoá cấm của /tucam — không có danh sách riêng cho ảnh. MIỄN PHÍ 10.000
-# Neurons/ngày (reset 00:00 UTC), không cần API key hay thẻ nào thêm — chỉ
-# cần khai báo binding này. Nếu bind lỗi/vượt hạn mức ngày, trichVanBanTuAnh
-# tự fail-safe trả về rỗng — không chặn oan tin nhắn có ảnh.
-# (Lớp AI phát hiện lôi kéo xem bio/tiểu sử — aiPhatHienLoiKeoXemBio — dùng
-# binding này trước đây đã bị GỠ BỎ HOÀN TOÀN khỏi index.js, xem comment ở
-# đầu file đó. Biến ANTHROPIC_API_KEY nếu còn set cũng không còn nơi nào
-# đọc tới, có thể xoá secret đó nếu không dùng việc gì khác.)
-[ai]
-binding = "AI"
-
-# Lịch sử Durable Object IpRegistry — đã tạo ở v1 (khi còn chống trùng IP),
-# giờ xóa hẳn ở v2. Cloudflare bắt buộc phải khai báo tường minh bước xóa
-# này, không được lặng lẽ bỏ binding — nếu không sẽ báo lỗi 10064.
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["IpRegistry"]
-
-[[migrations]]
-tag = "v2"
-deleted_classes = ["IpRegistry"]
-
-# Cron Trigger:
-#   "*/10 * * * *" — làm mới cache bảng xếp hạng mỗi 10 phút (tăng tần suất
-#                    từ 1 giờ/lần lên 10 phút/lần để BXH cập nhật sát hơn)
-#   "0 14 * * *"   — 14:00 UTC = 21:00 giờ Việt Nam mỗi ngày, tự động tạo
-#                    1 gift code mới (300-500 coin/lượt, tối đa 50 lượt)
-#                    (trước đây ghi nhầm "0 13 * * *" nên KHÔNG khớp với
-#                    event.cron === "0 14 * * *" trong index.js — lịch gift
-#                    code tự động chưa từng chạy được; đã sửa lại cho khớp)
-[triggers]
-crons = ["*/10 * * * *", "0 14 * * *"]
+database_name = "crystal_tap_db"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
 
 [vars]
-CHU_SO_HUU = "7055595466"
-NHOM_LOG = "@nhomlogbot"
-LINK_MINIAPP = "https://c.vuacaytienx.workers.dev/"
-LINK_ANH = "https://i.ibb.co/G30BjPLs/file-000000000740820bae9353d842911d28.png"
-# Dùng cho thông báo Gift Code tự động khi admin chạy /taogifcode — CHỈ gửi
-# vào kênh + nhóm này (không DM riêng từng user). Có thể là username public
-# (vd "@vuacaytien_news") hoặc chat_id số (vd "-1001234567890" nếu là nhóm/
-# kênh riêng tư). Nhớ thêm bot làm ADMIN của kênh/nhóm đó thì mới gửi được.
-KENH_THONG_BAO = "@vuacaytien_news"
-NHOM_CHAT = "@vuacaytien_chat"
-# Link mở chat riêng với bot — dùng làm nút bấm trong tin nhắn gửi vào
-# kênh/nhóm (vì nút web_app chỉ hoạt động trong chat riêng 1-1 với bot).
-LINK_BOT = "https://t.me/vuacaytien_bot"
-# THUONG_COIN_QUANG_CAO (mặc định 350) và THUONG_COIN_NHIEM_VU (mặc định 2000)
-# có thể khai báo ở đây nếu muốn ghi đè mặc định trong code.
+# URL của chính Worker này (sau khi deploy), dùng để gắn nút "Chơi ngay"
+# trong tin nhắn trả lời /start. Ví dụ: https://crystal-tap-game.<subdomain>.workers.dev
+MINI_APP_URL = "https://REPLACE_WITH_YOUR_WORKER_URL"
 
-# Secrets — set qua Dashboard: Settings > Variables and secrets
-#   BOT_TOKEN, LINK4M_API_TOKEN, TAPLAYMA_API_TOKEN, BBMKTS_API_TOKEN,
-#   LAYMA_API_TOKEN, WEBHOOK_SECRET, ADMIN_WEB_SECRET
-#   (LINK4M_API_TOKEN / TAPLAYMA_API_TOKEN / BBMKTS_API_TOKEN / LAYMA_API_TOKEN:
-#   token API của 4 nhà cung cấp rút gọn link dùng cho "Nhiệm vụ thêm — Vượt
-#   link", lấy ở trang quản lý riêng của từng bên — bbmkts lấy tại
-#   https://bbmkts.com/admin mục "Mã API của bạn"; layma lấy tại
-#   https://quanly.layma.net (mục Token API, dùng làm tham số tokenUser))
-#   (ADMIN_WEB_SECRET: mật khẩu trang web quản lý rút tiền /admin-rut-tien.html)
-#   ANTHROPIC_API_KEY (TUỲ CHỌN, TỐN PHÍ): chỉ dùng làm DỰ PHÒNG cho lớp AI
-#   lọc bio khi Workers AI (binding [ai] ở trên, MIỄN PHÍ) không khả dụng
-#   hoặc lỗi. Không set cũng không sao — code tự fail-safe bỏ qua bước này.
+# Username bot (KHÔNG có dấu @) và short name của Mini App (đặt lúc /newapp
+# với BotFather) — dùng để dựng link mời bạn dạng:
+#   https://t.me/<BOT_USERNAME>/<APP_SHORT_NAME>?startapp=ref_<uid>
+BOT_USERNAME = "REPLACE_WITH_YOUR_BOT_USERNAME"
+APP_SHORT_NAME = "REPLACE_WITH_YOUR_APP_SHORT_NAME"
+
+# Optional: set your Telegram bot token as a secret to validate initData
+# và để bot có thể gửi tin nhắn trả lời /start
+# wrangler secret put BOT_TOKEN
+
+# Optional: đặt secret token cho webhook để xác minh request thực sự từ Telegram
+# wrangler secret put WEBHOOK_SECRET
